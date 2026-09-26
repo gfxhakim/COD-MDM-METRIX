@@ -47,22 +47,31 @@ export function backoffMs(attempt: number, retryAfterMs?: number): number {
 export async function startSync(ctx: WorkspaceContext, input: { mode: "INCREMENTAL" | "FULL"; trigger?: SyncTrigger }) {
   assertCan(ctx, "sync.run");
   await rateLimit(`mdm-sync:${ctx.workspaceId}`, 12, 3600);
-  const { adapter, connection } = await adapterForWorkspaceMeta(ctx.workspaceId);
+  const res = await enqueueSync(ctx.workspaceId, { mode: input.mode, trigger: input.trigger ?? "MANUAL", requestedById: ctx.userId });
+  if (!res.alreadyRunning) await audit(ctx, "sync.started", { type: "SyncJob", id: res.job.id }, { mode: res.job.mode, adapter: res.job.adapter });
+  return res;
+}
+
+/**
+ * Queue a sync for a workspace, holding the per-workspace lock. No permission check:
+ * callers are `startSync` (after checking the user's role) and the scheduler.
+ */
+export async function enqueueSync(workspaceId: string, input: { mode: "INCREMENTAL" | "FULL"; trigger: SyncTrigger; requestedById: string | null }) {
+  const { adapter, connection } = await adapterForWorkspaceMeta(workspaceId);
   if (!connection?.encryptedCredential) throw new InputError("Save an MDM API key in Settings first");
   if (connection.status !== "CONNECTED") throw new InputError("Run a successful connection test in Settings before syncing");
-  const existing = await db.syncJob.findUnique({ where: { activeLock: lockKey(ctx.workspaceId) } });
+  const existing = await db.syncJob.findUnique({ where: { activeLock: lockKey(workspaceId) } });
   if (existing) return { job: existing, alreadyRunning: true };
   const updatedSince = input.mode === "INCREMENTAL" && connection.lastSuccessfulSyncAt ? new Date(connection.lastSuccessfulSyncAt.getTime() - INCREMENTAL_OVERLAP_MS) : null;
   try {
     const job = await db.syncJob.create({
-      data: { workspaceId: ctx.workspaceId, provider: PROVIDER, trigger: input.trigger ?? "MANUAL", requestedById: ctx.userId, mode: updatedSince ? "INCREMENTAL" : "FULL", adapter, updatedSince, activeLock: lockKey(ctx.workspaceId) },
+      data: { workspaceId, provider: PROVIDER, trigger: input.trigger, requestedById: input.requestedById, mode: updatedSince ? "INCREMENTAL" : "FULL", adapter, updatedSince, activeLock: lockKey(workspaceId) },
     });
-    await audit(ctx, "sync.started", { type: "SyncJob", id: job.id }, { mode: job.mode, adapter });
     return { job, alreadyRunning: false };
   } catch (e) {
     // Lost the race for the per-workspace lock: another request just queued a job.
     if ((e as { code?: string }).code === "P2002") {
-      const job = await db.syncJob.findUnique({ where: { activeLock: lockKey(ctx.workspaceId) } });
+      const job = await db.syncJob.findUnique({ where: { activeLock: lockKey(workspaceId) } });
       if (job) return { job, alreadyRunning: true };
     }
     throw e;

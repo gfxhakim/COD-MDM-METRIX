@@ -133,7 +133,7 @@ export function MdmTab() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Sync interval" description="Used by scheduled syncs." />
+          <CardHeader title="Sync interval" description="Once the connection test passes, an incremental sync runs automatically at this interval." />
           <CardBody>
             <Select aria-label="Sync interval" disabled={!canManage || interval.isPending} value={String(c.syncIntervalMinutes)} onChange={(e) => interval.mutate({ minutes: Number(e.target.value) })}>
               {[15, 30, 45, 60, 120, 240, 720, 1440].map((m) => <option key={m} value={m}>Every {m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? "s" : ""}`}</option>)}

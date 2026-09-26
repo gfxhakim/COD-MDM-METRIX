@@ -225,6 +225,7 @@ export function SyncView() {
           <p className="text-xs text-muted">Last successful sync</p>
           <p className="mt-1 text-lg font-semibold">{c?.lastSuccessfulSyncAt ? timeAgo(c.lastSuccessfulSyncAt) : "Never"}</p>
           <p className="mt-1 text-xs text-muted">{c?.lastSuccessfulSyncAt ? formatDateTime(c.lastSuccessfulSyncAt) : "Parcel data shown in reports may be missing."}</p>
+          {c?.status === "CONNECTED" ? <p className="mt-1 text-xs text-muted">Syncs automatically every {c.syncIntervalMinutes < 60 ? `${c.syncIntervalMinutes} min` : `${c.syncIntervalMinutes / 60} h`}.</p> : null}
         </Card>
         <Card className="p-4">
           <p className="text-xs text-muted">Unknown MDM statuses</p>
