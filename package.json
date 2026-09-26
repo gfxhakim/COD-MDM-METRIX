@@ -15,7 +15,12 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
-    "sync:worker": "tsx --tsconfig tsconfig.json scripts/sync-worker.ts"
+    "sync:worker": "tsx --tsconfig tsconfig.json scripts/sync-worker.ts",
+    "db:pg:schema": "node scripts/postgres-schema.mjs",
+    "db:pg:deploy": "prisma migrate deploy --schema prisma/postgres/schema.prisma",
+    "db:pg:generate": "prisma generate --schema prisma/postgres/schema.prisma",
+    "test:postgres": "node scripts/postgres-schema.mjs --check && prisma generate --schema prisma/postgres/schema.prisma && vitest run; status=$?; prisma generate >/dev/null; exit $status",
+    "db:backup": "tsx scripts/backup.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
