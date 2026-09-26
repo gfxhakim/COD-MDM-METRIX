@@ -26,3 +26,13 @@ export function assertProductionConfig() {
   const problems = productionConfigProblems();
   if (problems.length) throw new Error(`Refusing to start with an unsafe configuration:\n- ${problems.join("\n- ")}`);
 }
+
+/** For process entry points: print the reason and exit instead of leaving a half-started server behind. */
+export function enforceProductionConfig() {
+  try {
+    assertProductionConfig();
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+}
