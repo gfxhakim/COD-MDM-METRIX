@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { History, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calculator, History, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
@@ -235,6 +236,7 @@ export function ProductsView() {
                   <Td>{p.active ? <Badge tone="positive">Active</Badge> : <Badge>Inactive</Badge>}</Td>
                   <Td>
                     <div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" asChild><Link href={`/simulator?productId=${p.id}`} aria-label={`Breakeven simulator for ${p.name}`}><Calculator /></Link></Button>
                       <Button size="icon" variant="ghost" aria-label={`Cost versions for ${p.name}`} onClick={() => setVersioning(p)}><History /></Button>
                       {canWrite ? (
                         <>
@@ -253,7 +255,6 @@ export function ProductsView() {
       {creating ? <ProductDialog open onOpenChange={setCreating} currency={currency} /> : null}
       {editing ? <ProductDialog product={editing} open onOpenChange={(o) => !o && setEditing(null)} currency={currency} /> : null}
       {versioning ? <CostVersionDialog product={versioning} open onOpenChange={(o) => !o && setVersioning(null)} /> : null}
-      <p className="mt-4 text-xs text-subtle">The product-level breakeven simulator is added with the economics engine in Milestone 2.</p>
     </>
   );
 }

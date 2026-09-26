@@ -17,11 +17,14 @@ export type EconomicsDefaults = z.infer<typeof economicsDefaultsSchema>;
 
 export const verdictThresholdsSchema = z.object({
   minSampleOrders: z.number().int().min(1).default(20),
-  targetPoas: z.number().min(0).default(1.3),
+  /** trueNetProfit ÷ adSpend. 0.3 means 30% profit on top of ad spend. */
+  targetPoas: z.number().min(-10).max(100).default(0.3),
   minDeliveryRate: z.number().min(0).max(1).default(0.55),
   maxRtoRate: z.number().min(0).max(1).default(0.3),
   /** Placed CPA considered "acceptable" for BAD_TRAFFIC detection (minor units). */
   acceptablePlacedCpa: z.number().int().min(0).default(80000),
+  /** Shipped parcels needed before delivery/RTO rates can trigger BAD_TRAFFIC. */
+  minShippedForRates: z.number().int().min(1).default(10),
 });
 export type VerdictThresholds = z.infer<typeof verdictThresholdsSchema>;
 

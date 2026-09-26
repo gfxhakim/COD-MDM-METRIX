@@ -3,6 +3,7 @@ import { auditRouter, membersRouter, workspaceRouter } from "@/server/trpc/route
 import { productsRouter } from "@/server/trpc/routers/products";
 import { ordersRouter } from "@/server/trpc/routers/orders";
 import { expensesRouter } from "@/server/trpc/routers/expenses";
+import { creativesRouter, reportsRouter, simulatorRouter } from "@/server/trpc/routers/economics";
 
 export const appRouter = router({
   workspace: workspaceRouter,
@@ -11,6 +12,9 @@ export const appRouter = router({
   products: productsRouter,
   orders: ordersRouter,
   expenses: expensesRouter,
+  reports: reportsRouter,
+  creatives: creativesRouter,
+  simulator: simulatorRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -453,6 +453,8 @@ model Order {
   status                OrderStatus @default(PENDING)
   confirmedAt           DateTime?
   canceledAt            DateTime?
+  /// Call-center attempts, used when the call-center cost basis is CALL_ATTEMPT.
+  callAttempts          Int?
   /// SHA-256 of normalized phone (salted per workspace). Raw phone is never stored.
   phoneHash             String?
   phoneMasked           String?
@@ -777,6 +779,7 @@ model SimulatorScenario {
   workspaceId String
   productId   String?
   name        String
+  /// Zod-validated simulator inputs (money in minor units, probabilities 0–1).
   inputs      Json
   createdById String?
   createdAt   DateTime @default(now())

@@ -37,7 +37,8 @@ contract-check script and is never read by the application.
 ```
 prisma/schema.prisma           30 tables; money = integer minor units + currency (default DZD)
 prisma/seed.ts                 synthetic demo workspaces
-src/domain/                    pure, tested business logic (cost versions, status mapping, settings)
+src/domain/                    pure, tested business logic (economics engine, simulator, cost versions, status mapping)
+src/server/reports/            loads stored facts per workspace and runs the engine (dashboard, matrix)
 src/lib/                       money, normalization, PII hashing, permissions (client-safe)
 src/server/tenancy.ts          WorkspaceContext + membership resolution + role checks
 src/server/repositories/       every method takes a WorkspaceContext and filters by workspaceId
@@ -70,7 +71,7 @@ tests/                         unit + integration tests (tenant isolation, roles
 ## Milestones
 
 1. ✅ Scaffold, auth, workspaces & roles, schema/migrations, dark shell, demo seed, products/orders/expenses CRUD
-2. Economics engine, dashboard profit metrics, breakeven simulator, creative matrix
+2. ✅ Economics engine, dashboard profit metrics, breakeven simulator, creative matrix
 3. CSV import wizards, attribution normalization, spend matching, import errors
 4. Secure MDM settings, read-only connection test, async sync, status history, unmatched review
 5. Scheduled sync, hardening, Playwright E2E, deployment + backup/restore docs

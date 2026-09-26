@@ -21,10 +21,10 @@ export function Tooltip({ content, children }: { content: React.ReactNode; child
 }
 
 /** Metric label with a keyboard-focusable definition tooltip. */
-export function Term({ label, definition }: { label: string; definition: React.ReactNode }) {
+export function Term({ label, definition, hideLabel }: { label: string; definition: React.ReactNode; hideLabel?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1">
-      {label}
+      {hideLabel ? null : label}
       <Tooltip content={definition}>
         <button type="button" className="text-subtle hover:text-muted" aria-label={`What is ${label}?`}>
           <Info className="size-3" />

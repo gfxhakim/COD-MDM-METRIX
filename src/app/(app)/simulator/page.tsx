@@ -1,7 +1,9 @@
-import { ComingSoon } from "@/components/app/coming-soon";
+import type { Metadata } from "next";
+import { SimulatorView } from "./simulator-view";
 
-export const metadata = { title: "Breakeven CPA" };
+export const metadata: Metadata = { title: "Breakeven CPA" };
 
-export default function Page() {
-  return <ComingSoon title="Breakeven CPA simulator" description="What can you afford to pay per order and still make delivered profit?" milestone={2} detail="Inputs P, C, S, R, K, D and Q with observed vs scenario rates, a delivery-rate × CPA sensitivity grid, and saved scenarios." />;
+export default async function SimulatorPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  return <SimulatorView initialProductId={typeof sp.productId === "string" ? sp.productId : ""} />;
 }

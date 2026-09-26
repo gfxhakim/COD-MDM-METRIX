@@ -52,6 +52,8 @@ async function seedMain() {
   const ws = await createWorkspace(user.id, { name: "Demo · Atlas Gadgets", isDemo: true });
   await db.workspaceMember.upsert({ where: { workspaceId_userId: { workspaceId: ws.id, userId: analyst.id } }, create: { workspaceId: ws.id, userId: analyst.id, role: "ANALYST" }, update: {} });
   const w = ws.id;
+  // A 60-order demo needs smaller samples than a real store to show verdicts.
+  await db.workspace.update({ where: { id: w }, data: { verdictThresholds: { minSampleOrders: 5, targetPoas: 0.3, minDeliveryRate: 0.55, maxRtoRate: 0.3, acceptablePlacedCpa: DZD(800), minShippedForRates: 4 } } });
   const now = Date.now();
   const start = new Date(now - 45 * DAY);
 
@@ -159,7 +161,7 @@ async function seedMain() {
       if (last.normalizedStatus === "DELIVERED") {
         await db.cashEvent.create({ data: { workspaceId: w, type: "COD_COLLECTED", parcelId: parcel.id, orderId: order.id, amount: cod, occurredAt: last.occurredAt, externalRef: `demo-cod-${trackingId}` } });
         if (rand() < 0.7) {
-          await db.cashEvent.create({ data: { workspaceId: w, type: "REMITTED", parcelId: parcel.id, orderId: order.id, amount: cod - DZD(product.ship), occurredAt: new Date(last.occurredAt.getTime() + 3 * DAY), externalRef: `demo-remit-${trackingId}` } });
+          await db.cashEvent.create({ data: { workspaceId: w, type: "REMITTED", parcelId: parcel.id, orderId: order.id, amount: cod, occurredAt: new Date(last.occurredAt.getTime() + 3 * DAY), externalRef: `demo-remit-${trackingId}` } });
         }
       }
     }
@@ -176,11 +178,14 @@ async function seedMain() {
   await db.unmatchedRecord.create({ data: { workspaceId: w, provider: "MDM_EXPRESS", entityType: "parcel", externalId: orphan.trackingId, reference: "ES-99999", reason: "No local order with reference ES-99999, no linked tracking ID, no source-order ID in metadata", parcelId: orphan.id } });
 
   // ── Ad spend per creative per day + unmatched spend
+  const SPEND_FACTOR: Record<string, number> = { cr_pc_ugc_01: 0.6, cr_pc_demo_02: 1.2, cr_pc_static_03: 0.5, cr_mb_ugc_01: 0.7, cr_mb_recipe_02: 0.5, cr_mb_static_03: 1.6, cr_ln_ugc_01: 0.4, cr_ln_story_02: 0.8 };
   for (let d = 0; d < 40; d++) {
     const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + d));
     for (const c of creatives) {
       if (rand() < 0.2) continue;
-      const spend = DZD(Math.round(900 + rand() * 2600));
+      // Skewed per creative so the demo shows a spread of verdicts.
+      const factor = SPEND_FACTOR[c.externalCreativeId] ?? 1;
+      const spend = DZD(Math.round((40 + rand() * 70) * factor));
       const row = `${date.toISOString().slice(0, 10)}|${c.externalCreativeId}`;
       await db.adSpend.create({
         data: { workspaceId: w, platform: "META", source: "META_CSV", date, campaignId: c.campaignId, campaignName: c.campaignName, adsetName: c.adsetName, adId: `ad_${c.externalCreativeId}`, adName: c.name, externalCreativeId: c.externalCreativeId, creativeId: c.id, spend, impressions: Math.round(spend / 12), clicks: Math.round(spend / 900), sourceRowHash: sha(row) },
@@ -189,7 +194,7 @@ async function seedMain() {
   }
   for (let d = 0; d < 3; d++) {
     const date = new Date(now - (d + 2) * DAY);
-    await db.adSpend.create({ data: { workspaceId: w, platform: "META", source: "META_CSV", date, campaignName: "Old test | DZ", adName: "Unknown creative", externalCreativeId: "cr_unknown_77", creativeId: null, spend: DZD(1800), sourceRowHash: sha(`unmatched-${d}`) } });
+    await db.adSpend.create({ data: { workspaceId: w, platform: "META", source: "META_CSV", date, campaignName: "Old test | DZ", adName: "Unknown creative", externalCreativeId: "cr_unknown_77", creativeId: null, spend: DZD(350), sourceRowHash: sha(`unmatched-${d}`) } });
   }
 
   // ── Expenses: global + product-specific
@@ -197,9 +202,9 @@ async function seedMain() {
   const expenses = [
     [0, 1, "SOFTWARE", 4500, "Shopify plan", "GLOBAL", null, "FIXED"], [1, 1, "SOFTWARE", 4500, "Shopify plan", "GLOBAL", null, "FIXED"],
     [0, 3, "AI_TOOLS", 2800, "AI copy + image tools", "GLOBAL", null, "FIXED"], [1, 3, "AI_TOOLS", 2800, "AI copy + image tools", "GLOBAL", null, "FIXED"],
-    [0, 5, "DOMAINS_PROXIES", 1500, "Domain + proxy", "GLOBAL", null, "FIXED"], [0, 10, "OFFICE", 12000, "Coworking desk", "GLOBAL", null, "FIXED"],
-    [1, 10, "OFFICE", 12000, "Coworking desk", "GLOBAL", null, "FIXED"], [0, 12, "BANK_FEES", 650, "Card fees", "GLOBAL", null, "VARIABLE"],
-    [0, 8, "PACKAGING", 6000, "Blender protective boxes", "PRODUCT", 1, "VARIABLE"], [1, 20, "WAREHOUSE", 8000, "Storage shelf rent", "GLOBAL", null, "FIXED"],
+    [0, 5, "DOMAINS_PROXIES", 1500, "Domain + proxy", "GLOBAL", null, "FIXED"], [0, 10, "OFFICE", 3000, "Coworking desk", "GLOBAL", null, "FIXED"],
+    [1, 10, "OFFICE", 3000, "Coworking desk", "GLOBAL", null, "FIXED"], [0, 12, "BANK_FEES", 650, "Card fees", "GLOBAL", null, "VARIABLE"],
+    [0, 8, "PACKAGING", 6000, "Blender protective boxes", "PRODUCT", 1, "VARIABLE"], [1, 20, "WAREHOUSE", 2000, "Storage shelf rent", "GLOBAL", null, "FIXED"],
     [0, 15, "OTHER", 3000, "Product photos (lamp)", "PRODUCT", 2, "FIXED"],
   ] as const;
   for (const [off, day, category, amount, description, allocation, pi, costType] of expenses) {
