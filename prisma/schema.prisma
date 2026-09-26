@@ -27,6 +27,8 @@ enum IntegrationProvider {
 
 enum ConnectionStatus {
   NOT_CONFIGURED
+  /// Credential saved but no successful read-only test yet.
+  UNTESTED
   CONNECTED
   ERROR
   DISABLED
@@ -281,6 +283,8 @@ model IntegrationConnection {
   lastSuccessfulSyncAt DateTime?
   lastError            String?
   syncIntervalMinutes  Int                 @default(45)
+  credentialUpdatedAt  DateTime?
+  credentialUpdatedById String?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
@@ -310,6 +314,17 @@ model SyncJob {
   unmatchedCount     Int                 @default(0)
   error              String?
   heartbeatAt        DateTime?
+  /// FULL re-reads everything; INCREMENTAL asks for parcels updated since the last success (minus an overlap).
+  mode               String              @default("INCREMENTAL")
+  /// "mock" (labelled demo fixtures) or "live".
+  adapter            String              @default("mock")
+  updatedSince       DateTime?
+  /// Whole-job retry after a retryable provider failure (429/5xx/network).
+  attempt            Int                 @default(0)
+  nextRunAt          DateTime?
+  retryOfJobId       String?
+  /// "<workspaceId>:<provider>" while QUEUED or RUNNING, null once finished. The unique index is the per-workspace sync lock.
+  activeLock         String?             @unique
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -318,6 +333,7 @@ model SyncJob {
 
   @@index([workspaceId, status])
   @@index([workspaceId, createdAt])
+  @@index([status, nextRunAt])
 }
 
 model SyncItem {
@@ -535,6 +551,8 @@ model Parcel {
   provider             IntegrationProvider
   trackingId           String
   providerReference    String?
+  /// Store order ID the carrier echoed back (e.g. Shopify/EasySell ID), used as the third matching key.
+  sourceOrderId        String?
   providerStatus       String?
   normalizedStatus     NormalizedStatus    @default(UNKNOWN)
   codAmount            Int                 @default(0)

@@ -20,7 +20,7 @@ export function DataFreshness() {
         <Link href="/syncs" className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1", connected ? "border-border text-muted hover:text-fg" : "border-warning/30 bg-warning-soft text-warning")}>
           {connected ? <CircleDot className="size-3 text-positive" /> : <Link2Off className="size-3" />}
           <span className="hidden sm:inline">MDM</span>
-          {connected ? `synced ${timeAgo(data.lastSuccessfulSyncAt)}` : data.connectionStatus === "ERROR" ? "error" : "not connected"}
+          {connected ? (data.lastSuccessfulSyncAt ? `synced ${timeAgo(data.lastSuccessfulSyncAt)}` : "connected, not synced yet") : data.connectionStatus === "ERROR" ? "error" : "not connected"}
         </Link>
       </Tooltip>
       {issues > 0 ? (

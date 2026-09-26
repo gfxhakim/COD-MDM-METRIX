@@ -6,6 +6,7 @@ import { CostVersionError } from "@/domain/costVersions";
 import { MoneyError } from "@/lib/money";
 import { RateLimitError } from "@/server/rateLimit";
 import { InputError } from "@/server/errors";
+import { SecretError } from "@/server/crypto/secrets";
 import { getUserForToken, type SessionUser } from "@/server/auth/session";
 import { assertCan, ForbiddenError, NotFoundError, resolveWorkspaceContext, type Permission, type WorkspaceContext } from "@/server/tenancy";
 
@@ -53,7 +54,7 @@ const errorMapper = t.middleware(async ({ next, path }) => {
   if (cause instanceof TRPCError || err.code !== "INTERNAL_SERVER_ERROR") return result;
   if (cause instanceof ForbiddenError) throw new TRPCError({ code: "FORBIDDEN", message: cause.message });
   if (cause instanceof NotFoundError) throw new TRPCError({ code: "NOT_FOUND", message: cause.message });
-  if (cause instanceof CostVersionError || cause instanceof MoneyError || cause instanceof InputError) throw new TRPCError({ code: "BAD_REQUEST", message: cause.message });
+  if (cause instanceof CostVersionError || cause instanceof MoneyError || cause instanceof InputError || cause instanceof SecretError) throw new TRPCError({ code: "BAD_REQUEST", message: cause.message });
   if (cause instanceof RateLimitError) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: cause.message });
   if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === "P2002") {
     throw new TRPCError({ code: "CONFLICT", message: "A record with the same unique value already exists" });

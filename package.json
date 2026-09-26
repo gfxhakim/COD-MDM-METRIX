@@ -14,7 +14,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "sync:worker": "tsx --tsconfig tsconfig.json scripts/sync-worker.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

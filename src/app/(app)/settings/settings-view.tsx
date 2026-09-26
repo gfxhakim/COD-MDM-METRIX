@@ -2,13 +2,12 @@
 
 import type { Role } from "@prisma/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { switchWorkspaceAction } from "@/app/(auth)/actions";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
-import { ParcelStatusBadge } from "@/components/app/status";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
-import { DEFAULT_MDM_STATUS_MAP } from "@/domain/statusMapping";
+import { MdmTab, StatusMappingsTab } from "./mdm-settings";
 import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, humanize } from "@/lib/utils";
@@ -225,47 +224,6 @@ function EconomicsTab() {
       </Card>
       {canEdit ? <div className="lg:col-span-2"><Button variant="primary" type="submit" disabled={update.isPending}>Save economics settings</Button></div> : <p className="text-xs text-subtle">Only owners and admins can change these settings.</p>}
     </form>
-  );
-}
-
-function MdmTab() {
-  const trpc = useTRPC();
-  const health = useQuery(trpc.workspace.dataHealth.queryOptions());
-  const canManage = useCan("integrations.manage");
-  return (
-    <Card>
-      <CardHeader title="MDM Express connection" description="Credentials are specific to this workspace, encrypted at rest, and only ever used by the server." />
-      <CardBody className="flex flex-col gap-4 text-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted">Status:</span>
-          <Badge tone={health.data?.connectionStatus === "CONNECTED" ? "positive" : health.data?.connectionStatus === "ERROR" ? "negative" : "warning"}>{humanize(health.data?.connectionStatus ?? "NOT_CONFIGURED")}</Badge>
-          {health.data?.maskedLabel ? <span className="font-mono text-xs text-muted">{health.data.maskedLabel}</span> : null}
-        </div>
-        {!canManage ? (
-          <p className="flex items-center gap-2 text-warning"><ShieldAlert className="size-4" /> Only workspace owners and admins can manage this connection.</p>
-        ) : null}
-        <p className="rounded-lg border border-border bg-surface-2 p-4 text-muted">
-          The secure credential form, read-only connection test and background sync ship in Milestone 4, after the MDM OpenAPI schema has been checked for the exact authentication header and pagination. Until then the app uses a mocked adapter with clearly labelled demo fixtures.
-        </p>
-      </CardBody>
-    </Card>
-  );
-}
-
-function StatusMappingsTab() {
-  return (
-    <Card>
-      <CardHeader title="Status mappings" description="Provider status → normalized status. Anything unmapped becomes UNKNOWN and is flagged for review; it is never counted as delivered or returned." />
-      <Table>
-        <THead><tr><Th>MDM status</Th><Th>Normalized</Th></tr></THead>
-        <tbody>
-          {Object.entries(DEFAULT_MDM_STATUS_MAP).map(([k, v]) => (
-            <Tr key={k}><Td className="font-mono text-xs">{k}</Td><Td><ParcelStatusBadge status={v} /></Td></Tr>
-          ))}
-        </tbody>
-      </Table>
-      <p className="p-4 text-xs text-subtle">Per-workspace overrides become editable with the sync engine in Milestone 4.</p>
-    </Card>
   );
 }
 
