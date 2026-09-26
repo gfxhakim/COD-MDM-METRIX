@@ -21,7 +21,8 @@
     "db:pg:generate": "prisma generate --schema prisma/postgres/schema.prisma",
     "test:postgres": "node scripts/postgres-schema.mjs --check && prisma generate --schema prisma/postgres/schema.prisma && vitest run; status=$?; prisma generate >/dev/null; exit $status",
     "db:backup": "tsx scripts/backup.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "secrets:reencrypt": "tsx --tsconfig tsconfig.json scripts/reencrypt-credentials.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -142,3 +142,27 @@ describe("hardening", () => {
     expect(await db.session.findUnique({ where: { id: live.id } })).not.toBeNull();
   });
 });
+
+describe("encryption key rotation", () => {
+  it("re-encrypts stored credentials with the new key so the old one can be retired", async () => {
+    const { reencryptCredentials } = await import("@/server/crypto/rotate");
+    const { decryptSecret } = await import("@/server/crypto/secrets");
+    const t = await makeTenant("Rotate");
+    await t.caller.integrations.saveMdmCredential({ credential: SECRET });
+    const oldKey = process.env.APP_ENCRYPTION_KEY!;
+    const newKey = Buffer.alloc(32, 9).toString("base64");
+    vi.stubEnv("APP_ENCRYPTION_KEY", newKey);
+    vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", oldKey);
+    vi.stubEnv("APP_ENCRYPTION_KEY_VERSION", "2");
+    const r = await reencryptCredentials(2, { workspaceId: t.ws.id });
+    expect(r).toEqual({ reencrypted: 1, alreadyCurrent: 0, failed: [] });
+    const row = await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: t.ws.id } });
+    expect(row.keyVersion).toBe(2);
+    expect(row.encryptedCredential).toMatch(/^v1:2:/);
+    // The old key is no longer needed.
+    vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", "");
+    expect(decryptSecret(row.encryptedCredential!, { workspaceId: t.ws.id, purpose: "integration:MDM_EXPRESS" })).toBe(SECRET);
+    // Running it again changes nothing.
+    expect(await reencryptCredentials(2, { workspaceId: t.ws.id })).toEqual({ reencrypted: 0, alreadyCurrent: 1, failed: [] });
+  });
+});

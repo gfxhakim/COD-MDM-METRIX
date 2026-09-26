@@ -13,6 +13,8 @@ npx prisma migrate dev          # creates prisma/dev.db
 npm run db:seed                 # synthetic DEMO workspaces
 npm run dev                     # http://localhost:3000
 npm test                        # unit + integration tests (uses prisma/test.db)
+npm run test:e2e                # Playwright: the 11 critical flows on a production build
+npm run test:postgres           # the same unit/integration suite on PostgreSQL (TEST_DATABASE_URL=…_test)
 ```
 
 Demo logins (development only, synthetic data, labelled **DEMO DATA** in the UI):
@@ -26,7 +28,7 @@ Demo logins (development only, synthetic data, labelled **DEMO DATA** in the UI)
 ## MDM Express credentials: one per workspace
 
 There is **no global MDM key**. Each business enters its own MDM Express API key in
-**Settings → MDM Express** (available from Milestone 4). The key is encrypted at rest with
+**Settings → MDM Express**. The key is encrypted at rest with
 AES-256-GCM using `APP_ENCRYPTION_KEY`, decrypted only inside server-side integration code, and never
 returned to the browser, logged, or written to the audit log. The browser only sees status, masked
 last-four and timestamps. `MDM_API_KEY` in `.env.example` is a placeholder for an optional local
@@ -65,13 +67,22 @@ tests/                         unit + integration tests (tenant isolation, roles
 * CSRF: SameSite cookies plus an Origin check on every non-GET tRPC request.
 * Headers: CSP, X-Frame-Options DENY, nosniff, Referrer-Policy, HSTS in production.
 * PII: phone numbers are stored only as a per-workspace salted hash plus a mask (`•••• 456`).
-* Audit log for role changes, deletions, cost versions, manual parcel matches (credentials, syncs and
-  imports join in later milestones). Metadata is recursively scrubbed of secret-looking keys.
+* Audit log for role changes, deletions, cost versions, manual parcel matches, credential changes,
+  syncs (including scheduled ones) and imports. Metadata is recursively scrubbed of secret-looking keys.
+* Production start refuses placeholder or weak secrets; `/api/health` for monitors; expired sessions
+  and rate-limit rows are cleaned up hourly.
+
+## Production
+
+* [Deployment](docs/deployment.md): PostgreSQL, environment, scheduled sync options (built in,
+  worker, or external cron), how each customer adds their own MDM key, key rotation, updates.
+* [Backup and restore](docs/backup-and-restore.md): `npm run db:backup`, restore steps, drills.
 
 ## Milestones
 
 1. ✅ Scaffold, auth, workspaces & roles, schema/migrations, dark shell, demo seed, products/orders/expenses CRUD
 2. ✅ Economics engine, dashboard profit metrics, breakeven simulator, creative matrix
-3. CSV import wizards, attribution normalization, spend matching, import errors
-4. Secure MDM settings, read-only connection test, async sync, status history, unmatched review
-5. Scheduled sync, hardening, Playwright E2E, deployment + backup/restore docs
+3. ✅ CSV import wizards, attribution normalization, spend matching, import errors
+4. ✅ Secure MDM settings, read-only connection test, async sync, status history, unmatched review
+   (live adapter built from MDM's OpenAPI schema; unverified until a real key passes the test)
+5. ✅ Scheduled sync, hardening, Playwright E2E, deployment + backup/restore docs
