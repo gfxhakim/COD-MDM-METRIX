@@ -38,6 +38,9 @@ function cellValue(row: CreativeRow, key: (typeof MATRIX_COLUMN_KEYS)[number], c
 }
 
 export const creativesRouter = router({
+  list: workspaceProcedure.query(({ ctx }) =>
+    db.creative.findMany({ where: { workspaceId: ctx.ws.workspaceId }, orderBy: [{ name: "asc" }, { externalCreativeId: "asc" }], select: { id: true, externalCreativeId: true, name: true, productId: true, campaignName: true } }),
+  ),
   matrix: workspaceProcedure.input(range.extend({ revenueView })).query(({ ctx, input }) => creativeMatrix(ctx.ws, input)),
   exportCsv: workspaceProcedure
     .input(range.extend({ revenueView, columns: z.array(z.enum(MATRIX_COLUMN_KEYS)).min(1), minSample: z.number().int().min(0).default(0) }))

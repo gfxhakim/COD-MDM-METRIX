@@ -648,8 +648,13 @@ model AdSpend {
   externalCreativeId String?
   /// Null = unmatched spend, preserved for review rather than dropped.
   creativeId         String?
+  /// Spend in the workspace currency (converted when the export used another currency).
   spend              Int
   currency           String     @default("DZD")
+  originalSpend      Int?
+  originalCurrency   String?
+  /// Units of workspace currency per 1 unit of originalCurrency, as entered at import time.
+  fxRate             Float?
   impressions        Int?
   clicks             Int?
   sourceRowHash      String
@@ -678,6 +683,8 @@ model Expense {
   costType          CostType          @default(FIXED)
   bankTransactionId String?           @unique
   importBatchId     String?
+  /// Dedup key for imported expenses (null for manual entries).
+  sourceRowHash     String?
   createdById       String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -687,6 +694,7 @@ model Expense {
   bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id], onDelete: SetNull)
   importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
+  @@unique([workspaceId, sourceRowHash])
   @@index([workspaceId, date])
   @@index([workspaceId, category])
   @@index([workspaceId, productId])
@@ -721,13 +729,19 @@ model ImportBatch {
   workspaceId   String
   kind          ImportKind
   status        ImportStatus @default(PREVIEW)
+  /// e.g. SHOPIFY, EASYSELL, META_CSV
+  source        String?
   fileName      String
   fileSize      Int
   totalRows     Int          @default(0)
   importedRows  Int          @default(0)
   duplicateRows Int          @default(0)
+  updatedRows   Int          @default(0)
   errorRows     Int          @default(0)
   columnMapping Json?
+  /// Import options (date format, FX rate, defaults) and a summary of warnings.
+  options       Json?
+  summary       Json?
   createdById   String?
   createdAt     DateTime     @default(now())
   finishedAt    DateTime?

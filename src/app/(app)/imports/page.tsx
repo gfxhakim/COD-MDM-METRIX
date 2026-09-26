@@ -1,7 +1,9 @@
-import { ComingSoon } from "@/components/app/coming-soon";
+import type { Metadata } from "next";
+import { ImportsView } from "./imports-view";
 
-export const metadata = { title: "Imports" };
+export const metadata: Metadata = { title: "Imports" };
 
-export default function Page() {
-  return <ComingSoon title="Imports" description="Orders, Meta ad spend, expenses and bank transactions from CSV." milestone={3} detail="Upload, header detection, column mapping, 25-row preview, validation with row errors, deduplication and import history with downloadable error CSVs." />;
+export default async function ImportsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  return <ImportsView tab={tab ?? "orders"} />;
 }

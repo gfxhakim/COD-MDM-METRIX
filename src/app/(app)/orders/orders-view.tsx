@@ -97,7 +97,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           </Select>
         </div>
         {orders.error ? <ErrorState message={errorMessage(orders.error)} /> : orders.isLoading ? <Loading /> : !orders.data?.items.length ? (
-          <EmptyState icon={<ClipboardList />} title="No orders match" description="Import an orders CSV (Milestone 3) or add a manual order." />
+          <EmptyState icon={<ClipboardList />} title="No orders match" description="Import an orders CSV from Imports, or add a manual order." />
         ) : (
           <Table>
             <THead>

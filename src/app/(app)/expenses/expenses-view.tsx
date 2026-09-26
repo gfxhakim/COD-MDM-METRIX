@@ -162,7 +162,7 @@ export function ExpensesView() {
         <Card className="p-4">
           <p className="text-xs text-muted"><Term label="Bank rows awaiting review" definition="Imported bank rows do not affect profit until they are categorized or explicitly excluded." /></p>
           <p className="num mt-1 text-2xl font-semibold">{s?.pendingBankRows ?? "–"}</p>
-          <Link href="/imports" className="text-xs text-positive hover:underline">Bank import review (Milestone 3)</Link>
+          <Link href="/imports?tab=bank" className="text-xs text-positive hover:underline">Review bank rows</Link>
         </Card>
       </div>
 

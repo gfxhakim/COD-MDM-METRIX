@@ -21,3 +21,11 @@ export function maskPhone(raw: string): string | null {
   if (n.length < 4) return null;
   return `•••• ${n.slice(-3)}`;
 }
+
+/** Customer identifiers (emails, store customer IDs) are kept only as a short salted hash. */
+export function hashCustomerRef(raw: string, workspaceId: string): string | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  const salt = process.env.PII_HASH_SALT ?? "dev-only-salt";
+  return "c_" + createHash("sha256").update(`${salt}:${workspaceId}:customer:${v}`).digest("hex").slice(0, 24);
+}
