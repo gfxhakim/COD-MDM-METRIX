@@ -1,22 +1,27 @@
 # Milestone 4 report: MDM Express connection and sync
 
-## Blocker, first
+## Status, first
 
-**The live MDM adapter is not enabled yet.** The spec requires reading the raw MDM Express OpenAPI schema before implementing authentication, pagination, parcel search and field mapping, and says not to guess them. This build environment still can't reach `api.mdm.express`. Checked again on 2026-09-26 17:09 UTC: the proxy returned 403 for `api.mdm.express`, `mdm.express` and `www.mdm.express`. No OpenAPI file has been uploaded to the project either.
+**The live MDM adapter is implemented from MDM's OpenAPI document, but not yet verified against a real account.** HAKIM uploaded the OpenAPI JSON on 2026-09-26. The adapter was written from its raw schemas, with no guessing from endpoint names. No real key has been used, because this build environment cannot reach `api.mdm.express` and no key belongs here. **MDM is not confirmed working** until the read-only connection test passes with the workspace owner's own key, entered in Settings in a running deployment that can reach MDM.
 
-Everything else is built and tested against the labelled mock adapter. The schema-dependent parts are isolated in one place, `LIVE_SCHEMA` in `src/server/mdm/live.ts`, which has five functions to fill in:
-- `applyAuth`
-- `testRequest`
-- `accountLabel`
-- `parcelsRequest`
-- `parseParcelsPage`
+What the schema says, and how the adapter uses it (`LIVE_SCHEMA` in `src/server/mdm/live.ts`):
 
-While it is `null`, the live adapter sends no request at all. A user's saved key stays encrypted and unused, and the connection test says plainly that live MDM isn't enabled yet (status "Saved, not verified"). It never claims a connection.
+| Concern | From the schema | Adapter |
+|---|---|---|
+| Auth | `ApiKey` scheme: API key in header `x-api-key` (a `bearer` JWT is also accepted) | Sends only `x-api-key`, decrypted server-side per workspace |
+| Read-only test | `GET /api/auth/me` returns GetMyProfileResponse | Shows only the account `trackingId` and role; names, email and phones are dropped |
+| Status list | `GET /api/v2/shipping/parcels/metadata` returns `statuses[]` | Read during the test to list statuses that aren't mapped yet (best effort) |
+| Parcel search | `POST /api/v2/shipping/parcels/search` with `filters`, `sortBy`, `pagination {page, perPage}` | `filters.updatedAt.start` for incremental syncs, `sortBy.updatedAt ASC`, up to 100 per page |
+| Pagination | `pagination {page, total, hasMore, nextPage}`, `list: Parcel[]` | Cursor = page number; next from `nextPage` (or `hasMore`) |
+| Merchant reference | Parcel only has `orderId` (MDM's order ID). `Order.externalId` is the merchant's order ID | One batched `POST /api/v2/orders/search` by `filters.trackingId` per page; `externalId` becomes the match reference |
+| Fields | `status`, `statusDate`, `statusHistory[] {date, status}`, `pricing.totalToPayFromClient`, `fees.shipping`, `fees.return`, `destinationAddress.stateName`, `currency` | Mapped to COD amount, fees, wilaya, events, and dispatched/delivered/returned dates |
 
-**To unblock:** upload MDM's OpenAPI JSON to the project (simplest), or have `api.mdm.express` allowed in the cloud environment's network access. Project settings has no network section. After that, the remaining work is:
-1. Read the schema.
-2. Fill in `LIVE_SCHEMA`, plus contract tests built from the schema's example responses.
-3. Run the read-only connection test with a key you enter yourself in Settings.
+**Read-only by construction:** the client only sends GET, or POST to a path ending in `/search`. Anything else is refused before a request is made.
+
+**Assumptions to confirm on the first real test** (the schema doesn't state them):
+1. **Money units.** Amounts are plain numbers; the adapter treats them as major units (4000 means 4 000 DZD). If the first synced parcel shows a COD amount 100 times too large or small, this is the line to change.
+2. **Status strings.** The API uses camelCase (e.g. `outForDelivery`). Clear ones are mapped by default: delivered, returned, lost, outForDelivery, readyForDelivery, waitingCollection, settled. Ambiguous ones (postponed, deliveryFailed, deliveryAttemptFailed, deliveredPartially, incoming) go to the review queue on purpose. The connection test lists every unmapped status MDM reports.
+3. **Order access.** If the key can read parcels but not orders, sync still runs; parcels then match by tracking ID or land in the unmatched queue.
 
 ## 1. Files changed
 
@@ -24,9 +29,9 @@ New
 - `src/server/crypto/secrets.ts`: AES-256-GCM encryption for credentials, with key versions and rotation support. The workspace ID is bound in as associated data, and only a mask is ever shown.
 - `src/server/mdm/types.ts`: the provider-neutral parcel/page types, the adapter interface and typed `MdmError`s (retryable or not).
 - `src/server/mdm/url.ts`: the SSRF guard (https only, host allowlist, no IPs, credentials, ports or queries, and a DNS check that rejects private addresses).
-- `src/server/mdm/live.ts`: the live adapter and a hardened GET client.
+- `src/server/mdm/live.ts`: the live adapter and a hardened read-only client (GET, or POST to `/search` only).
   - The client applies a timeout, disables redirects, caps body size, maps 401/403/429/5xx, honors `Retry-After`, and only ever puts the credential in a header.
-  - Holds the `LIVE_SCHEMA` placeholder.
+  - Holds `LIVE_SCHEMA`, the MDM contract read from the OpenAPI document, and the parcel mapping.
 - `src/server/mdm/mock.ts`: the mocked adapter. It pages, filters by date, can script failures for tests, and rejects keys starting with `invalid`.
 - `src/server/mdm/demo-fixtures.ts`: deterministic, labelled demo fixtures built from the demo workspace's seeded parcels.
 - `src/server/mdm/redact.ts`: PII redaction for stored raw payloads and stable hashing.
@@ -110,17 +115,27 @@ The tables `IntegrationConnection`, `SyncItem`, `RawExternalRecord`, `StatusMapp
 
 ## 4. Tests added and results
 
+- `tests/unit/mdm-live.test.ts` (13 tests, new with the live adapter). Payloads are built field by field from the schema, which has no examples; placeholder values only:
+  - `x-api-key` is the only auth header and the key never appears in a URL
+  - the profile test shows only the account ID and role, and reads the status list; a 403 on the status list still connects; a 401 is an auth error
+  - the exact parcel search body (updatedAt filter, sort, page, perPage), page cursors, total, and the page-size cap
+  - one batched order lookup per page, `externalId` as the reference; no order access still syncs; a 429 on the lookup retries the page
+  - a response that isn't GetParcelsResponse is rejected; a non-search POST is refused before any request
+  - field mapping, including nullable fields, event ordering and derived dates
+  - client, courier, seller, address, GPS and notes are redacted from stored payloads
+  - camelCase status normalization, with ambiguous statuses left for review
 - `tests/unit/mdm.test.ts` (11 tests):
   - encryption round-trip, random IV, workspace binding, tamper detection, key rotation, masking
   - the SSRF allowlist and private-IP detection
   - payload redaction and stable hashing
-  - the live adapter refuses to run and makes no fetch while the schema is unverified
+  - the live adapter makes no fetch when no schema is configured
   - the hardened client puts the credential only in a header, never in the URL; disables redirects; maps 429 with Retry-After, 401 and non-JSON; blocks a host that resolves to a private address
   - mock paging, date filtering and scripted failures
   - backoff bounds
 - `tests/integration/mdm-sync.test.ts` (13 tests):
   - the key is never in the view, the database row or the audit log
-  - the live test doesn't claim success, and sync is refused
+  - live test through the real encrypted-key path: a rejected key is ERROR and sync stays locked; an accepted key is CONNECTED, lists unmapped statuses, and the key goes only to api.mdm.express in the `x-api-key` header
+  - live sync end to end with stubbed MDM responses: a parcel matched to its order through `externalId`, COD converted to minor units, and no PII stored
   - the demo workspace's mock test and sync end to end
   - roles, and rejection of an SSRF base URL
   - matching by reference, then source ID, then the unmatched queue
@@ -133,7 +148,7 @@ The tables `IntegrationConnection`, `SyncItem`, `RawExternalRecord`, `StatusMapp
   - an auth failure marks the connection
   - the single-active-job lock and cancel
   - tenant isolation
-- **Full suite: 129 tests passing in 14 files.** ESLint and `tsc` are clean, and `next build` succeeds.
+- **Full suite: 143 tests passing in 15 files.** ESLint and `tsc` are clean, and `next build` succeeds.
 - Browser smoke test on the demo workspace (Playwright/Chromium, `next start`):
   - An invalid key showed an error. The demo key showed only `••••4242` and the field cleared after saving. The test passed.
   - The background sync succeeded with 3 added, 1 updated, 49 unchanged and 2 unmatched. The orphan parcel was linked manually. A second sync changed nothing.
@@ -142,17 +157,17 @@ The tables `IntegrationConnection`, `SyncItem`, `RawExternalRecord`, `StatusMapp
 
 ## 5. Known limitations
 
-- **Live MDM is not enabled** until the OpenAPI schema is read (see the blocker above). No user key has been used against MDM.
+- **Live MDM is implemented but unverified.** No real key has been used against MDM; money units and status strings are assumptions until the first real test (see Status, first).
 - Cash remittance and COD collection events are not synced yet. Where MDM exposes them depends on the schema. Delivered revenue works now; the "cash remitted" view still relies on data from outside MDM.
 - Scheduled (interval) syncs are Milestone 5. The interval setting is saved, and the poller already handles retries and recovery.
 - Jobs run inside the web server process, with an optional separate worker. For multi-instance deployments, run the worker; jobs are claimed atomically, so running both is safe.
-- Syncs are incremental by `statusAt`. If the live API filters by a different "updated" field, the overlap window will be adjusted once the schema is known.
+- Live syncs are incremental by MDM's `updatedAt`, with a 24-hour overlap. The mock adapter filters by `statusAt`.
+- MDM's parcel search `perPage` limit isn't stated in the schema; the adapter asks for at most 100.
 
 ## 6. Exact next step
 
-1. Upload the OpenAPI JSON (or allow `api.mdm.express` in the cloud environment's network access).
-2. Read the raw schema for auth, pagination, parcel search and response fields.
-3. Fill in `LIVE_SCHEMA` with contract tests.
-4. HAKIM enters their own key in Settings and runs the read-only test.
+1. HAKIM runs the app somewhere that can reach `api.mdm.express`, enters their own MDM key in Settings, and clicks Test connection. Nothing is written to MDM.
+2. If it connects, map any statuses the test lists, run one sync, and check a few parcels' COD amounts against MDM to confirm the money units.
+3. Report back any mismatch; fixes are confined to `src/server/mdm/live.ts`.
 
 Milestone 5 (scheduled sync, hardening, Playwright E2E, deployment and backup docs) can start in parallel.

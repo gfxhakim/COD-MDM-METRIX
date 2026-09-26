@@ -33,7 +33,7 @@ export function MdmTab() {
   const [baseUrl, setBaseUrl] = React.useState("");
   const [editing, setEditing] = React.useState(false);
   const [confirmRemove, setConfirmRemove] = React.useState(false);
-  const [result, setResult] = React.useState<{ ok: boolean; message: string } | null>(null);
+  const [result, setResult] = React.useState<{ ok: boolean; message: string; accountLabel?: string | null; unmappedStatuses?: string[] } | null>(null);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: trpc.integrations.pathKey() });
     qc.invalidateQueries({ queryKey: trpc.workspace.dataHealth.queryKey() });
@@ -73,10 +73,12 @@ export function MdmTab() {
             <p className="flex items-start gap-2 rounded-lg border border-info/30 bg-info-soft p-3 text-info"><FlaskConical className="mt-0.5 size-4 shrink-0" /><span>Demo workspace: syncs use a mocked adapter with clearly labelled demo fixtures. No request is sent to MDM. Any key starting with <code>demo-</code> passes the test; one starting with <code>invalid</code> shows the error path.</span></p>
           ) : !c.liveAdapterReady ? (
             <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-warning"><ShieldAlert className="mt-0.5 size-4 shrink-0" /><span>You can save your key now. The live connection test and sync switch on once the MDM Express API schema has been verified; until then no request is sent to MDM and your key stays encrypted and unused.</span></p>
+          ) : c.status !== "CONNECTED" ? (
+            <p className="flex items-start gap-2 rounded-lg border border-info/30 bg-info-soft p-3 text-info"><PlugZap className="mt-0.5 size-4 shrink-0" /><span>Sync unlocks after a successful connection test. The test only reads your MDM profile and status list; it changes nothing in MDM.</span></p>
           ) : null}
 
           {c.lastError ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-negative" role="alert">{c.lastError}</p> : null}
-          {result ? <p className={`rounded-lg border p-3 ${result.ok ? "border-positive/30 bg-positive-soft text-positive" : "border-negative/30 bg-negative-soft text-negative"}`} role="status">{result.message}</p> : null}
+          {result ? <p className={`rounded-lg border p-3 ${result.ok ? "border-positive/30 bg-positive-soft text-positive" : "border-negative/30 bg-negative-soft text-negative"}`} role="status">{result.message}{result.ok && result.accountLabel ? <span className="mt-1 block text-xs">{result.accountLabel}</span> : null}{result.unmappedStatuses?.length ? <span className="mt-1 block font-mono text-xs">{result.unmappedStatuses.join(", ")}</span> : null}</p> : null}
 
           {!canManage ? <p className="flex items-center gap-2 text-warning"><ShieldAlert className="size-4" /> Only workspace owners and admins can manage this connection.</p> : null}
 

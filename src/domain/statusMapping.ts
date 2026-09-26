@@ -22,6 +22,12 @@ export const DEFAULT_MDM_STATUS_MAP: Record<string, NormalizedStatus> = {
   return_received: "RETURNED",
   returned: "RETURNED",
   lost: "LOST",
+  // MDM Express vocabulary (camelCase in the API, e.g. "outForDelivery"). Ambiguous
+  // states (postponed, deliveryAttemptFailed, deliveryFailed, deliveredPartially,
+  // incoming) are left out on purpose and go to the review queue.
+  waiting_collection: "CONFIRMED",
+  ready_for_delivery: "SHIPPED",
+  settled: "DELIVERED",
   refunded: "RETURNED",
   exchanged: "EXCHANGED",
   canceled: "CANCELED",
@@ -29,7 +35,10 @@ export const DEFAULT_MDM_STATUS_MAP: Record<string, NormalizedStatus> = {
 };
 
 export function statusKey(providerStatus: string): string {
-  return providerStatus.trim().toLowerCase().replace(/[\s\-]+/g, "_");
+  return providerStatus
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase().replace(/[\s\-]+/g, "_");
 }
 
 export function normalizeProviderStatus(

@@ -7,6 +7,7 @@ import { assertCan, type WorkspaceContext } from "@/server/tenancy";
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto/secrets";
 import { demoFixtures } from "./demo-fixtures";
 import { createLiveAdapter, LIVE_SCHEMA } from "./live";
+import { normalizeProviderStatus, statusKey } from "@/domain/statusMapping";
 import { createMockAdapter } from "./mock";
 import { MdmError, type MdmAdapter } from "./types";
 import { DEFAULT_MDM_BASE_URL, validateMdmBaseUrl } from "./url";
@@ -121,10 +122,17 @@ export async function testConnection(ctx: WorkspaceContext, factory: AdapterFact
   let ok = false;
   let message: string;
   let accountLabel: string | null = null;
+  let unmappedStatuses: string[] = [];
   try {
-    ({ accountLabel } = await adapter.testConnection());
+    const res = await adapter.testConnection();
+    accountLabel = res.accountLabel;
     ok = true;
     message = adapter.kind === "mock" ? "Demo adapter responded. This workspace uses labelled demo fixtures, not a real MDM account." : "Connected. MDM accepted the credential (read-only check).";
+    if (res.providerStatuses?.length) {
+      const overrides = Object.fromEntries((await db.statusMapping.findMany({ where: { workspaceId: ctx.workspaceId, provider: "MDM_EXPRESS" } })).map((m) => [statusKey(m.providerStatus), m.normalizedStatus]));
+      unmappedStatuses = res.providerStatuses.filter((st) => normalizeProviderStatus(st, overrides) === "UNKNOWN").slice(0, 50);
+      if (unmappedStatuses.length) message += ` ${unmappedStatuses.length} MDM status${unmappedStatuses.length === 1 ? " is" : "es are"} not mapped yet; parcels in them go to review until you map them in Status mappings.`;
+    }
   } catch (e) {
     if (!(e instanceof MdmError)) console.error("[mdm] connection test failed", e);
     message = safeMdmMessage(e);
@@ -135,5 +143,5 @@ export async function testConnection(ctx: WorkspaceContext, factory: AdapterFact
     data: { status: ok ? "CONNECTED" : notAvailable ? "UNTESTED" : "ERROR", lastTestedAt: new Date(), lastError: ok ? null : message },
   });
   await audit(ctx, "integration.tested", { type: "IntegrationConnection", id: conn.id }, { ok, adapter: adapter.kind });
-  return { ok, message, accountLabel, connection: publicConnection(updated, ws) };
+  return { ok, message, accountLabel, unmappedStatuses, connection: publicConnection(updated, ws) };
 }

@@ -45,6 +45,6 @@ export class MdmError extends Error {
 export interface MdmAdapter {
   readonly kind: "mock" | "live";
   /** Read-only call proving the credential works. Must not create or change anything at MDM. */
-  testConnection(signal?: AbortSignal): Promise<{ accountLabel: string | null }>;
+  testConnection(signal?: AbortSignal): Promise<{ accountLabel: string | null; providerStatuses?: string[] }>;
   listParcels(query: { cursor: string | null; updatedSince: Date | null; pageSize: number }, signal?: AbortSignal): Promise<MdmPage>;
 }

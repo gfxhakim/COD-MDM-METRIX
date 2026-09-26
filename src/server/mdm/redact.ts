@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 /** Keys that hold customer PII or secrets. Raw payloads are stored for debugging, not for customer data. */
-const PII_KEY = /(phone|mobile|tel(ephone)?$|e-?mail|first_?name|last_?name|full_?name|customer_?name|recipient|client_?name|^name$|address|street|adresse|nom|prenom|prénom|token|secret|password|api_?key|authorization)/i;
+const PII_KEY = /(phone|mobile|tel(ephone)?$|e-?mail|first_?name|last_?name|full_?name|customer_?name|recipient|client_?name|^name$|address|street|adresse|nom|prenom|prénom|gps|^ip$|^notes?$|token|secret|password|api_?key|authorization)/i;
 
 export function redactPayload(value: unknown, depth = 0): unknown {
   if (depth > 8) return "[depth]";

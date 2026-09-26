@@ -7,7 +7,7 @@ vi.mock("node:dns/promises", () => ({
 import { decryptSecret, encryptSecret, maskSecret, SecretError } from "@/server/crypto/secrets";
 import { isPrivateAddress, validateMdmBaseUrl } from "@/server/mdm/url";
 import { redactPayload, stableStringify } from "@/server/mdm/redact";
-import { createLiveAdapter, LIVE_ADAPTER_UNAVAILABLE, mdmGet, type LiveSchema } from "@/server/mdm/live";
+import { createLiveAdapter, LIVE_ADAPTER_UNAVAILABLE, mdmRequest, type LiveSchema } from "@/server/mdm/live";
 import { createMockAdapter } from "@/server/mdm/mock";
 import { MdmError } from "@/server/mdm/types";
 import { backoffMs } from "@/server/mdm/sync";
@@ -73,10 +73,10 @@ describe("raw payload redaction", () => {
 describe("adapters", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("live adapter refuses to run and sends nothing until the schema is verified", async () => {
+  it("live adapter without a schema refuses to run and sends nothing", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
-    const a = createLiveAdapter({ baseUrl: "https://api.mdm.express", credential: "secret-credential-1" });
+    const a = createLiveAdapter({ baseUrl: "https://api.mdm.express", credential: "secret-credential-1", schema: null });
     await expect(a.testConnection()).rejects.toMatchObject({ kind: "NOT_AVAILABLE", message: LIVE_ADAPTER_UNAVAILABLE });
     await expect(a.listParcels({ cursor: null, updatedSince: null, pageSize: 10 })).rejects.toMatchObject({ kind: "NOT_AVAILABLE" });
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -84,9 +84,9 @@ describe("adapters", () => {
 
   const fakeSchema: LiveSchema = {
     applyAuth: (h, c) => h.set("x-test-auth", c),
-    testRequest: () => ({ path: "/ping" }),
+    testRequest: () => ({ method: "GET", path: "/ping" }),
     accountLabel: () => "acct",
-    parcelsRequest: (q) => ({ path: "/parcels", query: { page: q.cursor ?? "1" } }),
+    parcelsRequest: (q) => ({ method: "GET", path: "/parcels", query: { page: q.cursor ?? "1" } }),
     parseParcelsPage: () => ({ items: [], nextCursor: null }),
   };
 
@@ -96,21 +96,21 @@ describe("adapters", () => {
       calls.push({ url: String(url), init });
       return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
     }));
-    await mdmGet("https://api.mdm.express", "secret-credential-1", fakeSchema, { path: "/parcels", query: { page: "2" } });
+    await mdmRequest("https://api.mdm.express", "secret-credential-1", fakeSchema, { method: "GET", path: "/parcels", query: { page: "2" } });
     expect(calls[0].url).toBe("https://api.mdm.express/parcels?page=2");
     expect(calls[0].url).not.toContain("secret");
     expect((calls[0].init.headers as Headers).get("x-test-auth")).toBe("secret-credential-1");
     expect(calls[0].init.redirect).toBe("error");
 
     vi.stubGlobal("fetch", vi.fn(async () => new Response("slow down", { status: 429, headers: { "retry-after": "7" } })));
-    await expect(mdmGet("https://api.mdm.express", "c".repeat(10), fakeSchema, { path: "/x" })).rejects.toMatchObject({ kind: "RATE_LIMIT", retryAfterMs: 7000 });
+    await expect(mdmRequest("https://api.mdm.express", "c".repeat(10), fakeSchema, { method: "GET", path: "/x" })).rejects.toMatchObject({ kind: "RATE_LIMIT", retryAfterMs: 7000 });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 401 })));
-    await expect(mdmGet("https://api.mdm.express", "c".repeat(10), fakeSchema, { path: "/x" })).rejects.toMatchObject({ kind: "AUTH" });
+    await expect(mdmRequest("https://api.mdm.express", "c".repeat(10), fakeSchema, { method: "GET", path: "/x" })).rejects.toMatchObject({ kind: "AUTH" });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>", { status: 200 })));
-    await expect(mdmGet("https://api.mdm.express", "c".repeat(10), fakeSchema, { path: "/x" })).rejects.toMatchObject({ kind: "BAD_RESPONSE" });
+    await expect(mdmRequest("https://api.mdm.express", "c".repeat(10), fakeSchema, { method: "GET", path: "/x" })).rejects.toMatchObject({ kind: "BAD_RESPONSE" });
 
     vi.stubEnv("MDM_ALLOWED_HOSTS", "internal.mdm.test");
-    await expect(mdmGet("https://internal.mdm.test", "c".repeat(10), fakeSchema, { path: "/x" })).rejects.toMatchObject({ kind: "CONFIG" });
+    await expect(mdmRequest("https://internal.mdm.test", "c".repeat(10), fakeSchema, { method: "GET", path: "/x" })).rejects.toMatchObject({ kind: "CONFIG" });
     vi.unstubAllEnvs();
   });
 

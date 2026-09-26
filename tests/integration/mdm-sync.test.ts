@@ -1,4 +1,7 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("node:dns/promises", () => ({ lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]) }));
+
 import { db } from "@/server/db";
 import { createWorkspace } from "@/server/repositories/workspaces";
 import { resolveWorkspaceContext } from "@/server/tenancy";
@@ -44,9 +47,10 @@ beforeAll(async () => {
 });
 
 describe("credentials", () => {
+  afterEach(() => vi.unstubAllGlobals());
   it("encrypts at rest and only ever returns a mask", async () => {
     const view = await t.caller.integrations.mdm();
-    expect(view).toMatchObject({ hasCredential: true, maskedLabel: "••••9876", adapter: "live", liveAdapterReady: false });
+    expect(view).toMatchObject({ hasCredential: true, maskedLabel: "••••9876", adapter: "live", liveAdapterReady: true });
     expect(JSON.stringify(view)).not.toContain("SUPERSECRET");
     const row = await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: t.ws.id } });
     expect(row.encryptedCredential).toMatch(/^v1:/);
@@ -55,14 +59,48 @@ describe("credentials", () => {
     expect(JSON.stringify(logs)).not.toContain("SUPERSECRET");
   });
 
-  it("live connection test does not claim success while the schema is unverified", async () => {
+  it("live connection test sends the decrypted key only to MDM and gates sync on success", async () => {
     const other = await makeTenant("SyncLive");
     await other.caller.integrations.saveMdmCredential({ credential: SECRET });
-    const r = await other.caller.integrations.testMdm();
-    expect(r.ok).toBe(false);
-    expect(r.connection.status).toBe("UNTESTED");
-    expect(r.message).toContain("not enabled yet");
+    const seen: { url: string; key: string | null }[] = [];
+    let accept = false;
+    vi.stubGlobal("fetch", vi.fn(async (url: URL, init: RequestInit) => {
+      seen.push({ url: String(url), key: (init.headers as Headers).get("x-api-key") });
+      if (!accept) return new Response("", { status: 401 });
+      const path = new URL(String(url)).pathname;
+      const body = path === "/api/auth/me" ? { trackingId: "ACC-1", role: "seller", firstName: "Owner" } : { statuses: ["delivered", "postponed"], types: [], subTypes: [], paymentMethods: [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }));
+    const bad = await other.caller.integrations.testMdm();
+    expect(bad).toMatchObject({ ok: false, connection: { status: "ERROR" } });
     await expect(other.caller.sync.start({ mode: "FULL" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    accept = true;
+    const ok = await other.caller.integrations.testMdm();
+    expect(ok).toMatchObject({ ok: true, accountLabel: "MDM account ACC-1 (seller)", unmappedStatuses: ["postponed"], connection: { status: "CONNECTED" } });
+    expect(ok.message).toContain("1 MDM status is not mapped yet");
+    expect(seen.every((c) => c.url.startsWith("https://api.mdm.express/") && c.key === SECRET && !c.url.includes(SECRET))).toBe(true);
+    expect(JSON.stringify(ok)).not.toContain(SECRET);
+  });
+
+  it("live sync pulls parcels and matches them through MDM's order externalId", async () => {
+    const live = await makeTenant("SyncLiveRun");
+    const product = await live.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    const order = await live.caller.orders.create({ orderNumber: "ES-2001", placedAt: new Date("2026-09-18T10:00:00Z"), status: "PENDING", codAmount: 390000, lines: [{ productId: product.id, quantity: 1, unitPrice: 390000 }] });
+    await connect(live);
+    vi.stubGlobal("fetch", vi.fn(async (url: URL) => {
+      const path = new URL(String(url)).pathname;
+      const body = path === "/api/v2/orders/search"
+        ? { pagination: { page: 1, hasMore: false, nextPage: null, total: 1 }, list: [{ trackingId: "MO-1", externalId: "ES-2001" }] }
+        : { pagination: { page: 1, hasMore: false, nextPage: null, total: 1 }, list: [{ trackingId: "LP-1", orderId: "MO-1", currency: "DZD", status: "outForDelivery", statusDate: "2026-09-20T10:00:00.000Z", pricing: { totalToPayFromClient: 3900 }, fees: { shipping: 600, return: 250 }, destinationAddress: { stateName: "Oran" }, client: { firstName: "Amina", phone: "0551111111" }, statusHistory: [{ date: "2026-09-20T10:00:00.000Z", status: "outForDelivery", responsible: { firstName: "Courier" } }] }] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }));
+    const { job } = await startSync(live.ctx, { mode: "FULL" });
+    const done = await runSyncJob(job.id, { sleep: noSleep });
+    expect(done).toMatchObject({ status: "SUCCEEDED", adapter: "live" });
+    const p = await db.parcel.findFirstOrThrow({ where: { workspaceId: live.ws.id, trackingId: "LP-1" } });
+    expect(p).toMatchObject({ orderId: order.id, matchMethod: "ORDER_REFERENCE", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "Oran" });
+    expect(JSON.stringify(await db.parcel.findMany({ where: { workspaceId: live.ws.id } }))).not.toMatch(/Amina|0551111111|Courier/);
   });
 
   it("demo workspaces use the labelled mock adapter and can reject bad keys", async () => {
