@@ -55,20 +55,20 @@ Nothing here has been done for you yet: no account exists and nothing is deploye
    - `PII_HASH_SALT` = the second value
    - `NODE_ENV` = `production`
    - Do **not** add any MDM key here. Each business enters its own inside the app.
-5. **Set the build and start commands** in the app service's settings:
-   - Build: `npm ci && npm run db:pg:generate && npm run build`
-   - Start: `npm run db:pg:deploy && npm start`
+5. **Build and start commands are already set.** The repository includes `railway.json`, which Railway reads automatically:
+   - it builds with the PostgreSQL setup
+   - it creates or updates the database tables each time the app starts
+   - it only switches to a new version once `/api/health` answers
 
-   The start command creates or updates the database tables first, then starts the app.
-6. **Set the health check** path to `/api/health`. Railway then only switches to a new version once it can reach its database.
-7. **Deploy**, then open the generated web address. Railway provides HTTPS automatically. You can attach your own domain later in the service settings.
-8. **Check it works.** Visit `https://<your-address>/api/health`: it should say `{"status":"ok"}`. If the app refuses to start, its logs name the variable that is missing or wrong.
-9. **Create your account.** Sign up on the site; this creates your business workspace. Don't run the demo "seed" command online, because it adds fake demo businesses.
-10. **Connect MDM Express.** Go to Settings → MDM Express, paste your MDM API key, then Encrypt & save → Test connection. When it says Connected:
+   There is nothing to type for this step.
+6. **Deploy**, then open the generated web address. Railway provides HTTPS automatically. You can attach your own domain later in the service settings.
+7. **Check it works.** Visit `https://<your-address>/api/health`: it should say `{"status":"ok"}`. If the app refuses to start, its logs name the variable that is missing or wrong.
+8. **Create your account.** Sign up on the site; this creates your business workspace. Don't run the demo "seed" command online, because it adds fake demo businesses.
+9. **Connect MDM Express.** Go to Settings → MDM Express, paste your MDM API key, then Encrypt & save → Test connection. When it says Connected:
     - map any statuses it lists (Settings → Status mappings)
     - go to MDM sync → Sync now
     - after that, syncs run automatically every 45 minutes
-11. **Confirm the numbers.** Compare the COD amounts of a few parcels with what MDM shows. This is the first real test of the MDM connection.
+10. **Confirm the numbers.** Compare the COD amounts of a few parcels with what MDM shows. This is the first real test of the MDM connection.
 
 ## Keeping it safe
 
