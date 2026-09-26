@@ -74,6 +74,7 @@ tests/                         unit + integration tests (tenant isolation, roles
 
 ## Production
 
+* [Step-by-step deployment for beginners](docs/deploy-step-by-step.md) (Railway example).
 * [Deployment](docs/deployment.md): PostgreSQL, environment, scheduled sync options (built in,
   worker, or external cron), how each customer adds their own MDM key, key rotation, updates.
 * [Backup and restore](docs/backup-and-restore.md): `npm run db:backup`, restore steps, drills.
