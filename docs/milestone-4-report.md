@@ -13,7 +13,7 @@ Everything else is built and tested against the labelled mock adapter. The schem
 
 While it is `null`, the live adapter sends no request at all. A user's saved key stays encrypted and unused, and the connection test says plainly that live MDM isn't enabled yet (status "Saved, not verified"). It never claims a connection.
 
-**To unblock:** allow `api.mdm.express` in the environment's network settings (Project settings → Environment → Network access), or upload MDM's OpenAPI JSON to the project. After that, the remaining work is:
+**To unblock:** upload MDM's OpenAPI JSON to the project (simplest), or have `api.mdm.express` allowed in the cloud environment's network access. Project settings has no network section. After that, the remaining work is:
 1. Read the schema.
 2. Fill in `LIVE_SCHEMA`, plus contract tests built from the schema's example responses.
 3. Run the read-only connection test with a key you enter yourself in Settings.
@@ -150,7 +150,7 @@ The tables `IntegrationConnection`, `SyncItem`, `RawExternalRecord`, `StatusMapp
 
 ## 6. Exact next step
 
-1. Allow `api.mdm.express` in the environment's network access, or upload the OpenAPI JSON.
+1. Upload the OpenAPI JSON (or allow `api.mdm.express` in the cloud environment's network access).
 2. Read the raw schema for auth, pagination, parcel search and response fields.
 3. Fill in `LIVE_SCHEMA` with contract tests.
 4. HAKIM enters their own key in Settings and runs the read-only test.
