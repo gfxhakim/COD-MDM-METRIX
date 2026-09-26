@@ -1,26 +1,69 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* COD Flow Tracker — dark operations palette. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: #111418;
+  --color-surface: #171b21;
+  --color-surface-2: #1d222a;
+  --color-surface-3: #252b35;
+  --color-sidebar: #0a0c0f;
+  --color-border: #262c36;
+  --color-border-strong: #343c49;
+  --color-fg: #eceff3;
+  --color-muted: #8b95a5;
+  --color-subtle: #5d6676;
+  --color-positive: #b6f24a;
+  --color-positive-soft: rgb(182 242 74 / 0.12);
+  --color-mint: #5eead4;
+  --color-warning: #f5b544;
+  --color-warning-soft: rgb(245 181 68 / 0.12);
+  --color-negative: #ff6b5e;
+  --color-negative-soft: rgb(255 107 94 / 0.12);
+  --color-info: #7aa7ff;
+  --color-info-soft: rgb(122 167 255 / 0.12);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-positive);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: rgb(182 242 74 / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Thin scrollbars for dense tables. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
 }

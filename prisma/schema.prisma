@@ -1,0 +1,788 @@
+// COD Flow Tracker schema.
+// SQLite in development; every type used here is PostgreSQL-compatible
+// (switch `provider` to "postgresql" and regenerate migrations for production).
+// Money is always stored as integer minor units with a currency code.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum Role {
+  OWNER
+  ADMIN
+  ANALYST
+  OPERATOR
+}
+
+enum IntegrationProvider {
+  MDM_EXPRESS
+}
+
+enum ConnectionStatus {
+  NOT_CONFIGURED
+  CONNECTED
+  ERROR
+  DISABLED
+}
+
+enum SyncJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  CANCELED
+}
+
+enum SyncTrigger {
+  MANUAL
+  SCHEDULED
+  RETRY
+}
+
+enum SyncItemResult {
+  ADDED
+  UPDATED
+  UNCHANGED
+  FAILED
+  UNMATCHED
+  SKIPPED
+}
+
+enum NormalizedStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  RETURNED
+  LOST
+  CANCELED
+  EXCHANGED
+  UNKNOWN
+}
+
+enum OrderSource {
+  SHOPIFY
+  EASYSELL
+  MANUAL
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+}
+
+enum MatchMethod {
+  ORDER_REFERENCE
+  TRACKING_ID
+  SOURCE_ORDER_ID
+  MANUAL
+  NONE
+}
+
+enum AttributionMethod {
+  UTM_CONTENT
+  MANUAL
+  NONE
+}
+
+enum AdPlatform {
+  META
+  TIKTOK
+  OTHER
+}
+
+enum ExpenseCategory {
+  AI_TOOLS
+  SOFTWARE
+  OFFICE
+  DOMAINS_PROXIES
+  BANK_FEES
+  CALL_CENTER
+  PACKAGING
+  WAREHOUSE
+  OTHER
+}
+
+enum ExpenseAllocation {
+  GLOBAL
+  PRODUCT
+}
+
+enum CostType {
+  FIXED
+  VARIABLE
+}
+
+enum BankReviewStatus {
+  PENDING
+  CATEGORIZED
+  EXCLUDED
+}
+
+enum ImportKind {
+  ORDERS
+  AD_SPEND
+  EXPENSES
+  BANK
+}
+
+enum ImportStatus {
+  PREVIEW
+  COMMITTED
+  PARTIAL
+  FAILED
+}
+
+enum CashEventType {
+  COD_COLLECTED
+  REMITTED
+  CARRIER_FEE
+  ADJUSTMENT
+}
+
+enum ReviewStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+// ─────────────────────── Identity & tenancy ───────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships WorkspaceMember[]
+  sessions    Session[]
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Workspace {
+  id                String   @id @default(uuid())
+  name              String
+  slug              String   @unique
+  currency          String   @default("DZD")
+  timezone          String   @default("Africa/Algiers")
+  isDemo            Boolean  @default(false)
+  /// Zod-validated JSON: fees, call-center basis, overhead allocation policy.
+  economicsDefaults Json?
+  /// Zod-validated JSON: verdict thresholds (min sample, target POAS, delivery/RTO limits).
+  verdictThresholds Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  members          WorkspaceMember[]
+  auditLogs        AuditLog[]
+  connections      IntegrationConnection[]
+  syncJobs         SyncJob[]
+  syncItems        SyncItem[]
+  rawRecords       RawExternalRecord[]
+  statusMappings   StatusMapping[]
+  unmatchedRecords UnmatchedRecord[]
+  products         Product[]
+  costVersions     ProductCostVersion[]
+  orders           Order[]
+  orderLines       OrderLine[]
+  attributions     Attribution[]
+  parcels          Parcel[]
+  parcelEvents     ParcelStatusEvent[]
+  cashEvents       CashEvent[]
+  creatives        Creative[]
+  adSpend          AdSpend[]
+  expenses         Expense[]
+  bankTransactions BankTransaction[]
+  importBatches    ImportBatch[]
+  importRowErrors  ImportRowError[]
+  metricSnapshots  MetricSnapshot[]
+  scenarios        SimulatorScenario[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        Role
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  workspaceId String
+  actorUserId String?
+  action      String
+  entityType  String?
+  entityId    String?
+  /// Never contains credentials; sanitized before write.
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, action])
+}
+
+model RateLimitBucket {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+
+  @@index([windowStart])
+}
+
+// ───────────────────────── MDM integration ─────────────────────────
+
+model IntegrationConnection {
+  id                   String              @id @default(uuid())
+  workspaceId          String
+  provider             IntegrationProvider
+  baseUrl              String              @default("https://api.mdm.express")
+  /// AES-256-GCM envelope "v1:<iv>:<tag>:<ciphertext>" (base64). Never sent to the browser.
+  encryptedCredential  String?
+  keyVersion           Int?
+  /// e.g. "••••1a2b". Safe to display.
+  maskedLabel          String?
+  status               ConnectionStatus    @default(NOT_CONFIGURED)
+  lastTestedAt         DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastError            String?
+  syncIntervalMinutes  Int                 @default(45)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+}
+
+model SyncJob {
+  id                 String              @id @default(uuid())
+  workspaceId        String
+  provider           IntegrationProvider
+  status             SyncJobStatus       @default(QUEUED)
+  trigger            SyncTrigger         @default(MANUAL)
+  requestedById      String?
+  cancelRequested    Boolean             @default(false)
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  cursor             String?
+  page               Int                 @default(0)
+  totalCount         Int?
+  addedCount         Int                 @default(0)
+  updatedCount       Int                 @default(0)
+  unchangedCount     Int                 @default(0)
+  failedCount        Int                 @default(0)
+  unknownStatusCount Int                 @default(0)
+  unmatchedCount     Int                 @default(0)
+  error              String?
+  heartbeatAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     SyncItem[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+}
+
+model SyncItem {
+  id          String         @id @default(uuid())
+  workspaceId String
+  jobId       String
+  entityType  String
+  providerId  String
+  localId     String?
+  result      SyncItemResult
+  error       String?
+  retryCount  Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  job       SyncJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, result])
+  @@index([jobId])
+}
+
+model RawExternalRecord {
+  id          String              @id @default(uuid())
+  workspaceId String
+  provider    IntegrationProvider
+  entityType  String
+  externalId  String
+  payload     Json
+  payloadHash String
+  observedAt  DateTime            @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, entityType, externalId, payloadHash])
+  @@index([workspaceId, provider, externalId])
+  @@index([observedAt])
+}
+
+model StatusMapping {
+  id               String              @id @default(uuid())
+  workspaceId      String
+  provider         IntegrationProvider
+  providerStatus   String
+  normalizedStatus NormalizedStatus
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, providerStatus])
+}
+
+model UnmatchedRecord {
+  id           String              @id @default(uuid())
+  workspaceId  String
+  provider     IntegrationProvider
+  entityType   String
+  externalId   String
+  reference    String?
+  reason       String
+  status       ReviewStatus        @default(OPEN)
+  parcelId     String?
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parcel    Parcel?   @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, provider, entityType, externalId])
+  @@index([workspaceId, status])
+}
+
+// ─────────────────────── Commerce & fulfillment ───────────────────────
+
+model Product {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  sku         String
+  currency    String   @default("DZD")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  costVersions ProductCostVersion[]
+  orderLines   OrderLine[]
+  creatives    Creative[]
+  expenses     Expense[]
+  scenarios    SimulatorScenario[]
+
+  @@unique([workspaceId, sku])
+  @@index([workspaceId, active])
+}
+
+/// Immutable history of unit-economics assumptions. Never updated in place;
+/// a new version closes the previous one by setting its effectiveTo.
+model ProductCostVersion {
+  id                 String    @id @default(uuid())
+  workspaceId        String
+  productId          String
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  salePrice          Int
+  sourcingCost       Int
+  forwardShippingFee Int
+  rtoFee             Int
+  callCenterFee      Int
+  packagingFee       Int
+  currency           String    @default("DZD")
+  note               String?
+  createdById        String?
+  createdAt          DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, productId, effectiveFrom])
+  @@index([effectiveFrom])
+}
+
+model Order {
+  id                    String      @id @default(uuid())
+  workspaceId           String
+  source                OrderSource
+  externalOrderId       String
+  orderNumber           String
+  normalizedOrderNumber String
+  placedAt              DateTime
+  status                OrderStatus @default(PENDING)
+  confirmedAt           DateTime?
+  canceledAt            DateTime?
+  /// SHA-256 of normalized phone (salted per workspace). Raw phone is never stored.
+  phoneHash             String?
+  phoneMasked           String?
+  customerRef           String?
+  wilaya                String?
+  city                  String?
+  codAmount             Int
+  currency              String      @default("DZD")
+  utmSource             String?
+  utmMedium             String?
+  utmCampaign           String?
+  utmContent            String?
+  tags                  String?
+  notes                 String?
+  importBatchId         String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lines       OrderLine[]
+  attribution Attribution?
+  parcels     Parcel[]
+  cashEvents  CashEvent[]
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, source, externalOrderId])
+  @@index([workspaceId, normalizedOrderNumber])
+  @@index([workspaceId, placedAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, wilaya])
+  @@index([confirmedAt])
+}
+
+model OrderLine {
+  id          String  @id @default(uuid())
+  workspaceId String
+  orderId     String
+  productId   String?
+  sku         String?
+  productName String?
+  quantity    Int
+  unitPrice   Int
+  currency    String  @default("DZD")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, productId])
+  @@index([orderId])
+}
+
+model Attribution {
+  id                    String            @id @default(uuid())
+  workspaceId           String
+  orderId               String            @unique
+  creativeId            String?
+  /// Denormalized for the creative + order-date index.
+  orderPlacedAt         DateTime
+  rawUtmContent         String?
+  normalizedCreativeKey String?
+  method                AttributionMethod @default(NONE)
+  confidence            Float             @default(0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  creative  Creative? @relation(fields: [creativeId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, creativeId, orderPlacedAt])
+}
+
+model Parcel {
+  id                   String              @id @default(uuid())
+  workspaceId          String
+  orderId              String?
+  provider             IntegrationProvider
+  trackingId           String
+  providerReference    String?
+  providerStatus       String?
+  normalizedStatus     NormalizedStatus    @default(UNKNOWN)
+  codAmount            Int                 @default(0)
+  currency             String              @default("DZD")
+  shippingFee          Int?
+  returnFee            Int?
+  wilaya               String?
+  dispatchedAt         DateTime?
+  deliveredAt          DateTime?
+  returnedAt           DateTime?
+  lastProviderUpdateAt DateTime?
+  matchMethod          MatchMethod         @default(NONE)
+  matchConfidence      Float               @default(0)
+  isDemoFixture        Boolean             @default(false)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  order      Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  events     ParcelStatusEvent[]
+  cashEvents CashEvent[]
+  unmatched  UnmatchedRecord[]
+
+  @@unique([workspaceId, provider, trackingId])
+  @@index([workspaceId, normalizedStatus])
+  @@index([workspaceId, wilaya])
+  @@index([workspaceId, orderId])
+  @@index([dispatchedAt])
+  @@index([deliveredAt])
+  @@index([returnedAt])
+}
+
+/// Append-only. Deduplicated by (parcelId, eventHash).
+model ParcelStatusEvent {
+  id               String           @id @default(uuid())
+  workspaceId      String
+  parcelId         String
+  providerStatus   String
+  normalizedStatus NormalizedStatus
+  occurredAt       DateTime
+  source           String           @default("MDM_EXPRESS")
+  eventHash        String
+  createdAt        DateTime         @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parcel    Parcel    @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+
+  @@unique([parcelId, eventHash])
+  @@index([workspaceId, occurredAt])
+}
+
+model CashEvent {
+  id          String        @id @default(uuid())
+  workspaceId String
+  type        CashEventType
+  parcelId    String?
+  orderId     String?
+  amount      Int
+  currency    String        @default("DZD")
+  occurredAt  DateTime
+  externalRef String?
+  note        String?
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parcel    Parcel?   @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, externalRef])
+  @@index([workspaceId, occurredAt])
+  @@index([workspaceId, type])
+}
+
+// ─────────────────────── Marketing & finance ───────────────────────
+
+model Creative {
+  id                 String     @id @default(uuid())
+  workspaceId        String
+  platform           AdPlatform @default(META)
+  externalCreativeId String
+  normalizedKey      String
+  name               String?
+  campaignId         String?
+  campaignName       String?
+  adsetName          String?
+  productId          String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product      Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  attributions Attribution[]
+  adSpend      AdSpend[]
+
+  @@unique([workspaceId, platform, externalCreativeId])
+  @@index([workspaceId, normalizedKey])
+}
+
+model AdSpend {
+  id                 String     @id @default(uuid())
+  workspaceId        String
+  platform           AdPlatform @default(META)
+  source             String     @default("META_CSV")
+  date               DateTime
+  campaignId         String?
+  campaignName       String?
+  adsetId            String?
+  adsetName          String?
+  adId               String?
+  adName             String?
+  externalCreativeId String?
+  /// Null = unmatched spend, preserved for review rather than dropped.
+  creativeId         String?
+  spend              Int
+  currency           String     @default("DZD")
+  impressions        Int?
+  clicks             Int?
+  sourceRowHash      String
+  importBatchId      String?
+  createdAt          DateTime   @default(now())
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creative    Creative?    @relation(fields: [creativeId], references: [id], onDelete: SetNull)
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, source, sourceRowHash])
+  @@index([workspaceId, date])
+  @@index([workspaceId, creativeId, date])
+}
+
+model Expense {
+  id                String            @id @default(uuid())
+  workspaceId       String
+  date              DateTime
+  category          ExpenseCategory
+  amount            Int
+  currency          String            @default("DZD")
+  description       String?
+  allocation        ExpenseAllocation @default(GLOBAL)
+  productId         String?
+  costType          CostType          @default(FIXED)
+  bankTransactionId String?           @unique
+  importBatchId     String?
+  createdById       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id], onDelete: SetNull)
+  importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, date])
+  @@index([workspaceId, category])
+  @@index([workspaceId, productId])
+}
+
+/// Bank rows land here first and do not affect profit until categorized or excluded.
+model BankTransaction {
+  id            String           @id @default(uuid())
+  workspaceId   String
+  date          DateTime
+  description   String?
+  amount        Int
+  currency      String           @default("DZD")
+  reference     String?
+  rowHash       String
+  reviewStatus  BankReviewStatus @default(PENDING)
+  importBatchId String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  expense     Expense?
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, rowHash])
+  @@index([workspaceId, date])
+  @@index([workspaceId, reviewStatus])
+}
+
+model ImportBatch {
+  id            String       @id @default(uuid())
+  workspaceId   String
+  kind          ImportKind
+  status        ImportStatus @default(PREVIEW)
+  fileName      String
+  fileSize      Int
+  totalRows     Int          @default(0)
+  importedRows  Int          @default(0)
+  duplicateRows Int          @default(0)
+  errorRows     Int          @default(0)
+  columnMapping Json?
+  createdById   String?
+  createdAt     DateTime     @default(now())
+  finishedAt    DateTime?
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  errors           ImportRowError[]
+  orders           Order[]
+  adSpend          AdSpend[]
+  expenses         Expense[]
+  bankTransactions BankTransaction[]
+
+  @@index([workspaceId, kind, createdAt])
+}
+
+model ImportRowError {
+  id          String   @id @default(uuid())
+  workspaceId String
+  batchId     String
+  rowNumber   Int
+  field       String?
+  message     String
+  rawRow      Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([workspaceId, createdAt])
+}
+
+model MetricSnapshot {
+  id          String   @id @default(uuid())
+  workspaceId String
+  kind        String
+  periodStart DateTime
+  periodEnd   DateTime
+  data        Json
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind, periodStart, periodEnd])
+  @@index([periodStart])
+}
+
+model SimulatorScenario {
+  id          String   @id @default(uuid())
+  workspaceId String
+  productId   String?
+  name        String
+  inputs      Json
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+}
