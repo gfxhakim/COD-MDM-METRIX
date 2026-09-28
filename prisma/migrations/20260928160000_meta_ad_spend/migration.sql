@@ -14,12 +14,32 @@ CREATE TABLE "AdAccount" (
     "timezone" TEXT,
     "accountStatus" INTEGER,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "tokenId" TEXT,
     "lastSeenAt" DATETIME,
     "lastSyncedAt" DATETIME,
     "lastError" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "AdAccount_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "AdAccount_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "AdAccount_tokenId_fkey" FOREIGN KEY ("tokenId") REFERENCES "MetaToken" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "MetaToken" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "workspaceId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "encryptedCredential" TEXT NOT NULL,
+    "keyVersion" INTEGER NOT NULL,
+    "maskedLabel" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'UNTESTED',
+    "lastTestedAt" DATETIME,
+    "lastError" TEXT,
+    "credentialUpdatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "credentialUpdatedById" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "MetaToken_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- RedefineTables
@@ -67,5 +87,11 @@ PRAGMA foreign_keys=ON;
 PRAGMA defer_foreign_keys=OFF;
 
 -- CreateIndex
+CREATE INDEX "AdAccount_tokenId_idx" ON "AdAccount"("tokenId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "AdAccount_workspaceId_platform_externalId_key" ON "AdAccount"("workspaceId", "platform", "externalId");
+
+-- CreateIndex
+CREATE INDEX "MetaToken_workspaceId_idx" ON "MetaToken"("workspaceId");
 

@@ -191,10 +191,12 @@ test.describe("demo workspace MDM (mock adapter)", () => {
 
   test("12. connect Meta ads without the token reaching the browser, and sync spend", async ({ page }) => {
     const token = "demo-meta-token-00000000000000007777";
+    const second = "demo-meta-token-00000000000000008888";
     const seen: string[] = [];
     page.on("response", async (r) => { if (r.url().includes("/api/trpc")) seen.push(await r.text().catch(() => "")); });
     await page.goto("/settings?tab=meta");
     await expect(page.getByText("Demo workspace: a mocked Meta account")).toBeVisible();
+    await page.fill("#meta-label", "Main BM");
     await page.fill("#meta-token", token);
     await page.click("button:has-text('Encrypt & save')");
     await expect(page.getByText("••••7777")).toBeVisible();
@@ -203,8 +205,17 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByText("Demo ad account (not a real Meta account)")).toBeVisible();
     await page.click("button:has-text('Sync spend now')");
     await expect(page.getByText("Last spend sync")).toBeVisible({ timeout: 30_000 });
-    expect(await page.content()).not.toContain(token);
-    expect(seen.join("\n")).not.toContain(token);
+    // A second Business Manager gets its own token.
+    await page.click("button:has-text('Add Business Manager')");
+    await page.fill("#meta-label", "Second BM");
+    await page.fill("#meta-token", second);
+    await page.click("button:has-text('Encrypt & save')");
+    await expect(page.getByText("2 saved, 1 working")).toBeVisible();
+    await expect(page.getByText("••••8888")).toBeVisible();
+    for (const t of [token, second]) {
+      expect(await page.content()).not.toContain(t);
+      expect(seen.join("\n")).not.toContain(t);
+    }
   });
 
   test("10. review an unmatched parcel", async ({ page }) => {

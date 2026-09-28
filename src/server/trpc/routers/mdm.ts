@@ -22,10 +22,15 @@ export const integrationsRouter = router({
     .mutation(({ ctx, input }) => conn.setSyncInterval(ctx.ws, input.minutes)),
 
   meta: workspaceProcedure.query(({ ctx }) => meta.getMeta(ctx.ws)),
-  /** The token travels once, in a POST body, and is encrypted before it touches the database. Only a mask comes back. */
-  saveMetaToken: permitted("integrations.manage").input(z.object({ token: z.string().min(1).max(1024) })).mutation(({ ctx, input }) => meta.saveMetaToken(ctx.ws, input)),
-  removeMetaToken: permitted("integrations.manage").mutation(({ ctx }) => meta.removeMetaToken(ctx.ws)),
-  testMeta: permitted("integrations.manage").mutation(({ ctx }) => meta.testMeta(ctx.ws)),
+  /**
+   * Add a token (one per Business Manager), or rename a saved one and optionally replace its token.
+   * The token travels once, in a POST body, and is encrypted before it touches the database. Only a mask comes back.
+   */
+  saveMetaToken: permitted("integrations.manage")
+    .input(z.object({ id: id.optional(), label: z.string().max(80).optional(), token: z.string().min(1).max(1024).optional() }))
+    .mutation(({ ctx, input }) => meta.saveMetaToken(ctx.ws, input)),
+  removeMetaToken: permitted("integrations.manage").input(z.object({ id })).mutation(({ ctx, input }) => meta.removeMetaToken(ctx.ws, input)),
+  testMeta: permitted("integrations.manage").input(z.object({ id })).mutation(({ ctx, input }) => meta.testMeta(ctx.ws, input)),
   setMetaInterval: permitted("integrations.manage")
     .input(z.object({ minutes: z.number().int().min(15).max(24 * 60) }))
     .mutation(({ ctx, input }) => meta.setMetaInterval(ctx.ws, input.minutes)),

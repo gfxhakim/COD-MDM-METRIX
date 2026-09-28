@@ -1,4 +1,4 @@
-import type { AdAccount, Prisma } from "@prisma/client";
+import type { AdAccount, MetaToken, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { InputError } from "@/server/errors";
 import { rateLimit } from "@/server/rateLimit";
@@ -7,13 +7,13 @@ import { parseExchangeRates } from "@/domain/settings";
 import { convertMinor } from "@/lib/money";
 import { normalizeCreativeKey } from "@/lib/normalize";
 import { sha256 } from "@/server/mdm/redact";
-import { META, metaAdapterForWorkspace, recordAdAccounts, safeMetaMessage, type MetaAdapterFactory } from "./connection";
+import { META, metaAdapterForToken, recordAdAccounts, refreshMetaStatus, safeMetaMessage, savedMetaTokens, type MetaAdapterFactory } from "./connection";
 import { relinkAttribution } from "@/server/imports/service";
 import { API_SOURCE, supersedeCsvSpend } from "./supersede";
-import { MetaError, type MetaAdapter, type MetaSpendRow } from "./types";
+import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaSpendRow } from "./types";
 
 /**
- * Meta ad spend sync. For every enabled ad account the token can see, reads spend per
+ * Meta ad spend sync. For every enabled ad account a saved token can see, reads spend per
  * ad per day and stores it as ad spend (source META_API), linked to the creative whose
  * content ID is the ad ID. The first sync reads the last BACKFILL_DAYS days; later ones
  * re-read the days since the last sync plus REFRESH_DAYS, because Meta keeps adjusting
@@ -27,7 +27,7 @@ const LEASE_MS = 20 * 60_000;
 const MAX_RETRIES = 3;
 
 export type MetaSyncDeps = { adapterFactory: MetaAdapterFactory; sleep: (ms: number) => Promise<void>; now: () => Date };
-const defaultDeps: MetaSyncDeps = { adapterFactory: metaAdapterForWorkspace, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: () => new Date() };
+const defaultDeps: MetaSyncDeps = { adapterFactory: metaAdapterForToken, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: () => new Date() };
 
 // ─────────────────────────── dates (YYYY-MM-DD in the ad account's time zone) ───────────────────────────
 
@@ -191,15 +191,18 @@ async function syncAccount(adapter: MetaAdapter, env: Env, acc: AdAccount, full:
 }
 
 /**
- * One spend sync for a workspace. Holds a lease so two never run at once. One account's
- * problem (a missing exchange rate, a revoked permission) doesn't stop the others; a
- * rejected token stops the sync and marks the connection as needing attention.
+ * One spend sync for a workspace. Holds a lease so two never run at once. Each saved token
+ * (Business Manager) lists its ad accounts; an account two tokens can see is read with the
+ * older one. One account's problem (a missing exchange rate, a revoked permission) doesn't
+ * stop the others, and a rejected token only stops its own accounts: it is marked as
+ * needing a new token, and the connection only stops once no token works.
  */
 export async function runMetaSync(workspaceId: string, opts: { full?: boolean; trigger?: "MANUAL" | "SCHEDULED"; actorUserId?: string | null } = {}, partial: Partial<MetaSyncDeps> = {}): Promise<MetaSyncResult> {
   const deps = { ...defaultDeps, ...partial };
   const started = deps.now();
   const conn = await db.integrationConnection.findUnique({ where: { workspaceId_provider: { workspaceId, provider: META } } });
-  if (!conn?.encryptedCredential || conn.status !== "CONNECTED") return { ran: false, reason: "not_connected" };
+  const tokens = (await savedMetaTokens(workspaceId)).filter((t) => t.status === "CONNECTED");
+  if (!conn || conn.status !== "CONNECTED" || !tokens.length) return { ran: false, reason: "not_connected" };
   const lease = await db.integrationConnection.updateMany({
     where: { id: conn.id, OR: [{ syncLeaseUntil: null }, { syncLeaseUntil: { lt: started } }] },
     data: { syncLeaseUntil: new Date(started.getTime() + LEASE_MS), lastSyncAttemptAt: started },
@@ -208,21 +211,48 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
 
   const counts: Counts = { added: 0, updated: 0, unchanged: 0, spend: 0 };
   const failed: { account: string; message: string }[] = [];
+  const rejected = new Map<string, string>();
   let fatal: string | null = null;
-  let tokenRejected = false;
   let accounts: AdAccount[] = [];
   let superseded = 0;
   let from = null as string | null;
   let until = null as string | null;
+  const reject = (t: MetaToken, message: string) => {
+    rejected.set(t.id, message);
+    failed.push({ account: t.label, message });
+  };
   try {
-    const adapter = await deps.adapterFactory(workspaceId);
-    await recordAdAccounts(workspaceId, await withRetry(() => adapter.listAdAccounts(), deps), started);
-    // Enabled accounts the token can still see.
-    accounts = await db.adAccount.findMany({ where: { workspaceId, platform: "META", enabled: true, lastSeenAt: { gte: started } }, orderBy: { externalId: "asc" } });
+    // 1. What each token can see. The oldest token that lists an account reads it.
+    const adapters = new Map<string, MetaAdapter>();
+    const owner = new Map<string, string>();
+    const listed: MetaAdAccount[] = [];
+    for (const t of tokens) {
+      try {
+        const adapter = await deps.adapterFactory(workspaceId, t);
+        const seen = await withRetry(() => adapter.listAdAccounts(), deps);
+        adapters.set(t.id, adapter);
+        for (const a of seen) {
+          if (owner.has(a.id)) continue;
+          owner.set(a.id, t.id);
+          listed.push(a);
+        }
+      } catch (e) {
+        if (!(e instanceof MetaError)) console.error(`[meta] listing ad accounts failed for token ${t.id}`, e instanceof Error ? e.message : e);
+        const message = safeMetaMessage(e);
+        if (e instanceof MetaError && e.kind === "AUTH") reject(t, message);
+        else failed.push({ account: t.label, message });
+      }
+    }
+    await recordAdAccounts(workspaceId, listed, owner, started, [...adapters.keys()]);
+
+    // 2. Enabled accounts a working token can see right now.
+    accounts = await db.adAccount.findMany({ where: { workspaceId, platform: "META", enabled: true, lastSeenAt: { gte: started }, tokenId: { in: [...adapters.keys()] } }, orderBy: { externalId: "asc" } });
     const env = await loadEnv(workspaceId);
     for (const acc of accounts) {
+      const token = tokens.find((t) => t.id === acc.tokenId)!;
+      if (rejected.has(token.id)) continue;
       try {
-        const w = await syncAccount(adapter, env, acc, !!opts.full, deps, counts);
+        const w = await syncAccount(adapters.get(token.id)!, env, acc, !!opts.full, deps, counts);
         from = !from || w.since < from ? w.since : from;
         until = !until || w.until > until ? w.until : until;
         await db.adAccount.update({ where: { id: acc.id }, data: { lastSyncedAt: started, lastError: null } });
@@ -230,12 +260,8 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
         if (!(e instanceof MetaError)) console.error(`[meta] account ${acc.externalId} failed`, e instanceof Error ? e.message : e);
         const message = safeMetaMessage(e);
         await db.adAccount.update({ where: { id: acc.id }, data: { lastError: message } });
-        failed.push({ account: acc.name ?? acc.externalId, message });
-        if (e instanceof MetaError && e.kind === "AUTH") {
-          fatal = message;
-          tokenRejected = true;
-          break;
-        }
+        if (e instanceof MetaError && e.kind === "AUTH") reject(token, message);
+        else failed.push({ account: acc.name ?? acc.externalId, message });
       }
     }
     if (from && until) superseded = await supersedeCsvSpend(workspaceId, { from: dayDate(addDays(from, -1)), to: dayDate(addDays(until, 1)) }, started);
@@ -244,23 +270,20 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
   } catch (e) {
     if (!(e instanceof MetaError)) console.error("[meta] sync failed", e instanceof Error ? e.message : e);
     fatal = safeMetaMessage(e);
-    tokenRejected = e instanceof MetaError && e.kind === "AUTH";
   }
 
-  const error = fatal ?? (failed.length ? `${failed.length} of ${accounts.length} ad account${accounts.length === 1 ? "" : "s"} could not be synced: ${failed.map((f) => `${f.account}: ${f.message}`).join(" ")}`.slice(0, 1000) : null);
+  // A rejected token needs a new one; its accounts wait until then.
+  for (const [id, message] of rejected) await db.metaToken.update({ where: { id }, data: { status: "ERROR", lastError: message } });
+  if (rejected.size) await refreshMetaStatus(workspaceId);
+
+  const error = fatal ?? (failed.length ? `Not everything could be synced: ${failed.map((f) => `${f.account}: ${f.message}`).join(" ")}`.slice(0, 1000) : null);
   const ok = !error;
   const summary = { from, until, accounts: accounts.length, added: counts.added, updated: counts.updated, unchanged: counts.unchanged, superseded, spend: counts.spend, failed };
   await db.integrationConnection.update({
     where: { id: conn.id },
-    data: {
-      syncLeaseUntil: null,
-      lastSyncSummary: summary as Prisma.InputJsonValue,
-      lastError: error,
-      ...(ok ? { lastSuccessfulSyncAt: started } : {}),
-      ...(tokenRejected ? { status: "ERROR" as const } : {}),
-    },
+    data: { syncLeaseUntil: null, lastSyncSummary: summary as Prisma.InputJsonValue, lastError: error, ...(ok ? { lastSuccessfulSyncAt: started } : {}) },
   });
-  await db.auditLog.create({ data: { workspaceId, actorUserId: opts.actorUserId ?? null, action: "meta.synced", entityType: "IntegrationConnection", entityId: conn.id, metadata: { trigger: opts.trigger ?? "MANUAL", full: !!opts.full, ok, ...summary, failed: failed.length } } });
+  await db.auditLog.create({ data: { workspaceId, actorUserId: opts.actorUserId ?? null, action: "meta.synced", entityType: "IntegrationConnection", entityId: conn.id, metadata: { trigger: opts.trigger ?? "MANUAL", full: !!opts.full, ok, ...summary, failed: failed.length, tokens: tokens.length, rejectedTokens: rejected.size } } });
   return { ran: true, ok, accounts: accounts.length, added: counts.added, updated: counts.updated, unchanged: counts.unchanged, superseded, failed, error };
 }
 
@@ -269,7 +292,7 @@ export async function startMetaSync(ctx: WorkspaceContext, input: { full: boolea
   assertCan(ctx, "sync.run");
   await rateLimit(`meta-sync:${ctx.workspaceId}`, 12, 3600);
   const conn = await db.integrationConnection.findUnique({ where: { workspaceId_provider: { workspaceId: ctx.workspaceId, provider: META } } });
-  if (!conn?.encryptedCredential) throw new InputError("Save a Meta access token in Settings first");
+  if (!conn || conn.status === "NOT_CONFIGURED") throw new InputError("Save a Meta access token in Settings first");
   if (conn.status !== "CONNECTED") throw new InputError("Run a successful connection test before syncing");
   if (conn.syncLeaseUntil && conn.syncLeaseUntil > new Date()) return { alreadyRunning: true };
   const run = () => runMetaSync(ctx.workspaceId, { full: input.full, trigger: "MANUAL", actorUserId: ctx.userId }).catch((e) => console.error("[meta] background sync crashed", e));
@@ -281,7 +304,7 @@ export async function startMetaSync(ctx: WorkspaceContext, input: { full: boolea
 /** Scheduler: run the spend sync for every connected workspace whose interval has passed. */
 export async function runDueMetaSyncs(now = new Date(), partial: Partial<MetaSyncDeps> = {}) {
   const conns = await db.integrationConnection.findMany({
-    where: { provider: META, status: "CONNECTED", encryptedCredential: { not: null }, syncIntervalMinutes: { gt: 0 } },
+    where: { provider: META, status: "CONNECTED", syncIntervalMinutes: { gt: 0 } },
     select: { workspaceId: true, syncIntervalMinutes: true, lastSyncAttemptAt: true },
     orderBy: { lastSyncAttemptAt: { sort: "asc", nulls: "first" } },
     take: 50,

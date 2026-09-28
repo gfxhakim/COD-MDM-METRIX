@@ -229,6 +229,7 @@ model Workspace {
   creatives        Creative[]
   adSpend          AdSpend[]
   adAccounts       AdAccount[]
+  metaTokens       MetaToken[]
   expenses         Expense[]
   bankTransactions BankTransaction[]
   importBatches    ImportBatch[]
@@ -887,14 +888,44 @@ model AdAccount {
   /// Meta's account_status (1 = active, 2 = disabled, 101 = closed, …).
   accountStatus Int?
   enabled       Boolean    @default(true)
-  /// Last time the token could see this account.
+  /// The saved token (Business Manager) that reads this account. Null when no saved token can see it.
+  tokenId       String?
+  /// Last time a token could see this account.
   lastSeenAt    DateTime?
   lastSyncedAt  DateTime?
   lastError     String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  token     MetaToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, platform, externalId])
+  @@index([tokenId])
+}
+
+/// A read-only Meta access token, usually one per Business Manager. A workspace can save
+/// several; the META_ADS IntegrationConnection holds the shared schedule and sync state.
+model MetaToken {
+  id                    String           @id @default(uuid())
+  workspaceId           String
+  /// Owner-chosen name, e.g. the Business Manager's name.
+  label                 String
+  /// AES-256-GCM envelope bound to this workspace and token ID. Never sent to the browser.
+  encryptedCredential   String
+  keyVersion            Int
+  /// e.g. "••••1a2b". Safe to display.
+  maskedLabel           String
+  status                ConnectionStatus @default(UNTESTED)
+  lastTestedAt          DateTime?
+  lastError             String?
+  credentialUpdatedAt   DateTime         @default(now())
+  credentialUpdatedById String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  adAccounts AdAccount[]
+
+  @@index([workspaceId])
 }

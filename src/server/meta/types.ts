@@ -52,3 +52,6 @@ export interface MetaAdapter {
   /** Spend per ad per day for `since`..`until` (inclusive, account time zone), one page at a time. */
   dailyAdSpend(q: { accountId: string; since: string; until: string; cursor: string | null; currency: string }, signal?: AbortSignal): Promise<MetaSpendPage>;
 }
+
+/** Encryption context for a saved Meta token: bound to its workspace and its own ID. */
+export const metaTokenPurpose = (tokenId: string) => `integration:META_ADS:${tokenId}`;

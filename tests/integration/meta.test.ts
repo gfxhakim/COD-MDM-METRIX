@@ -1,9 +1,11 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/server/db";
+import { reencryptCredentials } from "@/server/crypto/rotate";
+import { decryptSecret } from "@/server/crypto/secrets";
 import { testMeta } from "@/server/meta/connection";
 import { createMockMetaAdapter, type MockMetaOptions } from "@/server/meta/mock";
 import { runDueMetaSyncs, runMetaSync } from "@/server/meta/sync";
-import { MetaError, type MetaAdAccount, type MetaSpendRow } from "@/server/meta/types";
+import { MetaError, metaTokenPurpose, type MetaAdAccount, type MetaAdapter, type MetaSpendRow } from "@/server/meta/types";
 import { addMember, cost, makeTenant } from "../helpers";
 
 type Tenant = Awaited<ReturnType<typeof makeTenant>>;
@@ -21,10 +23,12 @@ const row = (adId: string, spend: number, over: Partial<MetaSpendRow> = {}): Met
 
 async function connected(name: string) {
   const t = await makeTenant(name);
-  await t.caller.integrations.saveMetaToken({ token: TOKEN });
+  await t.caller.integrations.saveMetaToken({ label: "Main BM", token: TOKEN });
+  await db.metaToken.updateMany({ where: { workspaceId: t.ws.id }, data: { status: "CONNECTED" } });
   await db.integrationConnection.updateMany({ where: { workspaceId: t.ws.id, provider: "META_ADS" }, data: { status: "CONNECTED" } });
   return t;
 }
+const tokenId = async (t: Tenant, label = "Main BM") => (await db.metaToken.findFirstOrThrow({ where: { workspaceId: t.ws.id, label } })).id;
 
 function sync(t: Tenant, opts: Omit<MockMetaOptions, "token">, extra: { full?: boolean; now?: Date } = {}) {
   const adapter = createMockMetaAdapter({ token: TOKEN, ...opts });
@@ -38,11 +42,14 @@ describe("Meta token", () => {
   it("is encrypted, only ever shown masked, and only owners and admins manage it", async () => {
     const t = await makeTenant("MetaToken");
     const view = await t.caller.integrations.saveMetaToken({ token: TOKEN });
-    expect(view).toMatchObject({ hasToken: true, maskedLabel: "••••0042", status: "UNTESTED" });
+    expect(view).toMatchObject({ hasToken: true, status: "UNTESTED", tokens: [{ label: "Business Manager 1", maskedLabel: "••••0042", status: "UNTESTED", accounts: 0 }] });
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    const row = await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: t.ws.id, provider: "META_ADS" } });
+    const row = await db.metaToken.findFirstOrThrow({ where: { workspaceId: t.ws.id } });
     expect(row.encryptedCredential).toMatch(/^v1:/);
     expect(row.encryptedCredential).not.toContain("placeholderTOKEN");
+    // Bound to this token: it can't be decrypted as another token or another workspace.
+    expect(decryptSecret(row.encryptedCredential, { workspaceId: t.ws.id, purpose: metaTokenPurpose(row.id) })).toBe(TOKEN);
+    expect(() => decryptSecret(row.encryptedCredential, { workspaceId: t.ws.id, purpose: metaTokenPurpose("00000000-0000-4000-8000-000000000000") })).toThrow();
     expect(JSON.stringify(await db.auditLog.findMany({ where: { workspaceId: t.ws.id } }))).not.toContain("placeholderTOKEN");
 
     const analyst = await addMember(t.ws.id, "ANALYST");
@@ -50,20 +57,27 @@ describe("Meta token", () => {
     await expect(analyst.caller.integrations.syncMeta({ full: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(JSON.stringify(await analyst.caller.integrations.meta())).not.toContain(TOKEN);
     await expect(t.caller.integrations.saveMetaToken({ token: "short" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Another workspace's token can't be touched.
+    const other = await makeTenant("MetaTokenOther");
+    await expect(other.caller.integrations.saveMetaToken({ id: row.id, label: "Mine now" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(other.caller.integrations.removeMetaToken({ id: row.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(other.caller.integrations.testMeta({ id: row.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
     // Sync needs a passing test first.
     await expect(t.caller.integrations.syncMeta({ full: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("the connection test lists every ad account and switches them all on", async () => {
     const t = await makeTenant("MetaTest");
-    await t.caller.integrations.saveMetaToken({ token: TOKEN });
-    const ok = await testMeta(t.ctx, async () => createMockMetaAdapter({ token: TOKEN, accounts: [DZD_ACCOUNT, USD_ACCOUNT] }));
+    await t.caller.integrations.saveMetaToken({ label: "Main BM", token: TOKEN });
+    const id = await tokenId(t);
+    const ok = await testMeta(t.ctx, { id }, async () => createMockMetaAdapter({ token: TOKEN, accounts: [DZD_ACCOUNT, USD_ACCOUNT] }));
     expect(ok).toMatchObject({ ok: true, connection: { status: "CONNECTED" } });
     expect(ok.message).toContain("2 ad accounts");
-    expect(ok.connection.accounts.map((a) => [a.externalId, a.enabled])).toEqual(expect.arrayContaining([["act_111", true], ["act_222", true]]));
+    expect(ok.connection.accounts.map((a) => [a.externalId, a.enabled, a.tokenId])).toEqual(expect.arrayContaining([["act_111", true, id], ["act_222", true, id]]));
+    expect(ok.connection.tokens).toMatchObject([{ id, status: "CONNECTED", accounts: 2 }]);
 
-    const bad = await testMeta(t.ctx, async () => createMockMetaAdapter({ token: "invalid-token-0000000000000" }));
-    expect(bad).toMatchObject({ ok: false, connection: { status: "ERROR" } });
+    const bad = await testMeta(t.ctx, { id }, async () => createMockMetaAdapter({ token: "invalid-token-0000000000000" }));
+    expect(bad).toMatchObject({ ok: false, connection: { status: "ERROR", tokens: [{ id, status: "ERROR" }] } });
   });
 });
 
@@ -160,6 +174,7 @@ describe("Meta sync problems", () => {
     const conn = await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: t.ws.id, provider: "META_ADS" } });
     expect(conn).toMatchObject({ status: "ERROR", syncLeaseUntil: null });
     expect(conn.lastError).toContain("access token");
+    expect(await db.metaToken.findFirstOrThrow({ where: { workspaceId: t.ws.id } })).toMatchObject({ status: "ERROR", lastError: expect.stringContaining("access token") });
     // Nothing runs until a new test passes.
     expect(await runMetaSync(t.ws.id, {}, { adapterFactory: async () => adapter, sleep: noSleep, now: () => NOW })).toEqual({ ran: false, reason: "not_connected" });
   });
@@ -170,7 +185,7 @@ describe("Meta sync problems", () => {
     expect((await sync(t, { accounts: [DZD_ACCOUNT] })).result).toEqual({ ran: false, reason: "running" });
     await db.integrationConnection.updateMany({ where: { workspaceId: t.ws.id, provider: "META_ADS" }, data: { syncLeaseUntil: null } });
 
-    await testMeta(t.ctx, async () => createMockMetaAdapter({ token: TOKEN, accounts: [DZD_ACCOUNT, USD_ACCOUNT] }));
+    await testMeta(t.ctx, { id: await tokenId(t) }, async () => createMockMetaAdapter({ token: TOKEN, accounts: [DZD_ACCOUNT, USD_ACCOUNT] }));
     const usd = await db.adAccount.findFirstOrThrow({ where: { workspaceId: t.ws.id, externalId: "act_222" } });
     await t.caller.integrations.setAdAccountEnabled({ id: usd.id, enabled: false });
     const adapter = createMockMetaAdapter({ token: TOKEN, accounts: [DZD_ACCOUNT, USD_ACCOUNT] });
@@ -182,5 +197,77 @@ describe("Meta sync problems", () => {
     expect(n).toBeGreaterThan(0);
     await runDueMetaSyncs(new Date(NOW.getTime() + 10 * 60_000), deps);
     expect(adapter.calls.length).toBe(n);
+  });
+});
+
+describe("Several Business Managers", () => {
+  const SHARED: MetaAdAccount = { id: "act_333", name: "Shared account", currency: "DZD", timezone: "Africa/Algiers", accountStatus: 1 };
+  const TOKEN_B = "EAAplaceholderTOKEN00000000000000BB";
+
+  it("reads every ad account of every token once, and one rejected token doesn't stop the others", async () => {
+    const t = await connected("MetaMultiBM");
+    await t.caller.integrations.saveMetaToken({ label: "Second BM", token: TOKEN_B });
+    const [a, b] = [await tokenId(t), await tokenId(t, "Second BM")];
+    const rows = { act_111: [row("120000000000081", 100000)], act_222: [row("120000000000082", 20000)], act_333: [row("120000000000083", 30000)] };
+    const adapters = {
+      [a]: createMockMetaAdapter({ token: TOKEN, accounts: [DZD_ACCOUNT, SHARED], rows }),
+      [b]: createMockMetaAdapter({ token: TOKEN_B, accounts: [{ ...USD_ACCOUNT, currency: "DZD" }, SHARED], rows }),
+    };
+    const factory = async (_ws: string, tok: { id: string }): Promise<MetaAdapter> => adapters[tok.id];
+
+    // Each token's test lists its accounts; the shared one stays with the token that read it first.
+    await testMeta(t.ctx, { id: a }, factory);
+    const tested = await testMeta(t.ctx, { id: b }, factory);
+    expect(tested.message).toContain("1 of them is already read through another saved token");
+    const owners = (v: typeof tested.connection) => Object.fromEntries(v.accounts.map((x) => [x.externalId, x.tokenId]));
+    expect(owners(tested.connection)).toEqual({ act_111: a, act_222: b, act_333: a });
+    expect(tested.connection.tokens.map((x) => [x.label, x.accounts])).toEqual([["Main BM", 2], ["Second BM", 1]]);
+
+    const first = await runMetaSync(t.ws.id, {}, { adapterFactory: factory, sleep: noSleep, now: () => NOW });
+    expect(first).toMatchObject({ ran: true, ok: true, accounts: 3, added: 3 });
+    // The shared account is read once, with the older token.
+    expect(adapters[a].calls.some((c) => c.accountId === "act_333")).toBe(true);
+    expect(adapters[b].calls.some((c) => c.accountId === "act_333")).toBe(false);
+    expect(await spendTotal(t)).toBe(150000);
+
+    // The second token is revoked: its own account waits, everything else keeps syncing.
+    adapters[b] = createMockMetaAdapter({ token: "invalid-revoked-token-000000000" });
+    const second = await runMetaSync(t.ws.id, { full: true }, { adapterFactory: factory, sleep: noSleep, now: () => new Date(NOW.getTime() + 60_000) });
+    expect(second).toMatchObject({ ran: true, ok: false, accounts: 2 });
+    expect(second.ran && second.error).toContain("Second BM");
+    const view = await t.caller.integrations.meta();
+    expect(view.status).toBe("CONNECTED");
+    expect(view.tokens.map((x) => [x.label, x.status])).toEqual([["Main BM", "CONNECTED"], ["Second BM", "ERROR"]]);
+
+    // Removing the first token releases its accounts; the second, once replaced and tested, picks up the shared one.
+    await t.caller.integrations.removeMetaToken({ id: a });
+    expect(owners(await t.caller.integrations.meta())).toEqual({ act_111: null, act_222: b, act_333: null });
+    await t.caller.integrations.saveMetaToken({ id: b, token: TOKEN_B });
+    adapters[b] = createMockMetaAdapter({ token: TOKEN_B, accounts: [{ ...USD_ACCOUNT, currency: "DZD" }, SHARED], rows });
+    const retest = await testMeta(t.ctx, { id: b }, factory);
+    expect(owners(retest.connection)).toEqual({ act_111: null, act_222: b, act_333: b });
+    // Spend already synced is kept.
+    expect(await spendTotal(t)).toBe(150000);
+    // Renaming keeps the token.
+    const renamed = await t.caller.integrations.saveMetaToken({ id: b, label: "Shop 2" });
+    expect(renamed.tokens).toMatchObject([{ id: b, label: "Shop 2", status: "CONNECTED", maskedLabel: "••••00BB" }]);
+  });
+
+  it("key rotation re-encrypts every saved token", async () => {
+    const t = await connected("MetaRotate");
+    const id = await tokenId(t);
+    const oldKey = process.env.APP_ENCRYPTION_KEY!;
+    vi.stubEnv("APP_ENCRYPTION_KEY", Buffer.alloc(32, 7).toString("base64"));
+    vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", oldKey);
+    vi.stubEnv("APP_ENCRYPTION_KEY_VERSION", "2");
+    try {
+      expect(await reencryptCredentials(2, { workspaceId: t.ws.id })).toEqual({ reencrypted: 1, alreadyCurrent: 0, failed: [] });
+      const row = await db.metaToken.findUniqueOrThrow({ where: { id } });
+      expect(row).toMatchObject({ keyVersion: 2, encryptedCredential: expect.stringMatching(/^v1:2:/) });
+      vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", "");
+      expect(decryptSecret(row.encryptedCredential, { workspaceId: t.ws.id, purpose: metaTokenPurpose(id) })).toBe(TOKEN);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
