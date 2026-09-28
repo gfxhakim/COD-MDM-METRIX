@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/form";
-import { Loading } from "@/components/ui/states";
+import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { formatMoney } from "@/lib/money";
@@ -53,6 +53,7 @@ export function MetaTab() {
   const interval = useMutation(trpc.integrations.setMetaInterval.mutationOptions({ onSuccess: () => { refresh(); toast("success", "Sync interval saved"); }, onError }));
   const toggle = useMutation(trpc.integrations.setAdAccountEnabled.mutationOptions({ onSuccess: refresh, onError }));
   const sync = useMutation(trpc.integrations.syncMeta.mutationOptions({ onSuccess: (r) => { refresh(); toast("success", r.alreadyRunning ? "A spend sync is already running" : "Spend sync started"); }, onError }));
+  if (q.error && !q.data) return <Card><ErrorState message={`Meta ads settings could not be loaded: ${errorMessage(q.error)}`} /></Card>;
   if (!q.data) return <Card><Loading /></Card>;
   const c = q.data;
   const cur = ws.data?.currency ?? "DZD";
