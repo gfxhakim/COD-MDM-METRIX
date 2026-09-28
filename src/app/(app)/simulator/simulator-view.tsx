@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Save, Trash2 } from "lucide-react";
 import * as React from "react";
+import { useCurrencyView } from "@/components/app/currency";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
@@ -68,6 +69,7 @@ function cellStyle(v: number, scale: number): React.CSSProperties {
 }
 
 export function SimulatorView({ initialProductId }: { initialProductId: string }) {
+  const { view } = useCurrencyView();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -140,7 +142,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
       {!f ? <Skeleton className="h-96" /> : (
         <div className="grid gap-6 xl:grid-cols-[26rem_1fr]">
           <Card>
-            <CardHeader title="Formula inputs" description={`Currency: ${currency}`} actions={
+            <CardHeader title="Formula inputs" description={view === currency ? `Currency: ${currency}` : `Currency: ${currency}. The simulator always works in ${currency}, the currency your amounts are kept in.`} actions={
               <Select aria-label="Model" value={f.model} onChange={(e) => set("model")(e.target.value as Form["model"])} className="w-36">
                 <option value="DEFAULT">Default model</option><option value="DETAILED">Detailed model</option>
               </Select>

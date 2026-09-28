@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator, History, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { useMoney } from "@/components/app/currency";
 import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, rateInput, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
@@ -16,7 +17,7 @@ import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
-import { formatMoney, parseToMinor } from "@/lib/money";
+import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDate, toDateInput } from "@/lib/utils";
 import { useCan } from "@/components/app/use-can";
@@ -123,6 +124,7 @@ function ProductDialog({ product, open, onOpenChange, currency, rates }: { produ
 }
 
 function CostVersionDialog({ product, open, onOpenChange, rates }: { product: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; rates: Rates }) {
+  const money = useMoney();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -184,7 +186,7 @@ function CostVersionDialog({ product, open, onOpenChange, rates }: { product: Pr
                 <div className="num mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-muted sm:grid-cols-3">
                   {COST_FIELDS.map((f) => (
                     <span key={f.key}>
-                      {f.label.split(" (")[0]}: <span className="text-fg">{formatMoney(v[f.key], v.currency)}</span>
+                      {f.label.split(" (")[0]}: <span className="text-fg">{money.fmt(v[f.key], v.currency)}</span>
                       {f.key === "sourcingCost" ? <OriginalAmount amount={v.sourcingCostOriginal} currency={v.sourcingCurrency} rate={v.sourcingFxRate} /> : null}
                     </span>
                   ))}
@@ -200,6 +202,7 @@ function CostVersionDialog({ product, open, onOpenChange, rates }: { product: Pr
 }
 
 export function ProductsView() {
+  const money = useMoney();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -252,7 +255,7 @@ export function ProductsView() {
                   <Td className="font-mono text-xs text-muted">{p.sku}</Td>
                   {(["salePrice", "sourcingCost", "forwardShippingFee", "rtoFee", "callCenterFee", "packagingFee"] as const).map((k) => (
                     <Td key={k} className="num text-right">
-                      {p.currentCost ? formatMoney(p.currentCost[k], p.currency) : "—"}
+                      {p.currentCost ? money.fmt(p.currentCost[k], p.currency) : "—"}
                       {k === "sourcingCost" && p.currentCost ? <OriginalAmount amount={p.currentCost.sourcingCostOriginal} currency={p.currentCost.sourcingCurrency} rate={p.currentCost.sourcingFxRate} /> : null}
                     </Td>
                   ))}

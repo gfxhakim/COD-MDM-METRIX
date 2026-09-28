@@ -4,6 +4,7 @@ import type { NormalizedStatus, OrderStatus } from "@prisma/client";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ClipboardList, Plus, Search } from "lucide-react";
 import * as React from "react";
+import { useMoney } from "@/components/app/currency";
 import { PageHeader } from "@/components/app/page-header";
 import { OrderStatusBadge, ParcelStatusBadge } from "@/components/app/status";
 import { useCan } from "@/components/app/use-can";
@@ -12,7 +13,6 @@ import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
-import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDate, timeAgo } from "@/lib/utils";
 import { OrderDrawer } from "./order-drawer";
@@ -22,6 +22,7 @@ const PARCEL_STATUSES: NormalizedStatus[] = ["PENDING", "CONFIRMED", "SHIPPED", 
 const ORDER_STATUSES: OrderStatus[] = ["PENDING", "CONFIRMED", "CANCELED"];
 
 export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: NormalizedStatus }) {
+  const money = useMoney();
   const trpc = useTRPC();
   const canWrite = useCan("orders.write");
   const [search, setSearch] = React.useState("");
@@ -122,7 +123,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   <Td className="font-mono text-xs text-muted">{o.trackingId ?? "—"}</Td>
                   <Td className="font-mono text-xs text-muted">{o.providerStatus ?? "—"}</Td>
                   <Td><ParcelStatusBadge status={o.normalizedStatus} /></Td>
-                  <Td className="num text-right">{formatMoney(o.codAmount, o.currency)}</Td>
+                  <Td className="num text-right">{money.fmt(o.codAmount, o.currency)}</Td>
                   <Td className="text-xs text-muted">{o.lastProviderUpdateAt ? timeAgo(o.lastProviderUpdateAt) : "—"}</Td>
                 </Tr>
               ))}

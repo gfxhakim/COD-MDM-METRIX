@@ -8,6 +8,7 @@ import * as React from "react";
 import { logoutAction, switchWorkspaceAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/app/logo";
 import { NAV } from "@/components/app/nav";
+import { CurrencyPicker, CurrencyProvider } from "@/components/app/currency";
 import { DataFreshness } from "@/components/app/data-freshness";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,7 @@ function SidebarContent({ current, workspaces, user, onNavigate }: { current: Sh
 export function AppShell({ current, workspaces, user, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: { name: string; email: string }; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   return (
+    <CurrencyProvider workspaceId={current.id}>
     <div className="flex min-h-screen">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-md focus:bg-positive focus:px-3 focus:py-2 focus:text-black">Skip to content</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-border bg-sidebar lg:block">
@@ -149,10 +151,11 @@ export function AppShell({ current, workspaces, user, children }: { current: She
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-bg/85 px-4 backdrop-blur lg:px-8">
           <button className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-fg lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu className="size-5" /></button>
           <div className="lg:hidden"><Logo compact /></div>
-          <div className="ml-auto"><DataFreshness /></div>
+          <div className="ml-auto flex items-center gap-3"><CurrencyPicker /><DataFreshness /></div>
         </header>
         <main id="main" className="flex-1 px-4 py-6 lg:px-8">{children}</main>
       </div>
     </div>
+    </CurrencyProvider>
   );
 }

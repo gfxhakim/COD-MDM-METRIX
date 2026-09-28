@@ -4,6 +4,8 @@ import { audit } from "@/server/audit";
 import { DEFAULT_MDM_STATUS_MAP } from "@/domain/statusMapping";
 import { economicsDefaultsSchema, parseExchangeRates, verdictThresholdsSchema, type EconomicsDefaults, type ExchangeRates, type VerdictThresholds } from "@/domain/settings";
 import { assertCan, ForbiddenError, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
+import { InputError } from "@/server/errors";
+import type { CurrencyCode } from "@/lib/money";
 
 function slugify(name: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40) || "workspace";
@@ -54,6 +56,7 @@ export async function getWorkspace(ctx: WorkspaceContext) {
     id: ws.id,
     name: ws.name,
     currency: ws.currency,
+    reportCurrency: ws.reportCurrency ?? ws.currency,
     timezone: ws.timezone,
     isDemo: ws.isDemo,
     economicsDefaults: economicsDefaultsSchema.parse(ws.economicsDefaults ?? {}),
@@ -64,12 +67,23 @@ export async function getWorkspace(ctx: WorkspaceContext) {
 
 export async function updateWorkspace(
   ctx: WorkspaceContext,
-  input: { name?: string; timezone?: string; economicsDefaults?: EconomicsDefaults; verdictThresholds?: VerdictThresholds; exchangeRates?: ExchangeRates },
+  input: { name?: string; timezone?: string; economicsDefaults?: EconomicsDefaults; verdictThresholds?: VerdictThresholds; exchangeRates?: ExchangeRates; reportCurrency?: CurrencyCode },
 ) {
   if (input.name !== undefined || input.timezone !== undefined) assertCan(ctx, "workspace.manage");
-  if (input.economicsDefaults || input.verdictThresholds || input.exchangeRates) assertCan(ctx, "settings.economics");
+  if (input.economicsDefaults || input.verdictThresholds || input.exchangeRates || input.reportCurrency) assertCan(ctx, "settings.economics");
   // A rate for the workspace's own currency would be meaningless (always 1).
   const exchangeRates = input.exchangeRates ? Object.fromEntries(Object.entries(input.exchangeRates).filter(([c]) => c !== ctx.currency)) : undefined;
+  const current = await db.workspace.findUniqueOrThrow({ where: { id: ctx.workspaceId }, select: { reportCurrency: true, exchangeRates: true } });
+  // Reports need a rate for the currency they are shown in. Stored amounts never change.
+  const rates: Partial<Record<string, number>> = exchangeRates ?? parseExchangeRates(current.exchangeRates);
+  const report = input.reportCurrency ?? current.reportCurrency ?? ctx.currency;
+  if ((input.reportCurrency || exchangeRates) && report !== ctx.currency && !rates[report]) {
+    throw new InputError(
+      input.reportCurrency
+        ? `Add a ${report} rate in Economics & currencies first, so amounts kept in ${ctx.currency} can be shown in ${report}.`
+        : `Reports are shown in ${report}. Keep its rate, or switch the report currency back to ${ctx.currency} first.`,
+    );
+  }
   const ws = await db.workspace.update({
     where: { id: ctx.workspaceId },
     data: {
@@ -78,9 +92,10 @@ export async function updateWorkspace(
       economicsDefaults: input.economicsDefaults,
       verdictThresholds: input.verdictThresholds,
       exchangeRates,
+      reportCurrency: input.reportCurrency ? (input.reportCurrency === ctx.currency ? null : input.reportCurrency) : undefined,
     },
   });
-  await audit(ctx, "workspace.settings_updated", { type: "Workspace", id: ws.id }, { fields: Object.keys(input), ...(exchangeRates ? { exchangeRates } : {}) });
+  await audit(ctx, "workspace.settings_updated", { type: "Workspace", id: ws.id }, { fields: Object.keys(input), ...(exchangeRates ? { exchangeRates } : {}), ...(input.reportCurrency ? { reportCurrency: input.reportCurrency } : {}) });
   return ws;
 }
 

@@ -4,6 +4,7 @@ import type { OrderStatus } from "@prisma/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link2, Trash2, Unlink } from "lucide-react";
 import * as React from "react";
+import { useMoney } from "@/components/app/currency";
 import { OrderStatusBadge, ParcelStatusBadge } from "@/components/app/status";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,6 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/form";
 import { ErrorState, Loading } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
-import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, humanize } from "@/lib/utils";
 import { useInvalidateOrders } from "./orders-view";
@@ -40,6 +40,7 @@ function KV({ items }: { items: [string, React.ReactNode][] }) {
 }
 
 export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const money = useMoney();
   const trpc = useTRPC();
   const toast = useToast();
   const invalidate = useInvalidateOrders();
@@ -63,7 +64,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
               <KV
                 items={[
                   ["Status", <OrderStatusBadge key="s" status={o.status} />],
-                  ["COD amount", <span key="c" className="num">{formatMoney(o.codAmount, o.currency)}</span>],
+                  ["COD amount", <span key="c" className="num">{money.fmt(o.codAmount, o.currency)}</span>],
                   ["External order ID", <span key="e" className="font-mono text-xs">{o.externalOrderId}</span>],
                   ["Normalized reference", <span key="n" className="font-mono text-xs">{o.normalizedOrderNumber}</span>],
                   ["Wilaya / city", [o.wilaya, o.city].filter(Boolean).join(" · ") || "—"],
@@ -91,7 +92,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                 {o.lines.map((l) => (
                   <li key={l.id} className="flex items-center justify-between px-4 py-2">
                     <span>{l.product?.name ?? l.productName ?? "Unknown product"} <span className="font-mono text-xs text-subtle">{l.product?.sku ?? l.sku}</span></span>
-                    <span className="num text-muted">{l.quantity} × {formatMoney(l.unitPrice, l.currency)}</span>
+                    <span className="num text-muted">{l.quantity} × {money.fmt(l.unitPrice, l.currency)}</span>
                   </li>
                 ))}
               </ul>
@@ -125,7 +126,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                         ) : null}
                       </div>
                       <p className="mt-2 text-xs text-muted">
-                        Match: {humanize(p.matchMethod)} · confidence {Math.round(p.matchConfidence * 100)}% · COD <span className="num">{formatMoney(p.codAmount, p.currency)}</span> · last update {formatDateTime(p.lastProviderUpdateAt)}
+                        Match: {humanize(p.matchMethod)} · confidence {Math.round(p.matchConfidence * 100)}% · COD <span className="num">{money.fmt(p.codAmount, p.currency)}</span> · last update {formatDateTime(p.lastProviderUpdateAt)}
                       </p>
                       {p.providerReference ? <p className="mt-1 text-xs text-muted">Provider reference: <code className="rounded bg-surface-3 px-1 font-mono">{p.providerReference}</code></p> : null}
                       <ol className="mt-3 border-l border-border-strong pl-4">

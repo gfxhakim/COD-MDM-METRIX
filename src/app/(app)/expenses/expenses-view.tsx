@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { useMoney } from "@/components/app/currency";
 import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
 import { minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
@@ -19,7 +20,6 @@ import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { categoryLabel, EXPENSE_CATEGORIES, type ExpenseCategoryKey } from "@/lib/labels";
-import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDate, toDateInput } from "@/lib/utils";
 
@@ -123,6 +123,7 @@ function ExpenseDialog({ expense, onClose, currency, rates }: { expense?: Expens
 }
 
 export function ExpensesView() {
+  const money = useMoney();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -166,7 +167,7 @@ export function ExpensesView() {
         ].map((k) => (
           <Card key={k.label} className="p-4">
             <p className="text-xs text-muted">{k.def ? <Term label={k.label} definition={k.def} /> : k.label}</p>
-            {k.value === undefined ? <Skeleton className="mt-2 h-7 w-32" /> : <p className={`num mt-1 text-2xl font-semibold ${k.tone}`}>{formatMoney(k.value, currency)}</p>}
+            {k.value === undefined ? <Skeleton className="mt-2 h-7 w-32" /> : <p className={`num mt-1 text-2xl font-semibold ${k.tone}`}>{money.fmt(k.value, currency)}</p>}
           </Card>
         ))}
         <Card className="p-4">
@@ -176,7 +177,7 @@ export function ExpensesView() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_20rem]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_20rem]">
         <Card>
           <div className="flex flex-wrap gap-2 border-b border-border p-3">
             <Select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className="w-40">
@@ -206,7 +207,7 @@ export function ExpensesView() {
                     <Td className="max-w-64 truncate text-muted">{e.description ?? "—"}</Td>
                     <Td>{e.allocation === "GLOBAL" ? <Badge tone="warning">Global</Badge> : <Badge tone="info">{e.product?.name ?? "Product"}</Badge>}</Td>
                     <Td className="text-xs text-muted">{e.costType.toLowerCase()}</Td>
-                    <Td className="num text-right">{formatMoney(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
+                    <Td className="num text-right">{money.fmt(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
                     <Td>
                       {canWrite ? (
                         <div className="flex justify-end gap-1">
@@ -232,8 +233,8 @@ export function ExpensesView() {
                   {s.months.map((m) => (
                     <Tr key={m.month}>
                       <Td className="text-xs">{m.month}</Td>
-                      <Td className="num text-right text-warning">{formatMoney(m.global, currency)}</Td>
-                      <Td className="num text-right">{formatMoney(m.total, currency)}</Td>
+                      <Td className="num text-right text-warning">{money.fmt(m.global, currency)}</Td>
+                      <Td className="num text-right">{money.fmt(m.total, currency)}</Td>
                     </Tr>
                   ))}
                 </tbody>

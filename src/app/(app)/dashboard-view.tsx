@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Boxes, FileWarning, Link2Off, Unlink } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { useMoney } from "@/components/app/currency";
 import { Money, Rate, Ratio } from "@/components/app/format";
 import { PageHeader } from "@/components/app/page-header";
 import { Sparkline } from "@/components/app/sparkline";
@@ -15,7 +16,6 @@ import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Term } from "@/components/ui/tooltip";
 import { DEF } from "@/lib/definitions";
-import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { cn, formatDateTime, formatPercent, timeAgo } from "@/lib/utils";
 
@@ -66,6 +66,7 @@ export function DashboardView() {
   const [creativeId, setCreativeId] = React.useState("");
   const [view, setView] = React.useState<RevenueView | "">("");
   const facets = useQuery(trpc.orders.facets.queryOptions());
+  const money = useMoney();
   const report = useQuery({
     ...trpc.reports.dashboard.queryOptions({
       from: from ? new Date(`${from}T00:00:00Z`) : undefined,
@@ -79,7 +80,7 @@ export function DashboardView() {
   const r = report.data;
   const m = r?.metrics;
   const cur = r?.currency ?? "DZD";
-  const fmt = (v: number) => formatMoney(v, cur);
+  const fmt = (v: number) => money.fmt(v, cur);
   const labels = r?.series.map((s) => s.date) ?? [];
   const h = r?.health;
 
@@ -125,7 +126,7 @@ export function DashboardView() {
         )}
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader title="Order → parcel funnel" description="Orders and parcels are counted separately: one order can ship as several parcels." />
           <CardBody>
@@ -180,7 +181,7 @@ export function DashboardView() {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2 2xl:grid-cols-3">
         <Card>
           <CardHeader title="Top profitable creatives" actions={<Link href="/creatives" className="text-xs text-positive hover:underline">Matrix</Link>} />
           {!r ? <Skeleton className="m-4 h-40" /> : r.topCreatives.length === 0 ? <EmptyState title="No attributed orders" /> : (

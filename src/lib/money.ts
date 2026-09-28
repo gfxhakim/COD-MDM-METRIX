@@ -5,7 +5,7 @@
 
 const EXPONENTS: Record<string, number> = { DZD: 2, EUR: 2, USD: 2, MAD: 2, TND: 3 };
 
-/** Currencies a user can enter a cost or an expense in. Reports are always in the workspace currency. */
+/** Currencies a user can enter a cost or an expense in, or show reports in (with a saved rate). */
 export const CURRENCIES = ["DZD", "USD", "EUR", "CNY", "AED", "SAR", "TRY", "GBP", "MAD", "TND"] as const;
 export type CurrencyCode = (typeof CURRENCIES)[number];
 
@@ -61,6 +61,20 @@ export function convertMinor(minor: number, from: string, to: string, rate: numb
   if (!Number.isFinite(rate) || rate <= 0) throw new MoneyError("Exchange rate must be greater than zero");
   const shift = currencyExponent(to) - currencyExponent(from);
   return assertSafe(Math.round(minor * rate * 10 ** shift));
+}
+
+/**
+ * Convert between any two currencies through the workspace's own currency `book`, with the
+ * workspace's rates (units of `book` per 1 unit of each other currency, e.g. {USD: 250}).
+ * Null when either side has no rate: the caller keeps the amount in its own currency.
+ */
+export function convertWithRates(minor: number, from: string, to: string, book: string, rates: Partial<Record<string, number>>): number | null {
+  if (from === to) return minor;
+  const perBook = (c: string) => (c === book ? 1 : rates[c]);
+  const a = perBook(from);
+  const b = perBook(to);
+  if (!a || !b || !(a > 0) || !(b > 0)) return null;
+  return convertMinor(minor, from, to, a / b);
 }
 
 export function minorToMajor(minor: number, currency = "DZD"): number {

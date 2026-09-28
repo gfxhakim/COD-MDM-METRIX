@@ -1,5 +1,7 @@
 "use client";
 
+import { useMoney } from "@/components/app/currency";
+import type { CurrencyCode } from "@/lib/money";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Columns3, Download, Megaphone } from "lucide-react";
 import * as React from "react";
@@ -16,7 +18,6 @@ import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { MATRIX_COLUMNS, type MatrixColumnKey } from "@/domain/matrixColumns";
 import { DEF } from "@/lib/definitions";
-import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ function Cell({ row, col, currency }: { row: Row; col: (typeof MATRIX_COLUMNS)[n
 }
 
 export function CreativesView() {
+  const money = useMoney();
   const trpc = useTRPC();
   const toast = useToast();
   const [from, setFrom] = React.useState("");
@@ -126,7 +128,7 @@ export function CreativesView() {
         title="Creative attribution matrix"
         description="Every creative from spend to delivered profit, aggregated on the server from stored orders, parcels, spend, cost versions and expenses."
         actions={
-          <Button onClick={() => exportCsv.mutate({ ...range, columns: columns.map((c) => c.key), minSample })} disabled={exportCsv.isPending}>
+          <Button onClick={() => exportCsv.mutate({ ...range, columns: columns.map((c) => c.key), minSample, currency: money.view as CurrencyCode })} disabled={exportCsv.isPending}>
             <Download /> Export CSV
           </Button>
         }
@@ -201,7 +203,7 @@ export function CreativesView() {
         {data ? (
           <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border px-4 py-3 text-xs text-subtle">
             <span>Verdict thresholds: min {data.thresholds.minSampleOrders} placed · target POAS {data.thresholds.targetPoas} · delivery ≥ {Math.round(data.thresholds.minDeliveryRate * 100)}% · RTO ≤ {Math.round(data.thresholds.maxRtoRate * 100)}%</span>
-            <span>Overhead policy: {data.overheadPolicy.replaceAll("_", " ").toLowerCase()}{data.unallocatedOverhead ? ` · ${formatMoney(data.unallocatedOverhead, cur)} not allocated to any creative` : ""}</span>
+            <span>Overhead policy: {data.overheadPolicy.replaceAll("_", " ").toLowerCase()}{data.unallocatedOverhead ? ` · ${money.fmt(data.unallocatedOverhead, cur)} not allocated to any creative` : ""}</span>
           </div>
         ) : null}
       </Card>

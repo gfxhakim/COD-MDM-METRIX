@@ -149,6 +149,36 @@ test.describe("new workspace", () => {
     await expect(row).toContainText("900");
   });
 
+  test("6b. show amounts in another currency", async ({ page }) => {
+    // Flow 5 saved 1 USD = 250 DZD. Stored amounts stay in DZD; only what is shown changes.
+    const matrix = "/creatives?from=2026-09-01&to=2026-09-30";
+    await page.goto(matrix);
+    const row = page.locator("tr", { hasText: "cr_e2e_hook_01" });
+    await expect(row).toContainText("2,700");
+    await page.getByLabel("Show amounts in").selectOption("USD");
+    await expect(row).toContainText(/USD.10\.80/); // 2 700 DZD at 250
+
+    // The pick follows this browser to every page; the original entry stays visible.
+    await page.goto("/expenses");
+    const plan = page.locator("tr", { hasText: "E2E store plan" });
+    await expect(plan).toContainText(/USD.29 × 250/);
+    await expect(plan).not.toContainText("7,250");
+    await page.getByLabel("Show amounts in").selectOption("DZD");
+    await expect(plan).toContainText("7,250");
+
+    // The workspace default, for everyone, in Settings.
+    await page.goto("/settings?tab=workspace");
+    await page.locator("#wsc").selectOption("USD");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Workspace saved")).toBeVisible();
+    await page.goto(matrix);
+    await expect(row).toContainText(/USD.10\.80/);
+    await page.goto("/settings?tab=workspace");
+    await page.locator("#wsc").selectOption("DZD");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Workspace saved")).toBeVisible();
+  });
+
   test("7. run the breakeven simulator", async ({ page }) => {
     await page.goto("/products");
     await page.getByRole("link", { name: "Breakeven simulator for E2E Lamp" }).click();

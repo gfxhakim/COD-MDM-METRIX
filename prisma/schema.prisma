@@ -196,7 +196,10 @@ model Workspace {
   id                String   @id @default(uuid())
   name              String
   slug              String   @unique
+  /// Currency every stored amount is kept in. Fixed at creation.
   currency          String   @default("DZD")
+  /// Currency reports and totals are shown in, converted with `exchangeRates`. Null = `currency`.
+  reportCurrency    String?
   timezone          String   @default("Africa/Algiers")
   isDemo            Boolean  @default(false)
   /// Zod-validated JSON: fees, call-center basis, overhead allocation policy.

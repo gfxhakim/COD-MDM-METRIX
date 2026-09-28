@@ -2,7 +2,9 @@ import { z } from "zod";
 import { MATRIX_COLUMNS, MATRIX_COLUMN_KEYS } from "@/domain/matrixColumns";
 import { simulate, simulatorInputSchema } from "@/domain/simulator";
 import { toCsv } from "@/lib/csv";
-import { minorToMajor } from "@/lib/money";
+import { convertWithRates, minorToMajor } from "@/lib/money";
+import { currencyCodeSchema, parseExchangeRates } from "@/domain/settings";
+import { InputError } from "@/server/errors";
 import { audit } from "@/server/audit";
 import { db } from "@/server/db";
 import { creativeMatrix, dashboardReport, observedForSimulator, type CreativeRow } from "@/server/reports/economics";
@@ -19,7 +21,10 @@ export const reportsRouter = router({
     .query(({ ctx, input }) => dashboardReport(ctx.ws, input)),
 });
 
-function cellValue(row: CreativeRow, key: (typeof MATRIX_COLUMN_KEYS)[number], currency: string): unknown {
+/** Money in the export follows the currency the page is shown in, with the workspace's rates. */
+type ExportCurrency = { book: string; to: string; rates: Partial<Record<string, number>> };
+
+function cellValue(row: CreativeRow, key: (typeof MATRIX_COLUMN_KEYS)[number], cur: ExportCurrency): unknown {
   const m = row.metrics;
   switch (key) {
     case "creative": return row.externalCreativeId ?? row.name;
@@ -29,7 +34,7 @@ function cellValue(row: CreativeRow, key: (typeof MATRIX_COLUMN_KEYS)[number], c
       const col = MATRIX_COLUMNS.find((c) => c.key === key)!;
       const v = m[key as keyof typeof m] as number | null;
       if (v === null) return "";
-      if (col.kind === "money") return minorToMajor(v, currency);
+      if (col.kind === "money") return minorToMajor(convertWithRates(v, cur.book, cur.to, cur.book, cur.rates) ?? v, cur.to);
       if (col.kind === "rate") return Math.round(v * 10000) / 10000;
       if (col.kind === "ratio") return Math.round(v * 100) / 100;
       return v;
@@ -43,11 +48,17 @@ export const creativesRouter = router({
   ),
   matrix: workspaceProcedure.input(range.extend({ revenueView })).query(({ ctx, input }) => creativeMatrix(ctx.ws, input)),
   exportCsv: workspaceProcedure
-    .input(range.extend({ revenueView, columns: z.array(z.enum(MATRIX_COLUMN_KEYS)).min(1), minSample: z.number().int().min(0).default(0) }))
+    .input(range.extend({ revenueView, columns: z.array(z.enum(MATRIX_COLUMN_KEYS)).min(1), minSample: z.number().int().min(0).default(0), currency: currencyCodeSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       const report = await creativeMatrix(ctx.ws, input);
+      const ws = await db.workspace.findUniqueOrThrow({ where: { id: ctx.ws.workspaceId }, select: { exchangeRates: true } });
+      const cur: ExportCurrency = { book: report.currency, to: input.currency ?? report.currency, rates: parseExchangeRates(ws.exchangeRates) };
+      if (convertWithRates(0, cur.book, cur.to, cur.book, cur.rates) === null) throw new InputError(`Add a ${cur.to} rate in Economics & currencies to export in ${cur.to}.`);
       const rows = report.rows.filter((r) => r.kind !== "CREATIVE" || r.metrics.placed >= input.minSample);
-      const columns = input.columns.map((key) => ({ header: MATRIX_COLUMNS.find((c) => c.key === key)!.label, value: (r: CreativeRow) => cellValue(r, key, report.currency) }));
+      const columns = input.columns.map((key) => {
+        const col = MATRIX_COLUMNS.find((c) => c.key === key)!;
+        return { header: col.kind === "money" ? `${col.label} (${cur.to})` : col.label, value: (r: CreativeRow) => cellValue(r, key, cur) };
+      });
       await audit(ctx.ws, "report.exported", { type: "CreativeMatrix" }, { rows: rows.length, columns: input.columns.length });
       return { filename: `creative-matrix-${new Date().toISOString().slice(0, 10)}.csv`, content: toCsv(rows, columns) };
     }),

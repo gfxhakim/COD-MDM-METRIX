@@ -107,9 +107,22 @@ describe("economics reports", () => {
 
   it("CSV export sanitises formula injection from imported names", async () => {
     const { content } = await t.caller.creatives.exportCsv({ columns: ["creative", "campaign", "adSpend", "truePoas"] });
-    expect(content.split("\r\n")[0]).toBe("Creative ID,Campaign,Spend,True POAS");
+    expect(content.split("\r\n")[0]).toBe("Creative ID,Campaign,Spend (DZD),True POAS");
     expect(content).toContain("'=cmd");
     expect(content).not.toMatch(/(^|,)=cmd/m);
+  });
+
+  it("CSV export follows the currency the page is shown in", async () => {
+    const columns = ["creative", "adSpend"] as const;
+    const rows = (content: string) => content.split("\r\n").slice(1).filter(Boolean).map((l) => Number(l.split(",").at(-1)));
+    const dzd = await t.caller.creatives.exportCsv({ columns: [...columns] });
+    await expect(t.caller.creatives.exportCsv({ columns: [...columns], currency: "USD" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await t.caller.workspace.updateSettings({ exchangeRates: { USD: 250 } });
+    const usd = await t.caller.creatives.exportCsv({ columns: [...columns], currency: "USD" });
+    expect(usd.content.split("\r\n")[0]).toBe("Creative ID,Spend (USD)");
+    expect(rows(usd.content)).toEqual(rows(dzd.content).map((v) => Math.round((v / 250) * 100) / 100));
+    expect(rows(dzd.content).some((v) => v > 0)).toBe(true);
+    await t.caller.workspace.updateSettings({ exchangeRates: {} });
   });
 
   it("simulator returns observed rates for a product and saves scenarios", async () => {

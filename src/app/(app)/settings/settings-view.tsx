@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { MdmTab, StatusMappingsTab } from "./mdm-settings";
 import { MetaTab } from "./meta-settings";
-import { CURRENCIES, parseToMinor } from "@/lib/money";
+import { CURRENCIES, parseToMinor, type CurrencyCode } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, humanize } from "@/lib/utils";
 
@@ -37,9 +37,11 @@ function WorkspaceTab() {
   const router = useRouter();
   const ws = useQuery(trpc.workspace.getCurrent.queryOptions());
   const canManage = useCan("workspace.manage");
+  const canEconomics = useCan("settings.economics");
   const [name, setName] = React.useState<string | null>(null);
+  const [report, setReport] = React.useState<string | null>(null);
   const [newName, setNewName] = React.useState("");
-  const update = useMutation(trpc.workspace.updateSettings.mutationOptions({ onSuccess: () => { qc.invalidateQueries({ queryKey: trpc.workspace.pathKey() }); toast("success", "Workspace saved"); router.refresh(); }, onError: (e) => toast("error", errorMessage(e)) }));
+  const update = useMutation(trpc.workspace.updateSettings.mutationOptions({ onSuccess: () => { qc.invalidateQueries({ queryKey: trpc.workspace.pathKey() }); setName(null); setReport(null); toast("success", "Workspace saved"); router.refresh(); }, onError: (e) => toast("error", errorMessage(e)) }));
   const create = useMutation(
     trpc.workspace.create.mutationOptions({
       onSuccess: async (w) => { await switchWorkspaceAction(w.id); toast("success", `Workspace "${w.name}" created`); router.push("/"); router.refresh(); },
@@ -47,19 +49,35 @@ function WorkspaceTab() {
     }),
   );
   if (!ws.data) return <Loading />;
+  const book = ws.data.currency;
+  const shownIn = report ?? ws.data.reportCurrency;
+  const reportChoices = [book, ...Object.keys(ws.data.exchangeRates).filter((c) => c !== book).sort()];
+  const changed = !!name || shownIn !== ws.data.reportCurrency;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader title="Workspace" description="Each business is a separate workspace. Data never crosses workspaces." />
         <CardBody>
-          <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); if (name) update.mutate({ name }); }}>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (changed) update.mutate({ ...(name ? { name } : {}), ...(shownIn !== ws.data.reportCurrency ? { reportCurrency: shownIn as CurrencyCode } : {}) });
+            }}
+          >
             <Field label="Business name" htmlFor="wsn"><Input id="wsn" value={name ?? ws.data.name} onChange={(e) => setName(e.target.value)} disabled={!canManage} /></Field>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Currency" htmlFor="wsc" hint="Set at creation"><Input id="wsc" value={ws.data.currency} disabled /></Field>
+              <Field label="Currency" htmlFor="wsc" hint={`Reports and totals are shown in this currency. Amounts stay stored in ${book} and are converted with your exchange rates.`}>
+                <Select id="wsc" value={shownIn} onChange={(e) => setReport(e.target.value)} disabled={!canEconomics}>
+                  {reportChoices.map((c) => <option key={c} value={c}>{c === book ? `${c} (stored)` : c}</option>)}
+                </Select>
+              </Field>
               <Field label="Timezone" htmlFor="wst"><Input id="wst" value={ws.data.timezone} disabled /></Field>
             </div>
             {ws.data.isDemo ? <Badge tone="warning" className="self-start">Demo workspace · synthetic data</Badge> : null}
-            {canManage ? <Button variant="primary" type="submit" className="self-start" disabled={!name || update.isPending}>Save</Button> : <p className="text-xs text-subtle">Only owners can rename the workspace.</p>}
+            {reportChoices.length === 1 && canEconomics ? <p className="text-xs text-muted">To show amounts in another currency, add its rate under Economics &amp; currencies first.</p> : null}
+            {canManage || canEconomics ? <Button variant="primary" type="submit" className="self-start" disabled={!changed || update.isPending}>Save</Button> : null}
+            {!canManage ? <p className="text-xs text-subtle">Only owners can rename the workspace.</p> : null}
           </form>
         </CardBody>
       </Card>
@@ -166,7 +184,7 @@ function ExchangeRatesCard() {
     <Card>
       <CardHeader
         title="Exchange rates"
-        description={`How many ${cur} one unit of each currency costs you. They fill in product costs, expenses and ad-spend imports entered in another currency, and every report converts to ${cur}. A saved amount keeps the rate it was entered with, so changing a rate here never changes past profit. Orders synced from MDM keep their own currency.`}
+        description={`How many ${cur} one unit of each currency costs you. They fill in product costs, expenses and ad spend paid in another currency; a saved amount keeps the rate it was entered with, so changing a rate here never changes past profit. They also let you show reports in that currency (Workspace, or "Show in" at the top of every page). Orders synced from MDM keep their own currency.`}
       />
       <CardBody>
         <form onSubmit={save} className="flex flex-col gap-3">
