@@ -1,6 +1,8 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { audit } from "@/server/audit";
 import { planNewCostVersion, selectCostVersion } from "@/domain/costVersions";
+import { toWorkspaceCurrency } from "@/server/fx";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 
 export type CostInput = {
@@ -10,7 +12,24 @@ export type CostInput = {
   rtoFee: number;
   callCenterFee: number;
   packagingFee: number;
+  /** Currency the sourcing cost was entered in; the other fields are in the workspace currency. */
+  sourcingCurrency?: string;
+  /** Workspace currency per 1 sourcingCurrency. Falls back to the rate in Settings. */
+  sourcingFxRate?: number | null;
 };
+
+/** Cost-version columns for a cost entered in the form, converting the sourcing cost when needed. */
+async function costColumns(ctx: WorkspaceContext, cost: CostInput, tx: Prisma.TransactionClient) {
+  const { sourcingCurrency, sourcingFxRate, ...values } = cost;
+  const sourcing = await toWorkspaceCurrency(ctx, values.sourcingCost, sourcingCurrency, sourcingFxRate, tx);
+  return {
+    ...values,
+    sourcingCost: sourcing.amount,
+    sourcingCostOriginal: sourcing.original?.amount ?? null,
+    sourcingCurrency: sourcing.original?.currency ?? null,
+    sourcingFxRate: sourcing.original?.rate ?? null,
+  };
+}
 
 export async function listProducts(ctx: WorkspaceContext, input: { includeInactive?: boolean } = {}) {
   const products = await db.product.findMany({
@@ -46,6 +65,7 @@ export async function createProduct(
 ) {
   assertCan(ctx, "catalog.write");
   const product = await db.$transaction(async (tx) => {
+    const cost = await costColumns(ctx, input.cost, tx);
     const p = await tx.product.create({
       data: {
         workspaceId: ctx.workspaceId,
@@ -60,7 +80,7 @@ export async function createProduct(
             currency: ctx.currency,
             createdById: ctx.userId,
             note: "Initial cost assumptions",
-            ...input.cost,
+            ...cost,
           },
         },
       },
@@ -96,6 +116,7 @@ export async function createCostVersion(
     if (!product) throw new NotFoundError("Product not found");
     const { closeId } = planNewCostVersion(product.costVersions, input.effectiveFrom);
     if (closeId) await tx.productCostVersion.update({ where: { id: closeId }, data: { effectiveTo: input.effectiveFrom } });
+    const cost = await costColumns(ctx, input.cost, tx);
     const v = await tx.productCostVersion.create({
       data: {
         workspaceId: ctx.workspaceId,
@@ -104,10 +125,10 @@ export async function createCostVersion(
         currency: product.currency,
         note: input.note,
         createdById: ctx.userId,
-        ...input.cost,
+        ...cost,
       },
     });
-    await audit(ctx, "product.cost_version_created", { type: "ProductCostVersion", id: v.id }, { productId: product.id, effectiveFrom: input.effectiveFrom, ...input.cost }, tx);
+    await audit(ctx, "product.cost_version_created", { type: "ProductCostVersion", id: v.id }, { productId: product.id, effectiveFrom: input.effectiveFrom, ...cost }, tx);
     return v;
   });
 }

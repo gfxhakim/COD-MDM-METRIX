@@ -5,6 +5,10 @@
 
 const EXPONENTS: Record<string, number> = { DZD: 2, EUR: 2, USD: 2, MAD: 2, TND: 3 };
 
+/** Currencies a user can enter a cost or an expense in. Reports are always in the workspace currency. */
+export const CURRENCIES = ["DZD", "USD", "EUR", "CNY", "AED", "SAR", "TRY", "GBP", "MAD", "TND"] as const;
+export type CurrencyCode = (typeof CURRENCIES)[number];
+
 export function currencyExponent(currency: string): number {
   return EXPONENTS[currency.toUpperCase()] ?? 2;
 }
@@ -46,6 +50,17 @@ export function parseToMinor(input: string | number, currency = "DZD"): number {
   let minor = Number(intPart) * 10 ** exp + Number(frac || "0") + (roundUp ? 1 : 0);
   if (neg) minor = -minor;
   return assertSafe(minor);
+}
+
+/**
+ * Convert minor units of `from` into minor units of `to`, where `rate` is how many
+ * `to` one `from` costs (e.g. 250 DZD per USD). Rounds to the nearest minor unit.
+ */
+export function convertMinor(minor: number, from: string, to: string, rate: number): number {
+  if (from === to) return minor;
+  if (!Number.isFinite(rate) || rate <= 0) throw new MoneyError("Exchange rate must be greater than zero");
+  const shift = currencyExponent(to) - currencyExponent(from);
+  return assertSafe(Math.round(minor * rate * 10 ** shift));
 }
 
 export function minorToMajor(minor: number, currency = "DZD"): number {

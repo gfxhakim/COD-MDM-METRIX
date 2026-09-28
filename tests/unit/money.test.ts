@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMoney, formatMoney, MoneyError, multiplyMoney, parseToMinor, scaleMoney } from "@/lib/money";
+import { addMoney, convertMinor, formatMoney, MoneyError, multiplyMoney, parseToMinor, scaleMoney } from "@/lib/money";
 
 describe("money", () => {
   it("parses common amount formats into integer minor units", () => {
@@ -41,5 +41,20 @@ describe("money", () => {
   it("formats with currency code", () => {
     expect(formatMoney(390000, "DZD").replace(/\s/g, " ")).toBe("DZD 3,900");
     expect(formatMoney(390050, "DZD").replace(/\s/g, " ")).toBe("DZD 3,900.50");
+  });
+});
+
+describe("convertMinor", () => {
+  it("converts between currencies with the rate, across decimal places", () => {
+    expect(convertMinor(500, "USD", "DZD", 250)).toBe(125000); // 5.00 USD → 1 250.00 DZD
+    expect(convertMinor(3000, "EUR", "DZD", 265.5)).toBe(796500);
+    expect(convertMinor(1234, "TND", "DZD", 43)).toBe(5306); // 1.234 TND → 53.06 DZD
+    expect(convertMinor(1, "USD", "DZD", 0.004)).toBe(0);
+  });
+
+  it("returns same-currency amounts unchanged and refuses a bad rate", () => {
+    expect(convertMinor(999, "DZD", "DZD", 0)).toBe(999);
+    expect(() => convertMinor(100, "USD", "DZD", 0)).toThrow(MoneyError);
+    expect(() => convertMinor(100, "USD", "DZD", Number.NaN)).toThrow(MoneyError);
   });
 });

@@ -44,6 +44,7 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
   const fields = IMPORT_FIELDS[kind];
   const last = useQuery(trpc.imports.lastMapping.queryOptions({ kind }));
   const products = useQuery({ ...trpc.products.list.queryOptions({ includeInactive: false }), enabled: kind === "AD_SPEND" });
+  const ws = useQuery(trpc.workspace.getCurrent.queryOptions());
 
   const [step, setStep] = React.useState<Step>("upload");
   const [file, setFile] = React.useState<FileState | null>(null);
@@ -65,7 +66,7 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
     options: {
       dateFormat,
       ...(kind === "ORDERS" ? { source } : {}),
-      ...(kind === "AD_SPEND" ? { fxRate: fxRate ? Number(fxRate) : null, createCreatives, productId: productId || null } : {}),
+      ...(kind === "AD_SPEND" ? { fxRate: fxRate ? Number(fxRate) : settingsRate ?? null, createCreatives, productId: productId || null } : {}),
     },
   });
 
@@ -123,6 +124,8 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
   const missing = missingRequired(kind, mapping);
   const headerCurrency = kind === "AD_SPEND" && mapping.spend ? /\(([A-Z]{3})\)/.exec(mapping.spend)?.[1] : undefined;
   const needsFx = !!headerCurrency && headerCurrency !== currency;
+  // An empty rate field falls back to the rate saved in Settings.
+  const settingsRate = needsFx ? (ws.data?.exchangeRates as Partial<Record<string, number>> | undefined)?.[headerCurrency!] : undefined;
   const p = preview.data;
   const done = commit.data;
 
@@ -185,8 +188,8 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
               ) : null}
               {kind === "AD_SPEND" ? (
                 <>
-                  <Field label={`Exchange rate to ${currency}`} htmlFor="fx" hint={needsFx ? `This export is in ${headerCurrency}. Enter how many ${currency} one ${headerCurrency} cost you.` : "Only needed when the export is in another currency."}>
-                    <Input id="fx" inputMode="decimal" value={fxRate} onChange={(e) => setFxRate(e.target.value.replace(/[^\d.]/g, ""))} placeholder={needsFx ? "e.g. 250" : "Not needed"} required={needsFx} />
+                  <Field label={`Exchange rate to ${currency}`} htmlFor="fx" hint={needsFx ? `This export is in ${headerCurrency}. Enter how many ${currency} one ${headerCurrency} cost you${settingsRate ? `, or leave it empty to use ${settingsRate} from Settings` : ""}.` : "Only needed when the export is in another currency."}>
+                    <Input id="fx" inputMode="decimal" value={fxRate} onChange={(e) => setFxRate(e.target.value.replace(/[^\d.]/g, ""))} placeholder={needsFx ? (settingsRate ? String(settingsRate) : "e.g. 250") : "Not needed"} required={needsFx && !settingsRate} />
                   </Field>
                   <Field label="New creative IDs" htmlFor="cc" hint="Off: spend for unknown IDs is kept as unmatched spend for review.">
                     <Select id="cc" value={createCreatives ? "1" : "0"} onChange={(e) => setCreateCreatives(e.target.value === "1")}>
@@ -207,7 +210,7 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
             {missing.length ? <p className="text-sm text-warning" role="status">Map the required fields: {missing.join(", ")}</p> : null}
             <div className="flex flex-wrap justify-between gap-2">
               <Button variant="ghost" onClick={reset}><ArrowLeft /> Choose another file</Button>
-              <Button variant="primary" disabled={missing.length > 0 || (needsFx && !fxRate) || preview.isPending} onClick={() => preview.mutate(request())}>
+              <Button variant="primary" disabled={missing.length > 0 || (needsFx && !fxRate && !settingsRate) || preview.isPending} onClick={() => preview.mutate(request())}>
                 {preview.isPending ? "Validating…" : "Validate & preview"}
               </Button>
             </div>
@@ -310,7 +313,7 @@ function PreviewTable({ kind, rows, currency }: { kind: Kind; rows: PreviewRow[]
       : kind === "AD_SPEND"
         ? [["Date", (r) => formatDate(r.date as Date)], ["Campaign", (r) => str(r.campaignName)], ["Ad", (r) => str(r.adName)], ["Creative ID", (r) => str(r.creativeId)], ["Spend", (r) => <><Money value={r.spend as number} currency={currency} />{r.originalCurrency ? <span className="block text-[11px] text-muted"><Money value={r.originalSpend as number} currency={String(r.originalCurrency)} /></span> : null}</>, "text-right"], ["Impr.", (r) => str(r.impressions), "text-right"]]
         : kind === "EXPENSES"
-          ? [["Date", (r) => formatDate(r.date as Date)], ["Category", (r) => categoryLabel(String(r.category))], ["Description", (r) => str(r.description)], ["Scope", (r) => (r.productId ? "Product" : "Global")], ["Type", (r) => humanize(String(r.costType))], ["Amount", (r) => <Money value={r.amount as number} currency={currency} />, "text-right"]]
+          ? [["Date", (r) => formatDate(r.date as Date)], ["Category", (r) => categoryLabel(String(r.category))], ["Description", (r) => str(r.description)], ["Scope", (r) => (r.productId ? "Product" : "Global")], ["Type", (r) => humanize(String(r.costType))], ["Amount", (r) => <><Money value={r.amount as number} currency={currency} />{r.originalCurrency ? <span className="block text-[11px] text-muted"><Money value={r.originalAmount as number} currency={String(r.originalCurrency)} /></span> : null}</>, "text-right"]]
           : [["Date", (r) => formatDate(r.date as Date)], ["Description", (r) => str(r.description)], ["Reference", (r) => str(r.reference)], ["Amount", (r) => <Money value={r.amount as number} currency={currency} signed />, "text-right"]];
   return (
     <div className="max-h-96 overflow-auto rounded-lg border border-border">

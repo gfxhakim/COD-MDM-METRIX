@@ -197,6 +197,9 @@ model Workspace {
   economicsDefaults Json?
   /// Zod-validated JSON: verdict thresholds (min sample, target POAS, delivery/RTO limits).
   verdictThresholds Json?
+  /// Zod-validated JSON: units of `currency` per 1 unit of another currency, e.g. {"USD": 250}.
+  /// Pre-fills forms; each saved amount keeps the rate it was converted with.
+  exchangeRates     Json?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -269,24 +272,24 @@ model RateLimitBucket {
 // ───────────────────────── MDM integration ─────────────────────────
 
 model IntegrationConnection {
-  id                   String              @id @default(uuid())
-  workspaceId          String
-  provider             IntegrationProvider
-  baseUrl              String              @default("https://api.mdm.express")
+  id                    String              @id @default(uuid())
+  workspaceId           String
+  provider              IntegrationProvider
+  baseUrl               String              @default("https://api.mdm.express")
   /// AES-256-GCM envelope "v1:<iv>:<tag>:<ciphertext>" (base64). Never sent to the browser.
-  encryptedCredential  String?
-  keyVersion           Int?
+  encryptedCredential   String?
+  keyVersion            Int?
   /// e.g. "••••1a2b". Safe to display.
-  maskedLabel          String?
-  status               ConnectionStatus    @default(NOT_CONFIGURED)
-  lastTestedAt         DateTime?
-  lastSuccessfulSyncAt DateTime?
-  lastError            String?
-  syncIntervalMinutes  Int                 @default(45)
-  credentialUpdatedAt  DateTime?
+  maskedLabel           String?
+  status                ConnectionStatus    @default(NOT_CONFIGURED)
+  lastTestedAt          DateTime?
+  lastSuccessfulSyncAt  DateTime?
+  lastError             String?
+  syncIntervalMinutes   Int                 @default(45)
+  credentialUpdatedAt   DateTime?
   credentialUpdatedById String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -435,21 +438,26 @@ model Product {
 /// Immutable history of unit-economics assumptions. Never updated in place;
 /// a new version closes the previous one by setting its effectiveTo.
 model ProductCostVersion {
-  id                 String    @id @default(uuid())
-  workspaceId        String
-  productId          String
-  effectiveFrom      DateTime
-  effectiveTo        DateTime?
-  salePrice          Int
-  sourcingCost       Int
-  forwardShippingFee Int
-  rtoFee             Int
-  callCenterFee      Int
-  packagingFee       Int
-  currency           String    @default("DZD")
-  note               String?
-  createdById        String?
-  createdAt          DateTime  @default(now())
+  id                   String    @id @default(uuid())
+  workspaceId          String
+  productId            String
+  effectiveFrom        DateTime
+  effectiveTo          DateTime?
+  salePrice            Int
+  sourcingCost         Int
+  forwardShippingFee   Int
+  rtoFee               Int
+  callCenterFee        Int
+  packagingFee         Int
+  currency             String    @default("DZD")
+  /// Set when the sourcing cost was entered in another currency: the amount as entered (minor
+  /// units of sourcingCurrency) and the rate used. sourcingCost is always in `currency`.
+  sourcingCostOriginal Int?
+  sourcingCurrency     String?
+  sourcingFxRate       Float?
+  note                 String?
+  createdById          String?
+  createdAt            DateTime  @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -693,8 +701,14 @@ model Expense {
   workspaceId       String
   date              DateTime
   category          ExpenseCategory
+  /// Always in the workspace currency (converted when entered in another currency).
   amount            Int
   currency          String            @default("DZD")
+  /// Set when entered in another currency: the amount as entered (minor units of
+  /// originalCurrency) and the rate used, in workspace currency per 1 unit.
+  originalAmount    Int?
+  originalCurrency  String?
+  fxRate            Float?
   description       String?
   allocation        ExpenseAllocation @default(GLOBAL)
   productId         String?

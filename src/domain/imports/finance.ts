@@ -1,4 +1,5 @@
 import type { CostType, ExpenseCategory } from "@prisma/client";
+import { convertMinor } from "@/lib/money";
 import type { ParsedCsv } from "./csv";
 import { cell, currencyOf, money, occurrenceKeys, RowError, type Mapping, type RowIssue } from "./common";
 import { parseDate, type DateFormat } from "./dates";
@@ -28,12 +29,26 @@ export function parseCostType(raw: string): CostType {
   return /^(var|variable)/i.test(raw.trim()) ? "VARIABLE" : "FIXED";
 }
 
-export type ImportedExpense = { line: number; date: Date; category: ExpenseCategory; amount: number; description: string | null; productId: string | null; costType: CostType; identity: string };
+export type ImportedExpense = {
+  line: number;
+  date: Date;
+  category: ExpenseCategory;
+  /** In the workspace currency. */
+  amount: number;
+  /** Set when the row was in another currency, converted with the workspace's rate from Settings. */
+  originalAmount: number | null;
+  originalCurrency: string | null;
+  fxRate: number | null;
+  description: string | null;
+  productId: string | null;
+  costType: CostType;
+  identity: string;
+};
 
 export function validateExpenses(
   csv: ParsedCsv,
   mapping: Mapping,
-  opts: { dateFormat: Exclude<DateFormat, "AUTO">; currency: string; products: readonly { id: string; sku: string }[] },
+  opts: { dateFormat: Exclude<DateFormat, "AUTO">; currency: string; products: readonly { id: string; sku: string }[]; rates?: Partial<Record<string, number>> },
 ) {
   const bySku = new Map(opts.products.map((p) => [p.sku.toLowerCase(), p.id]));
   const issues: RowIssue[] = [];
@@ -46,11 +61,13 @@ export function validateExpenses(
       const date = parseDate(dateRaw, opts.dateFormat);
       if (!date) throw new RowError("date", dateRaw ? `Invalid date "${dateRaw}"` : "Missing date");
       const currency = currencyOf(cell(row, mapping, "currency"), opts.currency);
-      if (currency !== opts.currency) throw new RowError("currency", `Expense is in ${currency}; this workspace uses ${opts.currency}`);
+      const fxRate = currency === opts.currency ? null : opts.rates?.[currency] ?? null;
+      if (currency !== opts.currency && !fxRate) throw new RowError("currency", `Expense is in ${currency}; set a ${currency} exchange rate in Settings → Economics & currencies first`);
       const amountRaw = cell(row, mapping, "amount");
       if (!amountRaw) throw new RowError("amount", "Missing amount");
-      const amount = money(amountRaw, currency, "amount");
-      if (amount === 0) throw new RowError("amount", "Amount is zero");
+      const original = money(amountRaw, currency, "amount");
+      if (original === 0) throw new RowError("amount", "Amount is zero");
+      const amount = fxRate ? convertMinor(original, currency, opts.currency, fxRate) : original;
       const catRaw = cell(row, mapping, "category");
       const { category, recognized } = parseCategory(catRaw);
       if (!recognized) warnings.push({ line: row.line, field: "category", message: `Unknown category "${catRaw}" imported as Other` });
@@ -58,8 +75,12 @@ export function validateExpenses(
       const productId = sku ? bySku.get(sku.toLowerCase()) ?? null : null;
       if (sku && !productId) throw new RowError("productSku", `Unknown product SKU "${sku}"`);
       const description = cell(row, mapping, "description") || null;
-      pending.push({ line: row.line, date, category, amount, description, productId, costType: parseCostType(cell(row, mapping, "costType")) });
-      ids.push([date.toISOString().slice(0, 10), category, amount, description ?? "", sku.toLowerCase()].join("|"));
+      pending.push({
+        line: row.line, date, category, amount, description, productId, costType: parseCostType(cell(row, mapping, "costType")),
+        originalAmount: fxRate ? original : null, originalCurrency: fxRate ? currency : null, fxRate,
+      });
+      // Foreign rows are identified by what the file says, so a new rate doesn't make a re-import look new.
+      ids.push([date.toISOString().slice(0, 10), category, fxRate ? `${original}${currency}` : amount, description ?? "", sku.toLowerCase()].join("|"));
     } catch (e) {
       if (e instanceof RowError) issues.push({ line: row.line, field: e.field, message: e.message });
       else throw e;

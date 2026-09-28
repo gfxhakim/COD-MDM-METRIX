@@ -18,7 +18,7 @@ import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { MdmTab, StatusMappingsTab } from "./mdm-settings";
-import { parseToMinor } from "@/lib/money";
+import { CURRENCIES, parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, humanize } from "@/lib/utils";
 
@@ -134,6 +134,67 @@ function MembersTab() {
   );
 }
 
+function ExchangeRatesCard() {
+  const trpc = useTRPC();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const canEdit = useCan("settings.economics");
+  const ws = useQuery(trpc.workspace.getCurrent.queryOptions());
+  const [rows, setRows] = React.useState<{ currency: string; rate: string }[] | null>(null);
+  const update = useMutation(
+    trpc.workspace.updateSettings.mutationOptions({
+      onSuccess: () => { qc.invalidateQueries({ queryKey: trpc.workspace.pathKey() }); setRows(null); toast("success", "Exchange rates saved"); },
+      onError: (e) => toast("error", errorMessage(e)),
+    }),
+  );
+  if (!ws.data) return null;
+  const cur = ws.data.currency;
+  const list = rows ?? Object.entries(ws.data.exchangeRates).map(([currency, rate]) => ({ currency, rate: String(rate) }));
+  const unused = CURRENCIES.filter((c) => c !== cur && !list.some((r) => r.currency === c));
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    const out: Partial<Record<(typeof CURRENCIES)[number], number>> = {};
+    for (const r of list) {
+      const n = Number(r.rate);
+      if (!(n > 0)) return toast("error", `Enter how many ${cur} one ${r.currency} costs`);
+      out[r.currency as (typeof CURRENCIES)[number]] = n;
+    }
+    update.mutate({ exchangeRates: out });
+  }
+  return (
+    <Card>
+      <CardHeader
+        title="Exchange rates"
+        description={`How many ${cur} one unit of each currency costs you. They fill in product costs, expenses and ad-spend imports entered in another currency, and every report converts to ${cur}. A saved amount keeps the rate it was entered with, so changing a rate here never changes past profit. Orders synced from MDM keep their own currency.`}
+      />
+      <CardBody>
+        <form onSubmit={save} className="flex flex-col gap-3">
+          {!list.length ? <p className="text-sm text-muted">No rates yet. Add the currencies you pay suppliers, ads or tools in.</p> : null}
+          {list.map((r, i) => (
+            <div key={r.currency} className="flex items-center gap-2 text-sm">
+              <label htmlFor={`fx-${r.currency}`} className="w-20 shrink-0 text-muted">1 {r.currency} =</label>
+              <Input id={`fx-${r.currency}`} inputMode="decimal" className="num w-32" value={r.rate} disabled={!canEdit} required onChange={(e) => setRows(list.map((x, j) => (j === i ? { ...x, rate: e.target.value.replace(/[^\d.]/g, "") } : x)))} />
+              <span className="text-muted">{cur}</span>
+              {canEdit ? <Button type="button" size="icon" variant="ghost" aria-label={`Remove the ${r.currency} rate`} onClick={() => setRows(list.filter((_, j) => j !== i))}><Trash2 /></Button> : null}
+            </div>
+          ))}
+          {canEdit ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {unused.length ? (
+                <Select aria-label="Add a currency" className="w-44" value="" onChange={(e) => e.target.value && setRows([...list, { currency: e.target.value, rate: "" }])}>
+                  <option value="">Add a currency…</option>
+                  {unused.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              ) : null}
+              <Button type="submit" variant="primary" disabled={update.isPending || rows === null}>Save exchange rates</Button>
+            </div>
+          ) : <p className="text-xs text-subtle">Only owners and admins can change exchange rates.</p>}
+        </form>
+      </CardBody>
+    </Card>
+  );
+}
+
 function EconomicsTab() {
   const trpc = useTRPC();
   const qc = useQueryClient();
@@ -227,6 +288,15 @@ function EconomicsTab() {
   );
 }
 
+function EconomicsAndRates() {
+  return (
+    <div className="flex flex-col gap-6">
+      <EconomicsTab />
+      <div className="grid gap-6 lg:grid-cols-2"><ExchangeRatesCard /></div>
+    </div>
+  );
+}
+
 function AuditTab() {
   const trpc = useTRPC();
   const canRead = useCan("audit.read");
@@ -264,14 +334,14 @@ export function SettingsView({ initialTab }: { initialTab: string }) {
         <TabsList className="mb-6">
           <TabsTrigger value="workspace">Workspace</TabsTrigger>
           <TabsTrigger value="members">Members & roles</TabsTrigger>
-          <TabsTrigger value="economics">Economics & verdicts</TabsTrigger>
+          <TabsTrigger value="economics">Economics & currencies</TabsTrigger>
           <TabsTrigger value="mdm">MDM Express</TabsTrigger>
           <TabsTrigger value="mappings">Status mappings</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
         </TabsList>
         <TabsContent value="workspace"><WorkspaceTab /></TabsContent>
         <TabsContent value="members"><MembersTab /></TabsContent>
-        <TabsContent value="economics"><EconomicsTab /></TabsContent>
+        <TabsContent value="economics"><EconomicsAndRates /></TabsContent>
         <TabsContent value="mdm"><MdmTab /></TabsContent>
         <TabsContent value="mappings"><StatusMappingsTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>

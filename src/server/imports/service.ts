@@ -14,6 +14,7 @@ import type { Mapping, RowIssue } from "@/domain/imports/common";
 import { validateOrders, type ImportedOrder } from "@/domain/imports/orders";
 import { validateSpend, type ImportedSpend } from "@/domain/imports/spend";
 import { validateBank, validateExpenses, type ImportedBankRow, type ImportedExpense } from "@/domain/imports/finance";
+import { parseExchangeRates } from "@/domain/settings";
 
 export { InputError as ImportInputError };
 
@@ -102,7 +103,8 @@ async function validate(ctx: WorkspaceContext, req: ImportRequest) {
       break;
     }
     case "EXPENSES": {
-      const r = validateExpenses(csv, mapping, { dateFormat, currency: ctx.currency, products });
+      const ws = await db.workspace.findUniqueOrThrow({ where: { id: ctx.workspaceId }, select: { exchangeRates: true } });
+      const r = validateExpenses(csv, mapping, { dateFormat, currency: ctx.currency, products, rates: parseExchangeRates(ws.exchangeRates) });
       validated = { kind: "EXPENSES", items: r.items };
       ({ issues, warnings } = r);
       break;
@@ -209,7 +211,7 @@ function previewRow(kind: ImportKind, item: ImportedOrder | ImportedSpend | Impo
     }
     case "EXPENSES": {
       const e = item as ImportedExpense;
-      return { date: e.date, category: e.category, amount: e.amount, description: e.description, productId: e.productId, costType: e.costType };
+      return { date: e.date, category: e.category, amount: e.amount, originalAmount: e.originalAmount, originalCurrency: e.originalCurrency, description: e.description, productId: e.productId, costType: e.costType };
     }
     case "BANK": {
       const b = item as ImportedBankRow;
@@ -435,6 +437,9 @@ async function writeExpenses(ctx: WorkspaceContext, batchId: string, items: Impo
         category: e.category,
         amount: e.amount,
         currency: ctx.currency,
+        originalAmount: e.originalAmount,
+        originalCurrency: e.originalCurrency,
+        fxRate: e.fxRate,
         description: e.description,
         allocation: e.productId ? ("PRODUCT" as const) : ("GLOBAL" as const),
         productId: e.productId,

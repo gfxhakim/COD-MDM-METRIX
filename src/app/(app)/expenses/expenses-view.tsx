@@ -5,7 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import { MoneyInput, minorToInput } from "@/components/app/money-input";
+import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
+import { minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,7 @@ import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { categoryLabel, EXPENSE_CATEGORIES, type ExpenseCategoryKey } from "@/lib/labels";
-import { formatMoney, parseToMinor } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDate, toDateInput } from "@/lib/utils";
 
@@ -28,6 +29,9 @@ type ExpenseRow = {
   category: ExpenseCategoryKey;
   amount: number;
   currency: string;
+  originalAmount: number | null;
+  originalCurrency: string | null;
+  fxRate: number | null;
   description: string | null;
   allocation: ExpenseAllocation;
   productId: string | null;
@@ -35,7 +39,7 @@ type ExpenseRow = {
   product: { id: string; name: string } | null;
 };
 
-function ExpenseDialog({ expense, onClose, currency }: { expense?: ExpenseRow; onClose: () => void; currency: string }) {
+function ExpenseDialog({ expense, onClose, currency, rates }: { expense?: ExpenseRow; onClose: () => void; currency: string; rates: Rates }) {
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -43,7 +47,9 @@ function ExpenseDialog({ expense, onClose, currency }: { expense?: ExpenseRow; o
   const [f, setF] = React.useState({
     date: toDateInput(expense?.date ?? new Date()),
     category: (expense?.category ?? "SOFTWARE") as ExpenseCategoryKey,
-    amount: minorToInput(expense?.amount, currency),
+    amount: (expense?.originalCurrency
+      ? { amount: minorToInput(expense.originalAmount, expense.originalCurrency), currency: expense.originalCurrency, rate: String(expense.fxRate ?? "") }
+      : { amount: minorToInput(expense?.amount, currency), currency, rate: "" }) as CurrencyAmount,
     description: expense?.description ?? "",
     allocation: (expense?.allocation ?? "GLOBAL") as ExpenseAllocation,
     productId: expense?.productId ?? "",
@@ -58,10 +64,13 @@ function ExpenseDialog({ expense, onClose, currency }: { expense?: ExpenseRow; o
     e.preventDefault();
     setError(null);
     try {
+      const amount = parseCurrencyAmount(f.amount, currency);
       const data = {
         date: new Date(`${f.date}T12:00:00Z`),
         category: f.category,
-        amount: parseToMinor(f.amount, currency),
+        amount: amount.amount,
+        currency: amount.currency,
+        fxRate: amount.rate,
         description: f.description || undefined,
         allocation: f.allocation,
         productId: f.allocation === "PRODUCT" ? f.productId || null : null,
@@ -80,7 +89,7 @@ function ExpenseDialog({ expense, onClose, currency }: { expense?: ExpenseRow; o
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Date" htmlFor="ed"><Input id="ed" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} required /></Field>
-            <Field label="Amount" htmlFor="ea"><MoneyInput id="ea" currency={currency} value={f.amount} onChange={(v) => setF({ ...f, amount: v })} required /></Field>
+            <Field label="Amount" htmlFor="ea"><CurrencyAmountInput id="ea" value={f.amount} onChange={(v) => setF({ ...f, amount: v })} workspaceCurrency={currency} rates={rates} required /></Field>
             <Field label="Category" htmlFor="ec">
               <Select id="ec" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value as ExpenseCategoryKey })}>
                 {EXPENSE_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -121,6 +130,7 @@ export function ExpensesView() {
   const ws = useQuery(trpc.workspace.getCurrent.queryOptions());
   const products = useQuery(trpc.products.list.queryOptions({ includeInactive: true }));
   const currency = ws.data?.currency ?? "DZD";
+  const rates: Rates = ws.data?.exchangeRates ?? {};
   const [category, setCategory] = React.useState("");
   const [allocation, setAllocation] = React.useState("");
   const [productId, setProductId] = React.useState("");
@@ -196,7 +206,7 @@ export function ExpensesView() {
                     <Td className="max-w-64 truncate text-muted">{e.description ?? "—"}</Td>
                     <Td>{e.allocation === "GLOBAL" ? <Badge tone="warning">Global</Badge> : <Badge tone="info">{e.product?.name ?? "Product"}</Badge>}</Td>
                     <Td className="text-xs text-muted">{e.costType.toLowerCase()}</Td>
-                    <Td className="num text-right">{formatMoney(e.amount, e.currency)}</Td>
+                    <Td className="num text-right">{formatMoney(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
                     <Td>
                       {canWrite ? (
                         <div className="flex justify-end gap-1">
@@ -233,8 +243,8 @@ export function ExpensesView() {
         </Card>
       </div>
 
-      {creating ? <ExpenseDialog onClose={() => setCreating(false)} currency={currency} /> : null}
-      {editing ? <ExpenseDialog expense={editing} onClose={() => setEditing(null)} currency={currency} /> : null}
+      {creating ? <ExpenseDialog onClose={() => setCreating(false)} currency={currency} rates={rates} /> : null}
+      {editing ? <ExpenseDialog expense={editing} onClose={() => setEditing(null)} currency={currency} rates={rates} /> : null}
     </>
   );
 }

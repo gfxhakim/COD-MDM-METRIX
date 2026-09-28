@@ -1,5 +1,5 @@
 import { normalizeCreativeKey } from "@/lib/normalize";
-import { currencyExponent } from "@/lib/money";
+import { convertMinor } from "@/lib/money";
 import type { ParsedCsv } from "./csv";
 import { cell, currencyOf, int, money, occurrenceKeys, RowError, type Mapping, type RowIssue } from "./common";
 import { parseDate, type DateFormat } from "./dates";
@@ -32,10 +32,7 @@ export function currencyFromHeader(header: string | null | undefined): string | 
   return m ? m[1] : null;
 }
 
-export function convert(minor: number, from: string, to: string, rate: number): number {
-  const shift = currencyExponent(to) - currencyExponent(from);
-  return Math.round(minor * rate * 10 ** shift);
-}
+export const convert = convertMinor;
 
 export function validateSpend(
   csv: ParsedCsv,

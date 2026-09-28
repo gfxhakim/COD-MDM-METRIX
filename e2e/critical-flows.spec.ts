@@ -117,6 +117,27 @@ test.describe("new workspace", () => {
     await dialog.locator("#edesc").fill("E2E analytics tool");
     await dialog.getByRole("button", { name: "Add expense" }).click();
     await expect(page.getByRole("cell", { name: "E2E analytics tool" })).toBeVisible();
+
+    // A dollar rate saved in Settings fills in when an expense is paid in USD.
+    await page.goto("/settings?tab=economics");
+    await page.getByLabel("Add a currency").selectOption("USD");
+    await page.locator("#fx-USD").fill("250");
+    await page.getByRole("button", { name: "Save exchange rates" }).click();
+    await expect(page.getByText("Exchange rates saved")).toBeVisible();
+
+    await page.goto("/expenses");
+    await page.getByRole("button", { name: "New expense" }).first().click();
+    const usd = page.getByRole("dialog");
+    await usd.locator("#ed").fill("2026-09-16");
+    await usd.locator("#ea").fill("29");
+    await usd.locator("#ea-currency").selectOption("USD");
+    await expect(usd.locator("#ea-rate")).toHaveValue("250");
+    await expect(usd.getByText(/= DZD.7,250/)).toBeVisible();
+    await usd.locator("#edesc").fill("E2E store plan");
+    await usd.getByRole("button", { name: "Add expense" }).click();
+    const row = page.locator("tr", { hasText: "E2E store plan" });
+    await expect(row).toContainText("7,250");
+    await expect(row).toContainText(/USD.29 × 250/);
   });
 
   test("6. view creative matrix metrics", async ({ page }) => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURRENCIES } from "@/lib/money";
 
 export const CALL_CENTER_BASES = ["PLACED_LEAD", "CONFIRMED_ORDER", "CALL_ATTEMPT"] as const;
 export const OVERHEAD_POLICIES = ["NONE", "BY_DELIVERED_ORDERS", "BY_REVENUE"] as const;
@@ -36,4 +37,20 @@ export function parseEconomicsDefaults(v: unknown): EconomicsDefaults {
 export function parseVerdictThresholds(v: unknown): VerdictThresholds {
   const r = verdictThresholdsSchema.safeParse(v ?? {});
   return r.success ? r.data : verdictThresholdsSchema.parse({});
+}
+
+export const currencyCodeSchema = z.enum(CURRENCIES);
+
+/**
+ * Exchange rates the workspace uses to fill in forms: how many units of the
+ * workspace currency one unit of each other currency costs, e.g. { USD: 250 }.
+ * Each saved amount keeps the rate it was converted with, so changing a rate
+ * here never rewrites past costs.
+ */
+export const exchangeRatesSchema = z.partialRecord(currencyCodeSchema, z.number().positive().max(1_000_000));
+export type ExchangeRates = z.infer<typeof exchangeRatesSchema>;
+
+export function parseExchangeRates(v: unknown): ExchangeRates {
+  const r = exchangeRatesSchema.safeParse(v ?? {});
+  return r.success ? r.data : {};
 }

@@ -1,6 +1,7 @@
 import type { CostType, ExpenseAllocation, ExpenseCategory, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { audit } from "@/server/audit";
+import { toWorkspaceCurrency } from "@/server/fx";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 
 export type ExpenseInput = {
@@ -11,7 +12,26 @@ export type ExpenseInput = {
   allocation: ExpenseAllocation;
   productId?: string | null;
   costType: CostType;
+  /** Currency `amount` was entered in. Defaults to the workspace currency. */
+  currency?: string;
+  /** Workspace currency per 1 unit of `currency`. Falls back to the rate in Settings. */
+  fxRate?: number | null;
 };
+
+/** Expense columns for the form's input: `amount` in the workspace currency, the original kept alongside. */
+async function expenseColumns(ctx: WorkspaceContext, input: ExpenseInput) {
+  const { currency, fxRate, ...rest } = input;
+  const money = await toWorkspaceCurrency(ctx, rest.amount, currency, fxRate);
+  return {
+    ...rest,
+    amount: money.amount,
+    currency: ctx.currency,
+    originalAmount: money.original?.amount ?? null,
+    originalCurrency: money.original?.currency ?? null,
+    fxRate: money.original?.rate ?? null,
+    productId: input.allocation === "PRODUCT" ? input.productId : null,
+  };
+}
 
 export type ExpenseListInput = {
   category?: ExpenseCategory;
@@ -77,15 +97,9 @@ export async function createExpense(ctx: WorkspaceContext, input: ExpenseInput) 
   assertCan(ctx, "expenses.write");
   await assertProduct(ctx, input);
   const e = await db.expense.create({
-    data: {
-      workspaceId: ctx.workspaceId,
-      ...input,
-      productId: input.allocation === "PRODUCT" ? input.productId : null,
-      currency: ctx.currency,
-      createdById: ctx.userId,
-    },
+    data: { workspaceId: ctx.workspaceId, ...(await expenseColumns(ctx, input)), createdById: ctx.userId },
   });
-  await audit(ctx, "expense.created", { type: "Expense", id: e.id }, { category: e.category, amount: e.amount });
+  await audit(ctx, "expense.created", { type: "Expense", id: e.id }, { category: e.category, amount: e.amount, originalAmount: e.originalAmount, originalCurrency: e.originalCurrency, fxRate: e.fxRate });
   return e;
 }
 
@@ -94,11 +108,11 @@ export async function updateExpense(ctx: WorkspaceContext, id: string, input: Ex
   const existing = await db.expense.findFirst({ where: { id, workspaceId: ctx.workspaceId } });
   if (!existing) throw new NotFoundError("Expense not found");
   await assertProduct(ctx, input);
-  const e = await db.expense.update({
-    where: { id: existing.id },
-    data: { ...input, productId: input.allocation === "PRODUCT" ? input.productId : null },
+  const e = await db.expense.update({ where: { id: existing.id }, data: await expenseColumns(ctx, input) });
+  await audit(ctx, "expense.updated", { type: "Expense", id: e.id }, {
+    from: { amount: existing.amount, category: existing.category, originalAmount: existing.originalAmount, originalCurrency: existing.originalCurrency },
+    to: { amount: e.amount, category: e.category, originalAmount: e.originalAmount, originalCurrency: e.originalCurrency },
   });
-  await audit(ctx, "expense.updated", { type: "Expense", id: e.id }, { from: { amount: existing.amount, category: existing.category }, to: { amount: e.amount, category: e.category } });
   return e;
 }
 

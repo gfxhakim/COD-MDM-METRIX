@@ -2,7 +2,7 @@ import type { Prisma, Role } from "@prisma/client";
 import { db } from "@/server/db";
 import { audit } from "@/server/audit";
 import { DEFAULT_MDM_STATUS_MAP } from "@/domain/statusMapping";
-import { economicsDefaultsSchema, verdictThresholdsSchema, type EconomicsDefaults, type VerdictThresholds } from "@/domain/settings";
+import { economicsDefaultsSchema, parseExchangeRates, verdictThresholdsSchema, type EconomicsDefaults, type ExchangeRates, type VerdictThresholds } from "@/domain/settings";
 import { assertCan, ForbiddenError, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 
 function slugify(name: string): string {
@@ -58,15 +58,18 @@ export async function getWorkspace(ctx: WorkspaceContext) {
     isDemo: ws.isDemo,
     economicsDefaults: economicsDefaultsSchema.parse(ws.economicsDefaults ?? {}),
     verdictThresholds: verdictThresholdsSchema.parse(ws.verdictThresholds ?? {}),
+    exchangeRates: parseExchangeRates(ws.exchangeRates),
   };
 }
 
 export async function updateWorkspace(
   ctx: WorkspaceContext,
-  input: { name?: string; timezone?: string; economicsDefaults?: EconomicsDefaults; verdictThresholds?: VerdictThresholds },
+  input: { name?: string; timezone?: string; economicsDefaults?: EconomicsDefaults; verdictThresholds?: VerdictThresholds; exchangeRates?: ExchangeRates },
 ) {
   if (input.name !== undefined || input.timezone !== undefined) assertCan(ctx, "workspace.manage");
-  if (input.economicsDefaults || input.verdictThresholds) assertCan(ctx, "settings.economics");
+  if (input.economicsDefaults || input.verdictThresholds || input.exchangeRates) assertCan(ctx, "settings.economics");
+  // A rate for the workspace's own currency would be meaningless (always 1).
+  const exchangeRates = input.exchangeRates ? Object.fromEntries(Object.entries(input.exchangeRates).filter(([c]) => c !== ctx.currency)) : undefined;
   const ws = await db.workspace.update({
     where: { id: ctx.workspaceId },
     data: {
@@ -74,9 +77,10 @@ export async function updateWorkspace(
       timezone: input.timezone,
       economicsDefaults: input.economicsDefaults,
       verdictThresholds: input.verdictThresholds,
+      exchangeRates,
     },
   });
-  await audit(ctx, "workspace.settings_updated", { type: "Workspace", id: ws.id }, { fields: Object.keys(input) });
+  await audit(ctx, "workspace.settings_updated", { type: "Workspace", id: ws.id }, { fields: Object.keys(input), ...(exchangeRates ? { exchangeRates } : {}) });
   return ws;
 }
 
