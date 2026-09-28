@@ -81,6 +81,10 @@ describe("Meta client", () => {
     expect(e(100, "API calls from the server require an appsecret_proof argument")).toMatchObject({ kind: "CONFIG" });
     expect(e(2, "x", 500)).toMatchObject({ kind: "SERVER", retryable: true });
     for (const code of [190, 17, 200, 100, 2]) expect(e(code).message).not.toContain("secret detail");
+    // Meta's error number (never its text) is kept so a screenshot is enough to diagnose.
+    expect(e(200).message).toMatch(/\(Meta error 200\)$/);
+    expect(metaErrorFrom(400, { error: { code: 100, error_subcode: 33, message: "secret detail" } })).toMatchObject({ metaCode: "100, subcode 33", message: expect.stringMatching(/\(Meta error 100, subcode 33\)$/) });
+    expect(metaErrorFrom(403, null).message).not.toMatch(/Meta error/);
     expect(() => mapSpendRow({ ad_id: "1", date_start: "2026-09-01", spend: "lots" }, "USD")).toThrow(/not a number/);
   });
 
@@ -88,6 +92,40 @@ describe("Meta client", () => {
     stubGraph(() => ({ status: 400, body: { error: { code: 190, message: "Error validating access token", type: "OAuthException" } } }));
     await expect(createLiveMetaAdapter(TOKEN).listAdAccounts()).rejects.toMatchObject({ kind: "AUTH" });
     await expect(createLiveMetaAdapter(null).listAdAccounts()).rejects.toMatchObject({ kind: "CONFIG" });
+  });
+});
+
+describe("Meta refusing to list a token's ad accounts", () => {
+  const refused = (permissions: { status?: number; body: unknown }) =>
+    stubGraph((u) => (u.pathname.endsWith("/me/permissions") ? permissions : { status: 400, body: { error: { code: 200, message: "secret detail from Meta", type: "OAuthException" } } }));
+
+  it("says so when the token was made without ads_read", async () => {
+    const calls = refused({ body: { data: [{ permission: "business_management", status: "granted" }, { permission: "ads_read", status: "declined" }] } });
+    const e = await createLiveMetaAdapter(TOKEN).listAdAccounts().catch((x) => x);
+    expect(e).toMatchObject({ kind: "PERMISSION", metaCode: "200" });
+    expect(e.message).toMatch(/^This token was made without the ads_read permission.*\(Meta error 200\)$/);
+    expect(e.message).not.toContain("secret detail");
+    expect(calls.map((c) => c.url.pathname)).toEqual(["/v25.0/me/adaccounts", "/v25.0/me/permissions"]);
+    for (const c of calls) {
+      expect(c.method).toBe("GET");
+      expect(c.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
+      expect(c.url.toString()).not.toContain(TOKEN);
+    }
+  });
+
+  it("points at the Meta app when the token does have ads_read", async () => {
+    refused({ body: { data: [{ permission: "ads_read", status: "granted" }] } });
+    await expect(createLiveMetaAdapter(TOKEN).listAdAccounts()).rejects.toMatchObject({ kind: "PERMISSION", message: expect.stringMatching(/^The token has ads_read, but Meta still won't list.*Marketing API/) });
+  });
+
+  it("falls back to both checks when Meta won't show the permissions", async () => {
+    refused({ status: 400, body: { error: { code: 100, message: "secret detail" } } });
+    await expect(createLiveMetaAdapter(TOKEN).listAdAccounts()).rejects.toMatchObject({ kind: "PERMISSION", message: expect.stringMatching(/^Meta won't let this token list its ad accounts.*ads_read.*\(Meta error 200\)$/) });
+  });
+
+  it("keeps the per-account message when one ad account is refused", async () => {
+    stubGraph(() => ({ status: 403, body: { error: { code: 10, message: "secret detail" } } }));
+    await expect(createLiveMetaAdapter(TOKEN).dailyAdSpend({ accountId: "act_222", since: "2026-09-01", until: "2026-09-27", cursor: null, currency: "USD" })).rejects.toMatchObject({ kind: "PERMISSION", message: expect.stringMatching(/^The token can't read this ad account.*\(Meta error 10\)$/) });
   });
 });
 
