@@ -7,6 +7,7 @@ import { createWorkspace } from "@/server/repositories/workspaces";
 import { resolveWorkspaceContext } from "@/server/tenancy";
 import { createMockAdapter } from "@/server/mdm/mock";
 import { processDueJobs, runSyncJob, startSync } from "@/server/mdm/sync";
+import { applyStatusDefaults } from "@/server/mdm/statuses";
 import { MdmError, type MdmParcel } from "@/server/mdm/types";
 import { addMember, callerFor, cost, makeTenant, makeUser } from "../helpers";
 
@@ -68,7 +69,7 @@ describe("credentials", () => {
       seen.push({ url: String(url), key: (init.headers as Headers).get("x-api-key") });
       if (!accept) return new Response("", { status: 401 });
       const path = new URL(String(url)).pathname;
-      const body = path === "/api/auth/me" ? { trackingId: "ACC-1", role: "seller", firstName: "Owner" } : { statuses: ["delivered", "postponed"], types: [], subTypes: [], paymentMethods: [] };
+      const body = path === "/api/auth/me" ? { trackingId: "ACC-1", role: "seller", firstName: "Owner" } : { statuses: ["delivered", "delivered-partially"], types: [], subTypes: [], paymentMethods: [] };
       return new Response(JSON.stringify(body), { status: 200 });
     }));
     const bad = await other.caller.integrations.testMdm();
@@ -77,7 +78,7 @@ describe("credentials", () => {
 
     accept = true;
     const ok = await other.caller.integrations.testMdm();
-    expect(ok).toMatchObject({ ok: true, accountLabel: "MDM account ACC-1 (seller)", unmappedStatuses: ["postponed"], connection: { status: "CONNECTED" } });
+    expect(ok).toMatchObject({ ok: true, accountLabel: "MDM account ACC-1 (seller)", unmappedStatuses: ["delivered-partially"], connection: { status: "CONNECTED" } });
     expect(ok.message).toContain("1 MDM status is not mapped yet");
     expect(seen.every((c) => c.url.startsWith("https://api.mdm.express/") && c.key === SECRET && !c.url.includes(SECRET))).toBe(true);
     expect(JSON.stringify(ok)).not.toContain(SECRET);
@@ -238,5 +239,62 @@ describe("sync engine", () => {
     expect(JSON.stringify(mine)).not.toContain("activeLock");
     const ctxB = (await resolveWorkspaceContext(other.user.id, other.ws.id))!;
     await expect(startSync(ctxB, { mode: "FULL" })).rejects.toThrow(/Save an MDM API key/);
+  });
+});
+
+describe("built-in status defaults", () => {
+  const NEW_DEFAULTS = ["return_ready", "delivery_failed", "delivery_attempt_failed", "postponed", "received", "out_of_stock"];
+  const at = new Date("2026-09-22T08:00:00Z");
+
+  it("re-sorts parcels stuck as unknown, keeps the workspace's own choices, and adds the missing Settings rows", async () => {
+    const d = await makeTenant("SyncDefaults");
+    // A workspace created before these defaults existed, whose owner already mapped "received" themselves.
+    await db.statusMapping.deleteMany({ where: { workspaceId: d.ws.id, providerStatus: { in: NEW_DEFAULTS } } });
+    await db.statusMapping.create({ data: { workspaceId: d.ws.id, provider: "MDM_EXPRESS", providerStatus: "received", normalizedStatus: "CONFIRMED" } });
+    const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    const order = await d.caller.orders.create({ orderNumber: "ES-7", placedAt: new Date("2026-09-18T10:00:00Z"), status: "PENDING", codAmount: 390000, lines: [{ productId: product.id, quantity: 1, unitPrice: 390000 }] });
+    const mk = (trackingId: string, providerStatus: string, orderId: string | null = null) =>
+      db.parcel.create({ data: { workspaceId: d.ws.id, provider: "MDM_EXPRESS", trackingId, providerStatus, normalizedStatus: "UNKNOWN", lastProviderUpdateAt: at, orderId,
+        events: { create: { workspaceId: d.ws.id, providerStatus, normalizedStatus: "UNKNOWN", occurredAt: at, source: "MDM_EXPRESS", eventHash: `h-${trackingId}` } } } });
+    await mk("P-RR", "return-ready");
+    await mk("P-DF", "delivery-failed");
+    await mk("P-DAF", "delivery-attempt-failed", order.id);
+    await mk("P-REC", "received");
+    await mk("P-OOS", "out-of-stock");
+    await mk("P-ODD", "held_at_hub");
+
+    const res = await applyStatusDefaults(d.ws.id);
+    expect(res.added.sort()).toEqual(NEW_DEFAULTS.filter((k) => k !== "received").sort());
+    expect(res.parcels).toBe(5);
+    const byId = Object.fromEntries((await db.parcel.findMany({ where: { workspaceId: d.ws.id }, include: { events: true } })).map((p) => [p.trackingId, p]));
+    expect(byId["P-RR"]).toMatchObject({ normalizedStatus: "RETURNED", returnedAt: at, dispatchedAt: at });
+    expect(byId["P-DF"]).toMatchObject({ normalizedStatus: "RETURNED", returnedAt: at });
+    expect(byId["P-DAF"]).toMatchObject({ normalizedStatus: "SHIPPED", dispatchedAt: at, returnedAt: null });
+    expect(byId["P-REC"]).toMatchObject({ normalizedStatus: "CONFIRMED", dispatchedAt: null });
+    expect(byId["P-OOS"]).toMatchObject({ normalizedStatus: "CONFIRMED", dispatchedAt: null });
+    expect(byId["P-ODD"].normalizedStatus).toBe("UNKNOWN");
+    expect(byId["P-RR"].events[0].normalizedStatus).toBe("RETURNED");
+    expect(byId["P-ODD"].events[0].normalizedStatus).toBe("UNKNOWN");
+    // The shipped parcel confirms its pending order, as a sync would.
+    expect(await db.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ status: "CONFIRMED", confirmedAt: at });
+    expect(await d.caller.sync.unknownStatuses()).toEqual([{ providerStatus: "held_at_hub", parcels: 1 }]);
+    const rows = await d.caller.sync.statusMappings();
+    expect(rows.find((r) => r.providerStatus === "received")?.normalizedStatus).toBe("CONFIRMED");
+    expect(rows.find((r) => r.providerStatus === "return_ready")?.normalizedStatus).toBe("RETURNED");
+    expect(await db.auditLog.count({ where: { workspaceId: d.ws.id, action: "status_mapping.defaults_applied" } })).toBe(1);
+
+    // Running again changes nothing and logs nothing.
+    expect(await applyStatusDefaults(d.ws.id)).toEqual({ added: [], parcels: 0 });
+    expect(await db.auditLog.count({ where: { workspaceId: d.ws.id, action: "status_mapping.defaults_applied" } })).toBe(1);
+  });
+
+  it("runs at the start of every sync, even for parcels MDM doesn't send again", async () => {
+    const d = await makeTenant("SyncDefaults2");
+    await connect(d);
+    await db.parcel.create({ data: { workspaceId: d.ws.id, provider: "MDM_EXPRESS", trackingId: "P-PP", providerStatus: "postponed", normalizedStatus: "UNKNOWN", lastProviderUpdateAt: at } });
+    const { job } = await startSync(d.ctx, { mode: "INCREMENTAL" });
+    const factory = async () => ({ adapter: createMockAdapter({ fixtures: [], credential: SECRET }), connection: null });
+    expect(await runSyncJob(job.id, { adapterFactory: factory, sleep: noSleep })).toMatchObject({ status: "SUCCEEDED" });
+    expect((await db.parcel.findFirstOrThrow({ where: { workspaceId: d.ws.id, trackingId: "P-PP" } })).normalizedStatus).toBe("SHIPPED");
   });
 });

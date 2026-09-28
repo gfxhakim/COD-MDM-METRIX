@@ -36,6 +36,20 @@ describe("status normalization", () => {
 
   it("applies workspace overrides", () => {
     expect(normalizeProviderStatus("held_at_hub", { held_at_hub: "SHIPPED" })).toBe("SHIPPED");
+    expect(normalizeProviderStatus("received", { received: "CONFIRMED" })).toBe("CONFIRMED");
+  });
+
+  it("maps MDM Express's kebab-case statuses", () => {
+    expect(normalizeProviderStatus("return-ready")).toBe("RETURNED");
+    expect(normalizeProviderStatus("delivery-failed")).toBe("RETURNED");
+    expect(normalizeProviderStatus("delivery-attempt-failed")).toBe("SHIPPED");
+    expect(normalizeProviderStatus("deliveryAttemptFailed")).toBe("SHIPPED");
+    expect(normalizeProviderStatus("postponed")).toBe("SHIPPED");
+    expect(normalizeProviderStatus("received")).toBe("SHIPPED");
+    expect(normalizeProviderStatus("out-of-stock")).toBe("CONFIRMED");
+    expect(normalizeProviderStatus("out-for-delivery")).toBe("SHIPPED");
+    // Partial deliveries stay for review.
+    expect(normalizeProviderStatus("delivered-partially")).toBe("UNKNOWN");
   });
 });
 

@@ -1,6 +1,7 @@
 import { db } from "@/server/db";
 import { cleanupExpired, scheduleDueSyncs, schedulerEnabled } from "./schedule";
 import { processDueJobs, runSyncJob } from "./sync";
+import { applyStatusDefaultsOnce } from "./statuses";
 
 /**
  * In-process background execution. The HTTP request that queues a sync returns
@@ -31,9 +32,13 @@ async function runAndReschedule(jobId: string) {
 
 let lastCleanup = 0;
 
-/** One scheduler pass: queue due syncs, run due jobs, and clean up expired rows about once an hour. */
+/**
+ * One scheduler pass: queue due syncs, run due jobs, and clean up expired rows about once an hour.
+ * The first pass after a start also applies new built-in status defaults to every workspace.
+ */
 export async function runSchedulerTick(opts: { schedule?: boolean } = {}) {
   const now = new Date();
+  await applyStatusDefaultsOnce();
   const scheduled = (opts.schedule ?? schedulerEnabled()) ? await scheduleDueSyncs(now) : [];
   const processed = await processDueJobs();
   if (now.getTime() - lastCleanup > 3_600_000) {

@@ -4,10 +4,11 @@ import { audit } from "@/server/audit";
 import { InputError } from "@/server/errors";
 import { rateLimit } from "@/server/rateLimit";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
-import { normalizeProviderStatus, statusKey } from "@/domain/statusMapping";
+import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/statusMapping";
 import { normalizeReference } from "@/lib/normalize";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { redactPayload, sha256, stableStringify } from "./redact";
+import { applyStatusDefaults, parcelStatusSelect, setParcelStatus, workspaceStatusOverrides } from "./statuses";
 import { MdmError, type MdmAdapter, type MdmPage, type MdmParcel } from "./types";
 
 const PROVIDER = "MDM_EXPRESS" as const;
@@ -17,7 +18,6 @@ export const INCREMENTAL_OVERLAP_MS = 24 * 3_600_000;
 export const MAX_REQUEST_RETRIES = 4;
 export const MAX_JOB_ATTEMPTS = 3;
 export const STALE_AFTER_MS = 10 * 60_000;
-const SHIPPED_STATES: NormalizedStatus[] = ["SHIPPED", "DELIVERED", "RETURNED", "LOST", "EXCHANGED"];
 
 export type SyncDeps = {
   adapterFactory: AdapterFactory;
@@ -162,7 +162,9 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
   } catch (e) {
     return finish(job, "FAILED", counters, safeMdmMessage(e));
   }
-  const overrides = Object.fromEntries((await db.statusMapping.findMany({ where: { workspaceId: ws, provider: PROVIDER } })).map((m) => [statusKey(m.providerStatus), m.normalizedStatus]));
+  // New built-in defaults also re-sort parcels MDM won't send again. Never blocks the sync.
+  await applyStatusDefaults(ws).catch((e) => console.error(`[mdm] could not apply status defaults for workspace ${ws}`, e instanceof Error ? e.message : e));
+  const overrides = await workspaceStatusOverrides(ws);
 
   try {
     for (;;) {
@@ -383,11 +385,10 @@ export async function mapStatus(ctx: WorkspaceContext, input: { providerStatus: 
       create: { workspaceId: ctx.workspaceId, provider: PROVIDER, providerStatus: key, normalizedStatus: input.normalizedStatus },
       update: { normalizedStatus: input.normalizedStatus },
     });
-    const parcels = await tx.parcel.findMany({ where: { workspaceId: ctx.workspaceId, provider: PROVIDER, providerStatus: { not: null } }, select: { id: true, providerStatus: true, lastProviderUpdateAt: true, deliveredAt: true, returnedAt: true } });
+    const parcels = await tx.parcel.findMany({ where: { workspaceId: ctx.workspaceId, provider: PROVIDER, providerStatus: { not: null } }, select: parcelStatusSelect });
     let n = 0;
     for (const p of parcels.filter((x) => statusKey(x.providerStatus!) === key)) {
-      const s = input.normalizedStatus;
-      await tx.parcel.update({ where: { id: p.id }, data: { normalizedStatus: s, deliveredAt: s === "DELIVERED" ? p.deliveredAt ?? p.lastProviderUpdateAt : null, returnedAt: s === "RETURNED" ? p.returnedAt ?? p.lastProviderUpdateAt : null } });
+      await setParcelStatus(tx, ctx.workspaceId, p, input.normalizedStatus);
       n++;
     }
     const evs = await tx.parcelStatusEvent.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true, providerStatus: true } });

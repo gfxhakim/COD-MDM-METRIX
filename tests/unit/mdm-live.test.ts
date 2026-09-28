@@ -199,6 +199,6 @@ describe("MDM status vocabulary", () => {
     expect(normalizeProviderStatus("delivered")).toBe("DELIVERED");
     expect(normalizeProviderStatus("returned")).toBe("RETURNED");
     expect(normalizeProviderStatus("lost")).toBe("LOST");
-    for (const s of ["postponed", "deliveryFailed", "deliveryAttemptFailed", "deliveredPartially", "incoming"]) expect(normalizeProviderStatus(s)).toBe("UNKNOWN");
+    for (const s of ["deliveredPartially", "incoming", "collectionFailed"]) expect(normalizeProviderStatus(s)).toBe("UNKNOWN");
   });
 });
