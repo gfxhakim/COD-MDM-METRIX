@@ -81,3 +81,39 @@ describe("expenses in another currency", () => {
     expect(await t.caller.imports.commit(req)).toMatchObject({ importedRows: 0, duplicateRows: 2 });
   });
 });
+
+describe("report currency", () => {
+  let r: Tenant;
+  beforeAll(async () => {
+    r = await makeTenant("Report currency");
+  });
+
+  it("shows reports in another currency only once it has a rate, and never touches stored amounts", async () => {
+    expect(await r.caller.workspace.getCurrent()).toMatchObject({ currency: "DZD", reportCurrency: "DZD" });
+    await expect(r.caller.workspace.updateSettings({ reportCurrency: "USD" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Add a USD rate") });
+
+    const e = await r.caller.expenses.create({ date: new Date("2026-09-10T12:00:00Z"), category: "SOFTWARE", amount: 290000, currency: "DZD", allocation: "GLOBAL", costType: "FIXED", description: "Rent" });
+    await r.caller.workspace.updateSettings({ exchangeRates: { USD: 250 } });
+    await r.caller.workspace.updateSettings({ reportCurrency: "USD" });
+    expect(await r.caller.workspace.getCurrent()).toMatchObject({ currency: "DZD", reportCurrency: "USD" });
+    expect(await db.expense.findUniqueOrThrow({ where: { id: e.id } })).toMatchObject({ amount: 290000, currency: "DZD" });
+
+    // Its rate can't be removed while reports use it.
+    await expect(r.caller.workspace.updateSettings({ exchangeRates: {} })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Reports are shown in USD") });
+    expect((await r.caller.workspace.getCurrent()).exchangeRates).toEqual({ USD: 250 });
+
+    // Back to the stored currency: saved as "no report currency".
+    await r.caller.workspace.updateSettings({ reportCurrency: "DZD" });
+    expect(await db.workspace.findUniqueOrThrow({ where: { id: r.ws.id } })).toMatchObject({ currency: "DZD", reportCurrency: null });
+    await r.caller.workspace.updateSettings({ exchangeRates: {} });
+  });
+
+  it("is changed by owners and admins only", async () => {
+    await r.caller.workspace.updateSettings({ exchangeRates: { EUR: 270 } });
+    const analyst = await addMember(r.ws.id, "ANALYST");
+    await expect(analyst.caller.workspace.updateSettings({ reportCurrency: "EUR" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const admin = await addMember(r.ws.id, "ADMIN");
+    await admin.caller.workspace.updateSettings({ reportCurrency: "EUR" });
+    expect((await r.caller.workspace.getCurrent()).reportCurrency).toBe("EUR");
+  });
+});

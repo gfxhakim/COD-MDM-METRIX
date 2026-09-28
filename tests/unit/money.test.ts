@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMoney, convertMinor, formatMoney, MoneyError, multiplyMoney, parseToMinor, scaleMoney } from "@/lib/money";
+import { addMoney, convertMinor, convertWithRates, formatMoney, MoneyError, multiplyMoney, parseToMinor, scaleMoney } from "@/lib/money";
 
 describe("money", () => {
   it("parses common amount formats into integer minor units", () => {
@@ -56,5 +56,21 @@ describe("convertMinor", () => {
     expect(convertMinor(999, "DZD", "DZD", 0)).toBe(999);
     expect(() => convertMinor(100, "USD", "DZD", 0)).toThrow(MoneyError);
     expect(() => convertMinor(100, "USD", "DZD", Number.NaN)).toThrow(MoneyError);
+  });
+});
+
+describe("convertWithRates", () => {
+  const rates = { USD: 250, EUR: 270 };
+  it("converts through the workspace currency with the Settings rates", () => {
+    expect(convertWithRates(290000, "DZD", "USD", "DZD", rates)).toBe(1160); // 2 900 DZD → 11.60 USD
+    expect(convertWithRates(200, "USD", "DZD", "DZD", rates)).toBe(50000); // 2.00 USD → 500 DZD
+    expect(convertWithRates(1000, "EUR", "USD", "DZD", rates)).toBe(1080); // 10 EUR = 2 700 DZD = 10.80 USD
+    expect(convertWithRates(777, "DZD", "DZD", "DZD", {})).toBe(777);
+  });
+
+  it("returns null when a side has no rate, so the amount stays in its own currency", () => {
+    expect(convertWithRates(100, "DZD", "CNY", "DZD", rates)).toBeNull();
+    expect(convertWithRates(100, "CNY", "DZD", "DZD", rates)).toBeNull();
+    expect(convertWithRates(100, "DZD", "USD", "DZD", { USD: 0 })).toBeNull();
   });
 });

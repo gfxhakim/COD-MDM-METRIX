@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { economicsDefaultsSchema, exchangeRatesSchema, verdictThresholdsSchema } from "@/domain/settings";
+import { currencyCodeSchema, economicsDefaultsSchema, exchangeRatesSchema, verdictThresholdsSchema } from "@/domain/settings";
 import * as repo from "@/server/repositories/workspaces";
 import { getDataHealth, getOperationalCounts } from "@/server/repositories/overview";
 import { authedProcedure, permitted, router, workspaceProcedure } from "@/server/trpc/init";
@@ -19,6 +19,7 @@ export const workspaceRouter = router({
         economicsDefaults: economicsDefaultsSchema.optional(),
         verdictThresholds: verdictThresholdsSchema.optional(),
         exchangeRates: exchangeRatesSchema.optional(),
+        reportCurrency: currencyCodeSchema.optional(),
       }),
     )
     .mutation(({ ctx, input }) => repo.updateWorkspace(ctx.ws, input)),

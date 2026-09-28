@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, FlaskConical, History, KeyRound, Lock, Pencil, PlugZap, Plus, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 import * as React from "react";
+import { useMoney } from "@/components/app/currency";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { formatMoney } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 
@@ -32,6 +32,7 @@ const SETUP_STEPS = [
 type Editing = { mode: "add" } | { mode: "replace" | "rename"; id: string; label: string } | null;
 
 export function MetaTab() {
+  const money = useMoney();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -195,7 +196,7 @@ export function MetaTab() {
             <CardHeader title="Last spend sync" description={c.lastSyncAttemptAt ? formatDateTime(c.lastSyncAttemptAt) : undefined} />
             <CardBody className="flex flex-col gap-3 text-sm">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[["Days read", s.from && s.until ? `${s.from} → ${s.until}` : "—"], ["Ad accounts", String(s.accounts ?? 0)], ["New / updated rows", `${s.added ?? 0} / ${s.updated ?? 0}`], ["Spend read", formatMoney(s.spend ?? 0, cur)]].map(([l, v]) => (
+                {[["Days read", s.from && s.until ? `${s.from} → ${s.until}` : "—"], ["Ad accounts", String(s.accounts ?? 0)], ["New / updated rows", `${s.added ?? 0} / ${s.updated ?? 0}`], ["Spend read", money.fmt(s.spend ?? 0, cur)]].map(([l, v]) => (
                   <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted">{l}</p><p className="num font-semibold">{v}</p></div>
                 ))}
               </div>
