@@ -398,6 +398,24 @@ describe("MDM orders", () => {
     expect(await get("ORD-A2")).toMatchObject({ status: "CANCELED", utmContent: "120000000000010" });
   });
 
+  it("links every line to the workspace's only product, whatever MDM calls it", async () => {
+    const d = await makeTenant("OrdersF");
+    const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    await connect(d);
+    const orders = [mdmOrder("ORD-F1", { status: "delivered", utm: withContent("120000000000031"), products: [{ ref: "PRD-XYZ", variantOf: null, name: "Lampe LED pro", quantity: 2, unitPrice: null }] })];
+    await sync(d, { fixtures: [], credential: SECRET, orders });
+    const o = await db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId: "ORD-F1" }, include: { lines: true, attribution: { include: { creative: true } } } });
+    // The price falls back to the product's sale price when MDM sends none.
+    expect(o.lines).toMatchObject([{ productId: product.id, productName: "Lampe LED pro", quantity: 2, unitPrice: cost.salePrice }]);
+    expect(o.attribution?.creative?.productId).toBe(product.id);
+
+    // With a second active product, an unknown name is left unlinked rather than guessed.
+    await d.caller.products.create({ name: "Fan", sku: "FAN", cost });
+    await sync(d, { fixtures: [], credential: SECRET, orders: [mdmOrder("ORD-F2", { products: [{ ref: "PRD-XYZ", variantOf: null, name: "Lampe LED pro", quantity: 1, unitPrice: 390000 }] })] });
+    const o2 = await db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId: "ORD-F2" }, include: { lines: true } });
+    expect(o2.lines).toMatchObject([{ productId: null, productName: "Lampe LED pro" }]);
+  });
+
   it("links orders already imported from the store and keeps their own data", async () => {
     const d = await makeTenant("OrdersB");
     const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });

@@ -6,7 +6,7 @@ import { hashPhone } from "@/lib/pii";
 import { reconcileOrderStatuses } from "./statuses";
 import type { MdmOrder, MdmUtm } from "./types";
 
-type ProductRef = { id: string; sku: string; name: string; salePrice: number | null };
+type ProductRef = { id: string; sku: string; name: string; salePrice: number | null; active: boolean };
 
 /** Loaded once per sync; `creatives` grows as the sync creates creatives for new content IDs. */
 export type OrderSyncEnv = {
@@ -18,13 +18,13 @@ export type OrderSyncEnv = {
 
 export async function loadOrderSyncEnv(workspaceId: string, overrides: Record<string, NormalizedStatus>): Promise<OrderSyncEnv> {
   const [products, creatives] = await Promise.all([
-    db.product.findMany({ where: { workspaceId }, select: { id: true, sku: true, name: true, costVersions: { orderBy: { effectiveFrom: "desc" }, take: 1, select: { salePrice: true } } } }),
+    db.product.findMany({ where: { workspaceId }, select: { id: true, sku: true, name: true, active: true, costVersions: { orderBy: { effectiveFrom: "desc" }, take: 1, select: { salePrice: true } } } }),
     db.creative.findMany({ where: { workspaceId }, select: { id: true, normalizedKey: true } }),
   ]);
   return {
     workspaceId,
     overrides,
-    products: products.map((p) => ({ id: p.id, sku: p.sku, name: p.name, salePrice: p.costVersions[0]?.salePrice ?? null })),
+    products: products.map((p) => ({ id: p.id, sku: p.sku, name: p.name, active: p.active, salePrice: p.costVersions[0]?.salePrice ?? null })),
     creatives: new Map(creatives.map((c) => [c.normalizedKey, c.id])),
   };
 }
@@ -55,12 +55,19 @@ export async function ordersNeedingHistory(workspaceId: string, orders: MdmOrder
 
 type Line = { productId: string | null; sku: string | null; productName: string | null; quantity: number; unitPrice: number };
 
+/**
+ * MDM products are matched to the workspace's products by SKU (MDM product ID) or name.
+ * A workspace selling a single active product gets every unmatched line linked to it,
+ * so its costs count even when MDM names the product differently.
+ */
 function mapLines(o: MdmOrder, products: ProductRef[]): Line[] {
   const bySku = new Map(products.map((p) => [p.sku.toLowerCase(), p]));
   const byName = new Map(products.map((p) => [p.name.toLowerCase(), p]));
+  const active = products.filter((p) => p.active);
+  const only = active.length === 1 ? active[0] : null;
   return o.products.map((l) => {
     const product =
-      (l.ref && bySku.get(l.ref.toLowerCase())) || (l.variantOf && bySku.get(l.variantOf.toLowerCase())) || (l.name && (bySku.get(l.name.toLowerCase()) ?? byName.get(l.name.toLowerCase()))) || null;
+      (l.ref && bySku.get(l.ref.toLowerCase())) || (l.variantOf && bySku.get(l.variantOf.toLowerCase())) || (l.name && (bySku.get(l.name.toLowerCase()) ?? byName.get(l.name.toLowerCase()))) || only;
     return { productId: product?.id ?? null, sku: product?.sku ?? null, productName: l.name ?? product?.name ?? null, quantity: l.quantity, unitPrice: l.unitPrice ?? product?.salePrice ?? 0 };
   });
 }
