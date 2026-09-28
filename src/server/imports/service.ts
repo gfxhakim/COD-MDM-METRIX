@@ -5,7 +5,7 @@ import { audit } from "@/server/audit";
 import { InputError } from "@/server/errors";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 import { hashCustomerRef, hashPhone, maskPhone } from "@/lib/pii";
-import { normalizeCreativeKey } from "@/lib/normalize";
+import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { toCsv } from "@/lib/csv";
 import { CsvError, parseCsv, type ParsedCsv } from "@/domain/imports/csv";
 import { detectDateFormat, type DateFormat } from "@/domain/imports/dates";
@@ -120,15 +120,26 @@ async function validate(ctx: WorkspaceContext, req: ImportRequest) {
 }
 
 /** Keys already in the database for this workspace, so the preview and commit agree on duplicates. */
-async function existingKeys(ctx: WorkspaceContext, v: Validated, source: string): Promise<Map<string, { id: string; spend?: number }>> {
+type Existing = Map<string, { id: string; spend?: number; synced?: boolean }>;
+
+async function existingKeys(ctx: WorkspaceContext, v: Validated, source: string): Promise<Existing> {
   const ws = ctx.workspaceId;
-  const out = new Map<string, { id: string; spend?: number }>();
+  const out: Existing = new Map();
   for (let i = 0; i < v.items.length; i += 500) {
     switch (v.kind) {
       case "ORDERS": {
-        const ids = v.items.slice(i, i + 500).map((o) => o.externalOrderId);
-        const rows = await db.order.findMany({ where: { workspaceId: ws, source: source as OrderSource, externalOrderId: { in: ids } }, select: { id: true, externalOrderId: true } });
+        const chunk = v.items.slice(i, i + 500);
+        const rows = await db.order.findMany({ where: { workspaceId: ws, source: source as OrderSource, externalOrderId: { in: chunk.map((o) => o.externalOrderId) } }, select: { id: true, externalOrderId: true } });
         rows.forEach((r) => out.set(r.externalOrderId, { id: r.id }));
+        // Orders the MDM sync already brought in are the same orders: never imported twice.
+        const refsOf = (o: ImportedOrder) => [...new Set([o.normalizedOrderNumber, normalizeReference(o.externalOrderId)].filter(Boolean))];
+        const synced = await db.order.findMany({ where: { workspaceId: ws, source: "MDM_EXPRESS", normalizedOrderNumber: { in: [...new Set(chunk.flatMap(refsOf))] } }, select: { id: true, normalizedOrderNumber: true } });
+        for (const o of chunk) {
+          if (out.has(o.externalOrderId)) continue;
+          const refs = refsOf(o);
+          const hits = synced.filter((r) => refs.includes(r.normalizedOrderNumber));
+          if (hits.length === 1) out.set(o.externalOrderId, { id: hits[0].id, synced: true });
+        }
         break;
       }
       case "AD_SPEND": {
@@ -167,7 +178,7 @@ function keyOf(v: Validated["kind"], item: ImportedOrder | ImportedSpend | Impor
   }
 }
 
-function classify(v: Validated, existing: Map<string, { id: string; spend?: number }>) {
+function classify(v: Validated, existing: Existing) {
   let fresh = 0;
   let duplicate = 0;
   let update = 0;
@@ -283,6 +294,7 @@ export async function commitImport(ctx: WorkspaceContext, req: ImportRequest & {
     switch (validated.kind) {
       case "ORDERS":
         imported = await writeOrders(ctx, batch.id, source as OrderSource, validated.items.filter((_, i) => c.status[i] === "NEW"));
+        updated = await fillSyncedOrders(ctx, validated.items.filter((o, i) => c.status[i] === "DUPLICATE" && existing.get(o.externalOrderId)?.synced), existing);
         break;
       case "AD_SPEND": {
         const r = await writeSpend(ctx, batch.id, validated.items, c.status, req.options);
@@ -366,6 +378,32 @@ async function writeOrders(ctx: WorkspaceContext, batchId: string, source: Order
         });
         n++;
       }
+    });
+  }
+  return n;
+}
+
+/**
+ * Rows for orders the MDM sync already brought in: the file's content ID fills in orders
+ * MDM had none for. Nothing else changes, and attributions set by hand are kept.
+ */
+async function fillSyncedOrders(ctx: WorkspaceContext, rows: ImportedOrder[], existing: Existing): Promise<number> {
+  const withUtm = rows.filter((o) => o.utmContent);
+  if (!withUtm.length) return 0;
+  const creatives = new Map((await db.creative.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true, normalizedKey: true } })).map((c) => [c.normalizedKey, c.id]));
+  let n = 0;
+  for (const o of withUtm) {
+    const id = existing.get(o.externalOrderId)!.id;
+    await db.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({ where: { id, workspaceId: ctx.workspaceId, utmContent: null }, include: { attribution: true } });
+      if (!order) return;
+      await tx.order.update({ where: { id }, data: { utmSource: o.utmSource, utmMedium: o.utmMedium, utmCampaign: o.utmCampaign, utmContent: o.utmContent } });
+      if (order.attribution?.method !== "MANUAL") {
+        const creativeId = o.creativeKey ? creatives.get(o.creativeKey) ?? null : null;
+        const a = { rawUtmContent: o.utmContent, normalizedCreativeKey: o.creativeKey, creativeId, method: creativeId ? ("UTM_CONTENT" as const) : ("NONE" as const), confidence: creativeId ? 1 : 0 };
+        await tx.attribution.upsert({ where: { orderId: id }, create: { workspaceId: ctx.workspaceId, orderId: id, orderPlacedAt: order.placedAt, ...a }, update: a });
+      }
+      n++;
     });
   }
   return n;

@@ -127,7 +127,8 @@ export function MdmTab() {
               "Encrypted at rest with AES-256-GCM and bound to this workspace.",
               "Used only by server-side code. MDM is never called from your browser.",
               "Never returned to the browser, written to logs or put in URLs. Only the last 4 characters are shown.",
-              "The connection test is read-only and changes nothing in MDM.",
+              "The connection test and syncs only read from MDM and never change anything there.",
+              "Syncs read your MDM orders (status, amount, products, content ID) and parcels. Customer names, addresses and IPs are never stored; phone numbers are kept only in hashed form.",
               "Saving, testing and removing the key are recorded in the audit log.",
             ].map((t) => <p key={t} className="flex gap-2"><ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-positive" />{t}</p>)}
           </CardBody>

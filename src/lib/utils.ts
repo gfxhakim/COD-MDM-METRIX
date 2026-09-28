@@ -36,5 +36,5 @@ export function formatPercent(v: number | null | undefined, digits = 1): string 
 }
 
 export function humanize(s: string): string {
-  return s.toLowerCase().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return s.toLowerCase().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()).replace(/\bmdm\b/gi, "MDM");
 }

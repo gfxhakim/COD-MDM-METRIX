@@ -8,7 +8,7 @@ import { resolveWorkspaceContext } from "@/server/tenancy";
 import { createMockAdapter } from "@/server/mdm/mock";
 import { processDueJobs, runSyncJob, startSync } from "@/server/mdm/sync";
 import { applyStatusDefaults } from "@/server/mdm/statuses";
-import { MdmError, type MdmParcel } from "@/server/mdm/types";
+import { MdmError, type MdmOrder, type MdmParcel } from "@/server/mdm/types";
 import { addMember, callerFor, cost, makeTenant, makeUser } from "../helpers";
 
 type Tenant = Awaited<ReturnType<typeof makeTenant>>;
@@ -89,19 +89,25 @@ describe("credentials", () => {
     const product = await live.caller.products.create({ name: "Lamp", sku: "LMP", cost });
     const order = await live.caller.orders.create({ orderNumber: "ES-2001", placedAt: new Date("2026-09-18T10:00:00Z"), status: "PENDING", codAmount: 390000, lines: [{ productId: product.id, quantity: 1, unitPrice: 390000 }] });
     await connect(live);
-    vi.stubGlobal("fetch", vi.fn(async (url: URL) => {
+    const mdmOrder = { trackingId: "MO-1", externalId: "ES-2001", ip: "203.0.113.7", status: "outForDelivery", confirmed: true, createdAt: "2026-09-18T10:00:00.000Z", totalPrice: 3900, currency: "DZD", client: { firstName: "Amina", lastName: "Placeholder", phone: "0551111111" }, destination: { stateName: "Oran", streetAddress: "12 rue X" }, utm: { source: "facebook", content: "120000000000021" }, products: [] };
+    vi.stubGlobal("fetch", vi.fn(async (url: URL, init: RequestInit) => {
       const path = new URL(String(url)).pathname;
+      const req = JSON.parse(String(init.body ?? "{}"));
       const body = path === "/api/v2/orders/search"
-        ? { pagination: { page: 1, hasMore: false, nextPage: null, total: 1 }, list: [{ trackingId: "MO-1", externalId: "ES-2001" }] }
+        ? { pagination: { page: 1, hasMore: false, nextPage: null, total: 2 }, list: req.filters?.trackingId ? [{ trackingId: "MO-1", externalId: "ES-2001" }] : [mdmOrder, { trackingId: "MO-BROKEN" }] }
         : { pagination: { page: 1, hasMore: false, nextPage: null, total: 1 }, list: [{ trackingId: "LP-1", orderId: "MO-1", currency: "DZD", status: "outForDelivery", statusDate: "2026-09-20T10:00:00.000Z", pricing: { totalToPayFromClient: 3900 }, fees: { shipping: 600, return: 250 }, destinationAddress: { stateName: "Oran" }, client: { firstName: "Amina", phone: "0551111111" }, statusHistory: [{ date: "2026-09-20T10:00:00.000Z", status: "outForDelivery", responsible: { firstName: "Courier" } }] }] };
       return new Response(JSON.stringify(body), { status: 200 });
     }));
     const { job } = await startSync(live.ctx, { mode: "FULL" });
     const done = await runSyncJob(job.id, { sleep: noSleep });
-    expect(done).toMatchObject({ status: "SUCCEEDED", adapter: "live" });
+    // The order MDM can't be read is skipped and reported; everything else syncs.
+    expect(done).toMatchObject({ status: "PARTIAL", adapter: "live", ordersUpdatedCount: 1, failedCount: 1 });
+    expect(await db.syncItem.findFirstOrThrow({ where: { jobId: job.id, result: "FAILED" } })).toMatchObject({ entityType: "order", providerId: "MO-BROKEN" });
+    expect(await db.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ mdmOrderId: "MO-1", status: "CONFIRMED", utmContent: "120000000000021" });
     const p = await db.parcel.findFirstOrThrow({ where: { workspaceId: live.ws.id, trackingId: "LP-1" } });
-    expect(p).toMatchObject({ orderId: order.id, matchMethod: "ORDER_REFERENCE", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "Oran" });
-    expect(JSON.stringify(await db.parcel.findMany({ where: { workspaceId: live.ws.id } }))).not.toMatch(/Amina|0551111111|Courier/);
+    expect(p).toMatchObject({ orderId: order.id, matchMethod: "MDM_ORDER", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "Oran" });
+    const stored = JSON.stringify([await db.parcel.findMany({ where: { workspaceId: live.ws.id } }), await db.order.findMany({ where: { workspaceId: live.ws.id } }), await db.rawExternalRecord.findMany({ where: { workspaceId: live.ws.id } })]);
+    expect(stored).not.toMatch(/Amina|Placeholder|0551111111|551111111|Courier|203\.0\.113\.7|12 rue X/);
   });
 
   it("demo workspaces use the labelled mock adapter and can reject bad keys", async () => {
@@ -321,5 +327,148 @@ describe("built-in status defaults", () => {
     const factory = async () => ({ adapter: createMockAdapter({ fixtures: [], credential: SECRET }), connection: null });
     expect(await runSyncJob(job.id, { adapterFactory: factory, sleep: noSleep })).toMatchObject({ status: "SUCCEEDED" });
     expect((await db.parcel.findFirstOrThrow({ where: { workspaceId: d.ws.id, trackingId: "P-PP" } })).normalizedStatus).toBe("SHIPPED");
+  });
+});
+
+describe("MDM orders", () => {
+  const AT = new Date("2026-09-20T10:00:00Z");
+  const mdmOrder = (trackingId: string, over: Partial<MdmOrder> = {}): MdmOrder => ({
+    trackingId, externalId: null, status: "pending", statusAt: AT, confirmed: false, placedAt: new Date("2026-09-20T09:00:00Z"),
+    total: 390000, currency: "DZD", phone: "0551234567", wilaya: "Alger", city: "Bab Ezzouar",
+    utm: { source: "facebook", medium: "paid", campaign: "Spring", content: null },
+    products: [{ ref: "LMP", variantOf: null, name: "Lamp", quantity: 1, unitPrice: 390000 }], ...over,
+  });
+  const withContent = (content: string) => ({ source: "facebook", medium: "paid", campaign: "Spring", content });
+
+  async function sync(d: Tenant, opts: Parameters<typeof createMockAdapter>[0], mode: "FULL" | "INCREMENTAL" = "FULL") {
+    const adapter = createMockAdapter(opts);
+    const { job } = await startSync(d.ctx, { mode });
+    const done = await runSyncJob(job.id, { adapterFactory: async () => ({ adapter, connection: null }), sleep: noSleep, pageSize: 2 });
+    return { job, done: done!, adapter };
+  }
+
+  it("brings in orders with their content ID and counts them the way the business does", async () => {
+    const d = await makeTenant("OrdersA");
+    const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    await connect(d);
+    const orders = [
+      mdmOrder("ORD-A1", { status: "packaged", confirmed: true, utm: withContent("120000000000009") }),
+      mdmOrder("ORD-A2", { status: "not_answered" }),
+      mdmOrder("ORD-A3", { status: "canceled_after_confirmation", confirmed: true, utm: withContent("120000000000009") }),
+      mdmOrder("ORD-A4", { status: "delivered", confirmed: true }),
+    ];
+    const fixtures = [parcel("P-A1", { mdmOrderId: "ORD-A1", status: "dispatched", events: [{ status: "dispatched", at: AT }] })];
+    const { done, adapter } = await sync(d, { fixtures, credential: SECRET, orders, orderHistory: { "ORD-A2": withContent("120000000000010") } });
+    expect(done).toMatchObject({ status: "SUCCEEDED", mode: "FULL", ordersAddedCount: 4, ordersUpdatedCount: 0, ordersWithContentCount: 3, ordersNote: null, addedCount: 1, unmatchedCount: 0 });
+    // Only orders without a content ID of their own are looked up in their status history.
+    expect(adapter.historyCalls).toEqual(["ORD-A2", "ORD-A4"]);
+
+    const get = (mdmOrderId: string) => db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId }, include: { lines: true, attribution: { include: { creative: true } } } });
+    const a1 = await get("ORD-A1");
+    expect(a1).toMatchObject({ source: "MDM_EXPRESS", externalOrderId: "ORD-A1", status: "CONFIRMED", codAmount: 390000, wilaya: "Alger", utmContent: "120000000000009", phoneMasked: null });
+    expect(a1.phoneHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(a1.lines).toMatchObject([{ productId: product.id, quantity: 1, unitPrice: 390000 }]);
+    expect(a1.attribution).toMatchObject({ method: "UTM_CONTENT", creative: { externalCreativeId: "120000000000009", platform: "META", productId: product.id } });
+    expect(await get("ORD-A2")).toMatchObject({ status: "PENDING", confirmedAt: null, utmContent: "120000000000010", attribution: { method: "UTM_CONTENT" } });
+    // Canceled after confirming counts as canceled, not confirmed.
+    expect(await get("ORD-A3")).toMatchObject({ status: "CANCELED", confirmedAt: null, attribution: { creativeId: a1.attribution!.creativeId } });
+    expect(await get("ORD-A4")).toMatchObject({ status: "CONFIRMED", utmContent: null, attribution: { method: "NONE", creativeId: null } });
+    expect((await get("ORD-A4")).mdmHistoryCheckedAt).not.toBeNull();
+
+    // MDM's own parcel → order link.
+    expect(await db.parcel.findFirstOrThrow({ where: { workspaceId: d.ws.id, trackingId: "P-A1" } })).toMatchObject({ orderId: a1.id, matchMethod: "MDM_ORDER", matchConfidence: 1, mdmOrderId: "ORD-A1" });
+
+    const report = await d.caller.reports.dashboard({ from: new Date("2026-09-01T00:00:00Z"), to: new Date("2026-09-30T23:59:59Z") });
+    expect(report.metrics).toMatchObject({ placed: 4, confirmed: 2, shipped: 1 });
+
+    // Neither the phone number nor any part of it is stored.
+    const stored = JSON.stringify(await db.order.findMany({ where: { workspaceId: d.ws.id } }));
+    expect(stored).not.toMatch(/0551234567|551234567|1234567/);
+
+    // The next sync is incremental, re-reads nothing it already looked up, and changes nothing.
+    const again = await sync(d, { fixtures, credential: SECRET, orders, orderHistory: {} }, "INCREMENTAL");
+    expect(again.done).toMatchObject({ status: "SUCCEEDED", mode: "INCREMENTAL", ordersAddedCount: 0, ordersUpdatedCount: 0, ordersWithContentCount: 3 });
+    expect(again.adapter.historyCalls).toEqual([]);
+    expect(await get("ORD-A2")).toMatchObject({ utmContent: "120000000000010" });
+
+    // MDM moves an order on: the app follows.
+    const moved = orders.map((o) => (o.trackingId === "ORD-A2" ? { ...o, status: "cancelled" } : o));
+    const third = await sync(d, { fixtures, credential: SECRET, orders: moved }, "INCREMENTAL");
+    expect(third.done).toMatchObject({ ordersUpdatedCount: 1 });
+    expect(await get("ORD-A2")).toMatchObject({ status: "CANCELED", utmContent: "120000000000010" });
+  });
+
+  it("links orders already imported from the store and keeps their own data", async () => {
+    const d = await makeTenant("OrdersB");
+    const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    await connect(d);
+    const mk = (orderNumber: string, utmContent?: string) =>
+      d.caller.orders.create({ orderNumber, placedAt: new Date("2026-09-18T10:00:00Z"), status: "PENDING", codAmount: 500000, utmContent, lines: [{ productId: product.id, quantity: 2, unitPrice: 250000 }] });
+    const plain = await mk("#1001");
+    const tagged = await mk("#1002", "cr_csv_02");
+    // A parcel synced before its order came in, waiting in the unmatched queue.
+    const loose = await db.parcel.create({ data: { workspaceId: d.ws.id, provider: "MDM_EXPRESS", trackingId: "P-B1", mdmOrderId: "ORD-B1", providerStatus: "dispatched", normalizedStatus: "SHIPPED", lastProviderUpdateAt: AT, dispatchedAt: AT } });
+    await db.unmatchedRecord.create({ data: { workspaceId: d.ws.id, provider: "MDM_EXPRESS", entityType: "parcel", externalId: "P-B1", reason: "no order reference", parcelId: loose.id } });
+
+    const orders = [
+      mdmOrder("ORD-B1", { externalId: "#1001", status: "packaged", total: 999900, utm: withContent("120000000000011") }),
+      mdmOrder("ORD-B2", { externalId: "1002", status: "cancelled", utm: withContent("120000000000012") }),
+    ];
+    const { done } = await sync(d, { fixtures: [], credential: SECRET, orders });
+    expect(done).toMatchObject({ status: "SUCCEEDED", ordersAddedCount: 0, ordersUpdatedCount: 2 });
+    expect(await db.order.count({ where: { workspaceId: d.ws.id, source: "MDM_EXPRESS" } })).toBe(0);
+
+    const p = await db.order.findUniqueOrThrow({ where: { id: plain.id }, include: { lines: true, attribution: { include: { creative: true } } } });
+    // Store amounts and lines stay; MDM adds its status and the content ID the store order lacked.
+    expect(p).toMatchObject({ source: "MANUAL", mdmOrderId: "ORD-B1", status: "CONFIRMED", codAmount: 500000, utmContent: "120000000000011", attribution: { method: "UTM_CONTENT", creative: { externalCreativeId: "120000000000011" } } });
+    expect(p.lines).toMatchObject([{ quantity: 2, unitPrice: 250000 }]);
+    const t2 = await db.order.findUniqueOrThrow({ where: { id: tagged.id } });
+    expect(t2).toMatchObject({ mdmOrderId: "ORD-B2", status: "CANCELED", utmContent: "cr_csv_02" });
+    expect(await db.creative.count({ where: { workspaceId: d.ws.id, externalCreativeId: "120000000000012" } })).toBe(0);
+
+    expect(await db.parcel.findUniqueOrThrow({ where: { id: loose.id } })).toMatchObject({ orderId: plain.id, matchMethod: "MDM_ORDER" });
+    expect(await db.unmatchedRecord.findFirstOrThrow({ where: { workspaceId: d.ws.id, externalId: "P-B1" } })).toMatchObject({ status: "RESOLVED" });
+  });
+
+  it("never imports an order twice when a CSV repeats one MDM already brought in", async () => {
+    const d = await makeTenant("OrdersC");
+    await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    await connect(d);
+    await sync(d, { fixtures: [], credential: SECRET, orders: [mdmOrder("ORD-C1", { externalId: "#2001", status: "packaged" })] });
+    const csvText = "Name,Id,Created at,Lineitem sku,Lineitem quantity,Lineitem price,Total,Status,utm_content\n#2001,5001,2026-09-20 09:00,LMP,1,3900,3900,pending,cr_hook_02\n#2002,5002,2026-09-20 10:00,LMP,1,3900,3900,pending,cr_hook_03";
+    const mapping = { orderNumber: "Name", externalOrderId: "Id", placedAt: "Created at", sku: "Lineitem sku", quantity: "Lineitem quantity", unitPrice: "Lineitem price", total: "Total", status: "Status", utmContent: "utm_content" };
+    const req = { kind: "ORDERS" as const, fileName: "orders.csv", csvText, fileSize: csvText.length, mapping, options: { dateFormat: "AUTO" as const, source: "SHOPIFY" as const } };
+    expect((await d.caller.imports.preview(req)).counts).toMatchObject({ new: 1, duplicate: 1 });
+    expect(await d.caller.imports.commit(req)).toMatchObject({ importedRows: 1, duplicateRows: 1, updatedRows: 1 });
+    expect(await db.order.count({ where: { workspaceId: d.ws.id } })).toBe(2);
+    // The file's content ID fills in the synced order, which had none.
+    expect(await db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId: "ORD-C1" }, include: { attribution: true } })).toMatchObject({ status: "CONFIRMED", utmContent: "cr_hook_02", attribution: { rawUtmContent: "cr_hook_02" } });
+  });
+
+  it("re-reads everything once after the update, then goes back to incremental syncs", async () => {
+    const d = await makeTenant("OrdersD");
+    await connect(d);
+    await db.integrationConnection.updateMany({ where: { workspaceId: d.ws.id }, data: { lastSuccessfulSyncAt: AT } });
+    const first = await sync(d, { fixtures: [], credential: SECRET, orders: [] }, "INCREMENTAL");
+    expect(first.done).toMatchObject({ status: "SUCCEEDED", mode: "FULL", updatedSince: null });
+    expect((await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: d.ws.id } })).ordersSyncedAt).not.toBeNull();
+    const next = await sync(d, { fixtures: [], credential: SECRET, orders: [] }, "INCREMENTAL");
+    expect(next.done).toMatchObject({ mode: "INCREMENTAL" });
+  });
+
+  it("still syncs parcels when the key can't read orders or their history, and retries rate limits", async () => {
+    const d = await makeTenant("OrdersE");
+    await connect(d);
+    const noOrders = await sync(d, { fixtures: [parcel("P-E1")], credential: SECRET, orders: [mdmOrder("ORD-E1")], orderFailures: { 0: [new MdmError("forbidden", "AUTH")] } });
+    expect(noOrders.done).toMatchObject({ status: "SUCCEEDED", addedCount: 1, ordersAddedCount: 0 });
+    expect(noOrders.done.ordersNote).toContain("can't read orders");
+    expect((await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: d.ws.id } })).status).toBe("CONNECTED");
+
+    const orders = [mdmOrder("ORD-E2"), mdmOrder("ORD-E3"), mdmOrder("ORD-E4")];
+    const limited = await sync(d, { fixtures: [], credential: SECRET, orders, orderHistory: { "ORD-E2": withContent("120000000000013") }, historyFailures: { "ORD-E2": [new MdmError("slow down", "RATE_LIMIT", 10)], "ORD-E3": [new MdmError("forbidden", "AUTH")] } });
+    expect(limited.done).toMatchObject({ status: "SUCCEEDED", ordersAddedCount: 3, ordersWithContentCount: 1 });
+    expect(limited.done.ordersNote).toContain("can't read order history");
+    // After the history refusal, no more history reads in this sync.
+    expect(limited.adapter.historyCalls).toEqual(["ORD-E2", "ORD-E2", "ORD-E3"]);
   });
 });

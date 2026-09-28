@@ -1,7 +1,7 @@
 import { normalizeProviderStatus } from "@/domain/statusMapping";
 import { MoneyError, parseToMinor } from "@/lib/money";
 import { assertPublicHost, validateMdmBaseUrl } from "./url";
-import { MdmError, type MdmAdapter, type MdmPage, type MdmParcel } from "./types";
+import { MdmError, type MdmAdapter, type MdmOrder, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
 
 /**
  * Live MDM Express adapter.
@@ -18,6 +18,11 @@ import { MdmError, type MdmAdapter, type MdmPage, type MdmParcel } from "./types
  * - Merchant reference: a Parcel only carries `orderId` (MDM's own order tracking
  *   ID). The merchant's order ID is `Order.externalId`, read in one batched
  *   `POST /api/v2/orders/search` per page with `filters.trackingId`.
+ *
+ * - Orders: `POST /api/v2/orders/search` (GetOrdersRequest, same filters/sort/pagination
+ *   shape) answering GetOrdersResponse `{ pagination, list: Order[] }`. Order.utm holds the
+ *   UTM tags; when it is empty, `GET /api/v2/orders/{trackingId}/status-history` is read once
+ *   and the landing URL the store wrote into the first note is parsed for utm_content.
  *
  * Search endpoints use POST but only read. The client refuses any POST whose
  * path does not end in `/search`, so it cannot create or change anything at MDM.
@@ -44,6 +49,12 @@ export type LiveSchema = {
   /** Optional batched lookup of the merchant's order reference for a page of parcels. */
   ordersRequest?(mdmOrderIds: string[]): MdmRequest;
   parseOrderRefs?(body: unknown): Map<string, string>;
+  /** Optional: orders created or changed since a date, one page at a time. */
+  orderSearchRequest?(q: { cursor: string | null; updatedSince: Date | null; pageSize: number }): MdmRequest;
+  parseOrdersPage?(body: unknown): MdmOrdersPage;
+  /** Optional: one order's status history, where stores leave the landing URL. */
+  orderHistoryRequest?(trackingId: string): MdmRequest;
+  parseOrderHistory?(body: unknown): MdmUtm | null;
 };
 
 export const LIVE_ADAPTER_UNAVAILABLE =
@@ -113,6 +124,73 @@ export function mapMdmParcel(raw: unknown): LiveParcel {
   };
 }
 
+/** Ad platforms' unfilled URL macros, e.g. "{{ad.id}}", are not content IDs. */
+const utmValue = (v: unknown): string | null => {
+  const s = str(v);
+  return s && !/\{\{.*\}\}|^\{.*\}$/.test(s) ? s.slice(0, 200) : null;
+};
+
+/**
+ * Read an MDM order. Only what the reports need is kept: the customer's name,
+ * street address, GPS and IP are never copied, and the phone is only carried
+ * so the sync can hash and mask it.
+ */
+export function mapMdmOrder(raw: unknown): MdmOrder {
+  const o = obj(raw, "order");
+  const trackingId = str(o.trackingId);
+  if (!trackingId) throw new Error("order without trackingId");
+  const currency = (str(o.currency) ?? "DZD").toUpperCase();
+  const placedAt = date(o.createdAt) ?? date(o.updatedAt) ?? date(o.statusDate);
+  if (!placedAt) throw new Error(`order ${trackingId} has no creation date`);
+  const utm = isObj(o.utm) ? o.utm : {};
+  const client = isObj(o.client) ? o.client : {};
+  const dest = isObj(o.destination) ? o.destination : {};
+  const products = (Array.isArray(o.products) ? o.products : []).filter(isObj).map((p) => {
+    const q = typeof p.quantity === "number" && Number.isFinite(p.quantity) ? Math.round(p.quantity) : 1;
+    return { ref: str(p.trackingId), variantOf: str(p.variantOf), name: str(p.name), quantity: Math.min(Math.max(q, 1), 1000), unitPrice: money(p.price, currency) };
+  });
+  return {
+    trackingId,
+    externalId: str(o.externalId),
+    status: str(o.status),
+    statusAt: date(o.statusDate),
+    confirmed: typeof o.confirmed === "boolean" ? o.confirmed : null,
+    placedAt,
+    total: money(o.totalPrice, currency),
+    currency,
+    phone: str(client.phone),
+    wilaya: str(dest.stateName) ?? str(dest.stateCode),
+    city: str(dest.cityName),
+    utm: { source: utmValue(utm.source), medium: utmValue(utm.medium), campaign: utmValue(utm.campaign), content: utmValue(utm.content) },
+    products,
+  };
+}
+
+/**
+ * UTM tags in free text, e.g. a status-history note holding the landing URL
+ * (`…?utm_source=facebook&utm_content=1234&ad_id=1234`, possibly JSON-escaped).
+ * Falls back to `ad_id` when there is no utm_content. Nothing else in the text is kept.
+ */
+export function utmFromText(text: string): MdmUtm | null {
+  const t = text.replace(/\\u0026/gi, "&").replace(/&amp;/gi, "&").replace(/\\\//g, "/");
+  const found: Record<string, string> = {};
+  for (const m of t.matchAll(/(?:^|[?&\s"'(,;])(utm_source|utm_medium|utm_campaign|utm_content|ad_id)=([^&\s"'<>,;)}\]]+)/gi)) {
+    const k = m[1].toLowerCase();
+    if (k in found) continue;
+    let v = m[2].replace(/\+/g, " ");
+    try {
+      v = decodeURIComponent(v);
+    } catch {
+      // keep the raw value
+    }
+    const clean = utmValue(v);
+    if (clean) found[k] = clean;
+  }
+  const content = found.utm_content ?? found.ad_id ?? null;
+  if (!content && !found.utm_source && !found.utm_campaign) return null;
+  return { source: found.utm_source ?? null, medium: found.utm_medium ?? null, campaign: found.utm_campaign ?? null, content };
+}
+
 // ---------------------------------------------------------------- the MDM contract
 
 const SEARCH_PAGE_MAX = 100;
@@ -172,6 +250,50 @@ export const LIVE_SCHEMA: LiveSchema | null = {
       if (id && ext) out.set(id, ext);
     }
     return out;
+  },
+  orderSearchRequest({ cursor, updatedSince, pageSize }) {
+    const page = cursor ? Number(cursor) : 1;
+    return {
+      method: "POST",
+      path: "/api/v2/orders/search",
+      body: {
+        filters: updatedSince ? { updatedAt: { start: updatedSince.toISOString() } } : {},
+        sortBy: { updatedAt: "ASC" },
+        pagination: { page: Number.isInteger(page) && page > 0 ? page : 1, perPage: Math.min(pageSize, SEARCH_PAGE_MAX) },
+      },
+    };
+  },
+  parseOrdersPage(body) {
+    const b = obj(body, "orders response");
+    if (!Array.isArray(b.list)) throw new Error("orders response.list is missing");
+    const pg = obj(b.pagination, "orders response.pagination");
+    const next = typeof pg.nextPage === "number" ? pg.nextPage : pg.hasMore === true && typeof pg.page === "number" ? pg.page + 1 : null;
+    // One odd order never holds up the others (or the parcels after them).
+    const items: MdmOrder[] = [];
+    const unreadable: string[] = [];
+    for (const raw of b.list) {
+      try {
+        items.push(mapMdmOrder(raw));
+      } catch {
+        unreadable.push((isObj(raw) && str(raw.trackingId)) || "?");
+      }
+    }
+    return { items, unreadable, nextCursor: next != null && b.list.length > 0 ? String(next) : null, total: typeof pg.total === "number" ? pg.total : null };
+  },
+  orderHistoryRequest(trackingId) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(trackingId)) throw new MdmError("Unexpected MDM order ID", "BAD_RESPONSE");
+    return { method: "GET", path: `/api/v2/orders/${trackingId}/status-history` };
+  },
+  parseOrderHistory(body) {
+    const b = obj(body, "status history");
+    const items = (Array.isArray(b.list) ? b.list : []).filter(isObj);
+    // Oldest first: the store's note on the new order carries the landing URL.
+    items.sort((x, y) => (date(x.date)?.getTime() ?? 0) - (date(y.date)?.getTime() ?? 0));
+    for (const h of items) {
+      const found = typeof h.notes === "string" ? utmFromText(h.notes) : null;
+      if (found?.content) return found;
+    }
+    return null;
   },
 };
 
@@ -289,11 +411,29 @@ export function createLiveAdapter(opts: { baseUrl: string; credential: string | 
       return {
         total: page.total,
         nextCursor: page.nextCursor,
-        items: page.items.map(({ mdmOrderId, ...p }) => {
-          const ref = mdmOrderId ? (refs.get(mdmOrderId) ?? null) : null;
+        items: page.items.map((p) => {
+          const ref = p.mdmOrderId ? (refs.get(p.mdmOrderId) ?? null) : null;
           return { ...p, reference: ref, sourceOrderId: ref };
         }),
       };
     },
+    ...(schema?.orderSearchRequest && schema.parseOrdersPage
+      ? {
+          async listOrders(q, signal): Promise<MdmOrdersPage> {
+            const { s, credential } = ready();
+            const body = await mdmRequest(opts.baseUrl, credential, s, s.orderSearchRequest!(q), signal);
+            return shape(() => s.parseOrdersPage!(body));
+          },
+        }
+      : {}),
+    ...(schema?.orderHistoryRequest && schema.parseOrderHistory
+      ? {
+          async orderUtm(trackingId, signal): Promise<MdmUtm | null> {
+            const { s, credential } = ready();
+            const body = await mdmRequest(opts.baseUrl, credential, s, s.orderHistoryRequest!(trackingId), signal);
+            return shape(() => s.parseOrderHistory!(body));
+          },
+        }
+      : {}),
   };
 }

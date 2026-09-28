@@ -8,8 +8,9 @@ import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/sta
 import { normalizeReference } from "@/lib/normalize";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { redactPayload, sha256, stableStringify } from "./redact";
+import { loadOrderSyncEnv, ordersNeedingHistory, upsertMdmOrder } from "./orders";
 import { applyStatusDefaults, parcelStatusSelect, reconcileOrderStatuses, setParcelStatus, workspaceStatusOverrides } from "./statuses";
-import { MdmError, type MdmAdapter, type MdmPage, type MdmParcel } from "./types";
+import { MdmError, type MdmAdapter, type MdmParcel, type MdmUtm } from "./types";
 
 const PROVIDER = "MDM_EXPRESS" as const;
 export const PAGE_SIZE = 100;
@@ -62,10 +63,13 @@ export async function enqueueSync(workspaceId: string, input: { mode: "INCREMENT
   if (connection.status !== "CONNECTED") throw new InputError("Run a successful connection test in Settings before syncing");
   const existing = await db.syncJob.findUnique({ where: { activeLock: lockKey(workspaceId) } });
   if (existing) return { job: existing, alreadyRunning: true };
-  const updatedSince = input.mode === "INCREMENTAL" && connection.lastSuccessfulSyncAt ? new Date(connection.lastSuccessfulSyncAt.getTime() - INCREMENTAL_OVERLAP_MS) : null;
+  // Until a sync has read MDM orders, the next one re-reads everything once so parcels
+  // synced earlier are linked to their MDM orders.
+  const since = connection.ordersSyncedAt ? connection.lastSuccessfulSyncAt : null;
+  const updatedSince = input.mode === "INCREMENTAL" && since ? new Date(since.getTime() - INCREMENTAL_OVERLAP_MS) : null;
   try {
     const job = await db.syncJob.create({
-      data: { workspaceId, provider: PROVIDER, trigger: input.trigger, requestedById: input.requestedById, mode: updatedSince ? "INCREMENTAL" : "FULL", adapter, updatedSince, activeLock: lockKey(workspaceId) },
+      data: { workspaceId, provider: PROVIDER, trigger: input.trigger, requestedById: input.requestedById, mode: updatedSince ? "INCREMENTAL" : "FULL", adapter, updatedSince, phase: "ORDERS", activeLock: lockKey(workspaceId) },
     });
     return { job, alreadyRunning: false };
   } catch (e) {
@@ -146,16 +150,21 @@ export async function processDueJobs(deps: Partial<SyncDeps> = {}, limit = 10) {
   return results;
 }
 
-type Counters = { added: number; updated: number; unchanged: number; failed: number; unknown: number; unmatched: number };
+type Counters = { added: number; updated: number; unchanged: number; failed: number; unknown: number; unmatched: number; ordersAdded: number; ordersUpdated: number; ordersWithContent: number };
+
+const NO_ORDER_ACCESS = "This MDM API key can't read orders, so only parcels were synced. Content IDs still come from order CSV imports.";
+const NO_HISTORY_ACCESS = "This MDM API key can't read order history, so content IDs only come from the orders' own UTM fields.";
 
 export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {}) {
   const deps = { ...defaultDeps, ...partial };
   const job = await claim(jobId, deps.now());
   if (!job) return null;
   const ws = job.workspaceId;
-  const counters: Counters = { added: 0, updated: 0, unchanged: 0, failed: 0, unknown: 0, unmatched: 0 };
+  const counters: Counters = { added: 0, updated: 0, unchanged: 0, failed: 0, unknown: 0, unmatched: 0, ordersAdded: 0, ordersUpdated: 0, ordersWithContent: 0 };
   let cursor = job.cursor;
   let page = job.page;
+  let phase = job.phase;
+  let ordersNote = job.ordersNote;
   let adapter: MdmAdapter;
   try {
     ({ adapter } = await deps.adapterFactory(ws));
@@ -166,11 +175,72 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
   await applyStatusDefaults(ws).catch((e) => console.error(`[mdm] could not apply status defaults for workspace ${ws}`, e instanceof Error ? e.message : e));
   const overrides = await workspaceStatusOverrides(ws);
 
+  const canceled = async () => (await db.syncJob.findUniqueOrThrow({ where: { id: job.id }, select: { cancelRequested: true } })).cancelRequested;
+
   try {
+    // Orders first, so parcels read afterwards find the order MDM says they ship.
+    if (phase === "ORDERS") {
+      if (adapter.listOrders) {
+        const env = await loadOrderSyncEnv(ws, overrides);
+        let history = !!adapter.orderUtm && !ordersNote;
+        for (;;) {
+          if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
+          let result;
+          try {
+            result = await withRetry(() => adapter.listOrders!({ cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
+          } catch (e) {
+            // A key without order access still syncs parcels, as before.
+            if (!(e instanceof MdmError && e.kind === "AUTH")) throw e;
+            ordersNote = NO_ORDER_ACCESS;
+            break;
+          }
+          for (const id of result.unreadable ?? []) {
+            counters.failed++;
+            await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: id.slice(0, 200), result: "FAILED", error: "MDM sent this order in an unexpected shape, so it was skipped." } });
+          }
+          const needHistory = history ? await ordersNeedingHistory(ws, result.items) : new Set<string>();
+          for (const [i, o] of result.items.entries()) {
+            let found: MdmUtm | null = null;
+            let checked = false;
+            if (history && needHistory.has(o.trackingId)) {
+              try {
+                found = await withRetry(() => adapter.orderUtm!(o.trackingId), deps);
+                checked = true;
+              } catch (e) {
+                if (e instanceof MdmError && e.kind === "AUTH") {
+                  history = false;
+                  ordersNote = NO_HISTORY_ACCESS;
+                } else if (e instanceof MdmError && e.retryable) throw e;
+                // Anything else: this order keeps no content ID for now; the next sync looks again.
+              }
+            }
+            try {
+              const r = await upsertMdmOrder(env, job.id, o, found, checked);
+              if (r.counter === "added") counters.ordersAdded++;
+              else if (r.counter === "updated") counters.ordersUpdated++;
+              if (r.hasContent) counters.ordersWithContent++;
+            } catch (e) {
+              counters.failed++;
+              console.error(`[mdm] order ${o.trackingId} failed`, e instanceof Error ? e.message : e);
+              await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: o.trackingId.slice(0, 200), result: "FAILED", error: "Could not save this order. It will be retried on the next sync." } });
+            }
+            if (i % 25 === 24) await db.syncJob.update({ where: { id: job.id }, data: { heartbeatAt: deps.now() } });
+          }
+          page++;
+          cursor = result.nextCursor;
+          await db.syncJob.update({ where: { id: job.id }, data: { cursor, page, heartbeatAt: deps.now(), totalCount: result.total ?? undefined, ordersNote, ...countersData(job, counters) } });
+          if (!cursor) break;
+        }
+      }
+      phase = "PARCELS";
+      cursor = null;
+      page = 0;
+      await db.syncJob.update({ where: { id: job.id }, data: { phase, cursor, page, totalCount: null, ordersNote, ...countersData(job, counters) } });
+    }
+
     for (;;) {
-      const current = await db.syncJob.findUniqueOrThrow({ where: { id: job.id }, select: { cancelRequested: true } });
-      if (current.cancelRequested) return finish(job, "CANCELED", counters, "Canceled by a user");
-      const result = await fetchWithRetry(adapter, { cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }, deps);
+      if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
+      const result = await withRetry(() => adapter.listParcels({ cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
       for (const p of result.items) {
         try {
           const outcome = await upsertParcel(ws, job.id, p, overrides);
@@ -198,6 +268,7 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
     const message = safeMdmMessage(e);
     if (!(e instanceof MdmError)) console.error("[mdm] sync failed", e);
     const retryable = e instanceof MdmError && e.retryable;
+    if (ordersNote !== job.ordersNote) await db.syncJob.update({ where: { id: job.id }, data: { ordersNote } });
     if (e instanceof MdmError && (e.kind === "AUTH" || e.kind === "NOT_AVAILABLE" || e.kind === "CONFIG")) {
       await db.integrationConnection.updateMany({ where: { workspaceId: ws, provider: PROVIDER }, data: { status: e.kind === "AUTH" ? "ERROR" : undefined, lastError: message } });
     }
@@ -221,6 +292,9 @@ function countersData(job: SyncJob, c: Counters) {
     failedCount: job.failedCount + c.failed,
     unknownStatusCount: job.unknownStatusCount + c.unknown,
     unmatchedCount: job.unmatchedCount + c.unmatched,
+    ordersAddedCount: job.ordersAddedCount + c.ordersAdded,
+    ordersUpdatedCount: job.ordersUpdatedCount + c.ordersUpdated,
+    ordersWithContentCount: job.ordersWithContentCount + c.ordersWithContent,
   };
 }
 
@@ -228,18 +302,19 @@ async function finish(job: SyncJob, status: "SUCCEEDED" | "PARTIAL" | "FAILED" |
   const now = new Date();
   const done = await db.syncJob.update({ where: { id: job.id }, data: { status, finishedAt: now, activeLock: null, error, ...countersData(job, c) } });
   if (status === "SUCCEEDED" || status === "PARTIAL") {
-    await db.integrationConnection.updateMany({ where: { workspaceId: job.workspaceId, provider: PROVIDER }, data: { lastSuccessfulSyncAt: job.startedAt ?? now, lastError: null } });
+    await db.integrationConnection.updateMany({ where: { workspaceId: job.workspaceId, provider: PROVIDER }, data: { lastSuccessfulSyncAt: job.startedAt ?? now, ordersSyncedAt: job.startedAt ?? now, lastError: null } });
   } else if (status === "FAILED" && error) {
     await db.integrationConnection.updateMany({ where: { workspaceId: job.workspaceId, provider: PROVIDER }, data: { lastError: error } });
   }
-  await db.auditLog.create({ data: { workspaceId: job.workspaceId, actorUserId: null, action: "sync.finished", entityType: "SyncJob", entityId: job.id, metadata: { status, added: done.addedCount, updated: done.updatedCount, failed: done.failedCount, unmatched: done.unmatchedCount } } });
+  await db.auditLog.create({ data: { workspaceId: job.workspaceId, actorUserId: null, action: "sync.finished", entityType: "SyncJob", entityId: job.id, metadata: { status, added: done.addedCount, updated: done.updatedCount, failed: done.failedCount, unmatched: done.unmatchedCount, ordersAdded: done.ordersAddedCount, ordersUpdated: done.ordersUpdatedCount } } });
   return done;
 }
 
-async function fetchWithRetry(adapter: MdmAdapter, q: { cursor: string | null; updatedSince: Date | null; pageSize: number }, deps: SyncDeps): Promise<MdmPage> {
+/** One provider read, retried with backoff on rate limits, outages and network errors. */
+async function withRetry<T>(fn: () => Promise<T>, deps: SyncDeps): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await adapter.listParcels(q);
+      return await fn();
     } catch (e) {
       if (!(e instanceof MdmError) || !e.retryable || attempt >= MAX_REQUEST_RETRIES) throw e;
       await deps.sleep(backoffMs(attempt, e.retryAfterMs));
@@ -251,10 +326,15 @@ async function fetchWithRetry(adapter: MdmAdapter, q: { cursor: string | null; u
 
 type Match = { orderId: string; method: MatchMethod; confidence: number } | { orderId: null; reason: string };
 
-/** Order reference → existing tracking-ID link → source order ID → unmatched. Ambiguous matches are never guessed. */
+/** MDM's own order link → order reference → existing tracking-ID link → source order ID → unmatched. Ambiguous matches are never guessed. */
 export async function matchParcel(tx: Prisma.TransactionClient, workspaceId: string, p: MdmParcel, existing: { orderId: string | null; matchMethod: MatchMethod; matchConfidence: number } | null): Promise<Match> {
   if (existing?.matchMethod === "MANUAL" && existing.orderId) return { orderId: existing.orderId, method: "MANUAL", confidence: existing.matchConfidence };
   const reasons: string[] = [];
+  if (p.mdmOrderId) {
+    const hit = await tx.order.findUnique({ where: { workspaceId_mdmOrderId: { workspaceId, mdmOrderId: p.mdmOrderId } }, select: { id: true } });
+    if (hit) return { orderId: hit.id, method: "MDM_ORDER", confidence: 1 };
+    reasons.push(`MDM order ${p.mdmOrderId} not synced yet`);
+  }
   const ref = normalizeReference(p.reference);
   if (ref) {
     const hits = await tx.order.findMany({ where: { workspaceId, normalizedOrderNumber: ref }, select: { id: true }, take: 2 });
@@ -288,6 +368,7 @@ async function upsertParcel(workspaceId: string, jobId: string, p: MdmParcel, ov
     const fields = {
       providerReference: p.reference,
       sourceOrderId: p.sourceOrderId,
+      mdmOrderId: p.mdmOrderId ?? existing?.mdmOrderId ?? null,
       providerStatus: p.status,
       normalizedStatus: normalized,
       codAmount: p.codAmount ?? existing?.codAmount ?? 0,

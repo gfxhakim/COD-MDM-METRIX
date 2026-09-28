@@ -75,6 +75,8 @@ enum OrderSource {
   EASYSELL
   MANUAL
   OTHER
+  /// Read from MDM Express by the sync.
+  MDM_EXPRESS
 }
 
 enum OrderStatus {
@@ -89,6 +91,8 @@ enum MatchMethod {
   SOURCE_ORDER_ID
   MANUAL
   NONE
+  /// The parcel's MDM order is this order (MDM's own link).
+  MDM_ORDER
 }
 
 enum AttributionMethod {
@@ -284,6 +288,9 @@ model IntegrationConnection {
   status                ConnectionStatus    @default(NOT_CONFIGURED)
   lastTestedAt          DateTime?
   lastSuccessfulSyncAt  DateTime?
+  /// Last successful sync that also read MDM orders. Until one has run, the next sync re-reads
+  /// every parcel once so parcels synced earlier get linked to their MDM orders.
+  ordersSyncedAt        DateTime?
   lastError             String?
   syncIntervalMinutes   Int                 @default(45)
   credentialUpdatedAt   DateTime?
@@ -297,39 +304,47 @@ model IntegrationConnection {
 }
 
 model SyncJob {
-  id                 String              @id @default(uuid())
-  workspaceId        String
-  provider           IntegrationProvider
-  status             SyncJobStatus       @default(QUEUED)
-  trigger            SyncTrigger         @default(MANUAL)
-  requestedById      String?
-  cancelRequested    Boolean             @default(false)
-  startedAt          DateTime?
-  finishedAt         DateTime?
-  cursor             String?
-  page               Int                 @default(0)
-  totalCount         Int?
-  addedCount         Int                 @default(0)
-  updatedCount       Int                 @default(0)
-  unchangedCount     Int                 @default(0)
-  failedCount        Int                 @default(0)
-  unknownStatusCount Int                 @default(0)
-  unmatchedCount     Int                 @default(0)
-  error              String?
-  heartbeatAt        DateTime?
+  id                     String              @id @default(uuid())
+  workspaceId            String
+  provider               IntegrationProvider
+  status                 SyncJobStatus       @default(QUEUED)
+  trigger                SyncTrigger         @default(MANUAL)
+  requestedById          String?
+  cancelRequested        Boolean             @default(false)
+  startedAt              DateTime?
+  finishedAt             DateTime?
+  cursor                 String?
+  page                   Int                 @default(0)
+  totalCount             Int?
+  addedCount             Int                 @default(0)
+  updatedCount           Int                 @default(0)
+  unchangedCount         Int                 @default(0)
+  failedCount            Int                 @default(0)
+  unknownStatusCount     Int                 @default(0)
+  unmatchedCount         Int                 @default(0)
+  /// "ORDERS" (MDM orders are read first) then "PARCELS". Resumed jobs continue in the saved phase.
+  phase                  String              @default("PARCELS")
+  ordersAddedCount       Int                 @default(0)
+  ordersUpdatedCount     Int                 @default(0)
+  /// Orders read in this sync that carry a content ID (utm_content).
+  ordersWithContentCount Int                 @default(0)
+  /// Why orders were not (fully) read, e.g. the API key has no order access. Not an error.
+  ordersNote             String?
+  error                  String?
+  heartbeatAt            DateTime?
   /// FULL re-reads everything; INCREMENTAL asks for parcels updated since the last success (minus an overlap).
-  mode               String              @default("INCREMENTAL")
+  mode                   String              @default("INCREMENTAL")
   /// "mock" (labelled demo fixtures) or "live".
-  adapter            String              @default("mock")
-  updatedSince       DateTime?
+  adapter                String              @default("mock")
+  updatedSince           DateTime?
   /// Whole-job retry after a retryable provider failure (429/5xx/network).
-  attempt            Int                 @default(0)
-  nextRunAt          DateTime?
-  retryOfJobId       String?
+  attempt                Int                 @default(0)
+  nextRunAt              DateTime?
+  retryOfJobId           String?
   /// "<workspaceId>:<provider>" while QUEUED or RUNNING, null once finished. The unique index is the per-workspace sync lock.
-  activeLock         String?             @unique
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  activeLock             String?             @unique
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   items     SyncItem[]
@@ -494,6 +509,10 @@ model Order {
   tags                  String?
   notes                 String?
   importBatchId         String?
+  /// MDM's order tracking ID (e.g. ORD-XXXXXX) once the sync has read this order from MDM.
+  mdmOrderId            String?
+  /// When the sync last looked for a content ID in this order's MDM status history.
+  mdmHistoryCheckedAt   DateTime?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
@@ -505,6 +524,7 @@ model Order {
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, source, externalOrderId])
+  @@unique([workspaceId, mdmOrderId])
   @@index([workspaceId, normalizedOrderNumber])
   @@index([workspaceId, placedAt])
   @@index([workspaceId, status])
@@ -561,6 +581,8 @@ model Parcel {
   providerReference    String?
   /// Store order ID the carrier echoed back (e.g. Shopify/EasySell ID), used as the third matching key.
   sourceOrderId        String?
+  /// MDM's tracking ID of the order this parcel ships (MDM's own parcel → order link).
+  mdmOrderId           String?
   providerStatus       String?
   normalizedStatus     NormalizedStatus    @default(UNKNOWN)
   codAmount            Int                 @default(0)
@@ -588,6 +610,7 @@ model Parcel {
   @@index([workspaceId, normalizedStatus])
   @@index([workspaceId, wilaya])
   @@index([workspaceId, orderId])
+  @@index([workspaceId, mdmOrderId])
   @@index([dispatchedAt])
   @@index([deliveredAt])
   @@index([returnedAt])

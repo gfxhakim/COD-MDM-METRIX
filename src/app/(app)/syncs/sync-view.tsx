@@ -60,6 +60,14 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
               {d.job.updatedSince ? <span className="text-xs text-muted">changes since {formatDateTime(d.job.updatedSince)}</span> : null}
             </div>
             {d.job.error ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-negative">{d.job.error}</p> : null}
+            {d.job.ordersNote ? <p className="rounded-lg border border-info/30 bg-info-soft p-3 text-info">{d.job.ordersNote}</p> : null}
+            <p className="text-xs font-medium text-muted">Orders</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[["New", d.job.ordersAddedCount], ["Updated", d.job.ordersUpdatedCount], ["With a content ID", d.job.ordersWithContentCount]].map(([l, v]) => (
+                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted">{l}</p><p className="num text-lg font-semibold">{v}</p></div>
+              ))}
+            </div>
+            <p className="text-xs font-medium text-muted">Parcels</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {[["Added", d.job.addedCount], ["Updated", d.job.updatedCount], ["Unchanged", d.job.unchangedCount], ["Failed", d.job.failedCount], ["Unknown status", d.job.unknownStatusCount], ["Unmatched", d.job.unmatchedCount]].map(([l, v]) => (
                 <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted">{l}</p><p className="num text-lg font-semibold">{v}</p></div>
@@ -68,11 +76,12 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
             {d.items.length ? (
               <div className="max-h-80 overflow-auto rounded-lg border border-border">
                 <Table>
-                  <THead><tr><Th>Tracking ID</Th><Th>Result</Th><Th>Note</Th></tr></THead>
+                  <THead><tr><Th>Tracking ID</Th><Th>Type</Th><Th>Result</Th><Th>Note</Th></tr></THead>
                   <tbody>
                     {d.items.map((i) => (
                       <Tr key={i.id}>
                         <Td className="font-mono text-xs">{i.providerId}</Td>
+                        <Td className="text-xs text-muted">{i.entityType}</Td>
                         <Td><Badge tone={i.result === "FAILED" ? "negative" : i.result === "UNMATCHED" ? "warning" : i.result === "ADDED" ? "positive" : "info"}>{i.result.toLowerCase()}</Badge></Td>
                         <Td className="text-xs text-muted">{i.error ?? ""}</Td>
                       </Tr>
@@ -80,7 +89,7 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
                   </tbody>
                 </Table>
               </div>
-            ) : <p className="text-muted">No parcels were added, changed or failed in this sync.</p>}
+            ) : <p className="text-muted">No orders or parcels were added, changed or failed in this sync.</p>}
             {canRun && (d.job.status === "FAILED" || d.job.status === "PARTIAL") ? (
               <div className="flex justify-end"><Button variant="primary" onClick={() => retry.mutate({ id: d.job.id })} disabled={retry.isPending}><RotateCcw /> Retry this sync</Button></div>
             ) : null}
@@ -240,8 +249,8 @@ export function SyncView() {
             <div className="flex items-center gap-3">
               <Loader2 className="size-5 animate-spin text-info" />
               <div>
-                <p className="font-medium">{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : `Syncing, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
-                <p className="text-xs text-muted">{running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
+                <p className="font-medium">{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : `Syncing ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
+                <p className="text-xs text-muted">Orders: {running.ordersAddedCount} new · {running.ordersUpdatedCount} updated · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
               </div>
             </div>
             {canRun ? <Button size="sm" variant="ghost" disabled={running.cancelRequested} onClick={() => cancel.mutate({ id: running.id })}><Ban /> {running.cancelRequested ? "Canceling…" : "Cancel"}</Button> : null}
@@ -258,13 +267,14 @@ export function SyncView() {
           ) : (
             <div className="overflow-x-auto">
               <Table>
-                <THead><tr><Th>Started</Th><Th>Type</Th><Th>Status</Th><Th className="text-right">Added</Th><Th className="text-right">Updated</Th><Th className="text-right">Unchanged</Th><Th className="text-right">Failed</Th><Th className="text-right">Unmatched</Th><Th>Duration</Th></tr></THead>
+                <THead><tr><Th>Started</Th><Th>Type</Th><Th>Status</Th><Th className="text-right">New orders</Th><Th className="text-right">Parcels added</Th><Th className="text-right">Updated</Th><Th className="text-right">Unchanged</Th><Th className="text-right">Failed</Th><Th className="text-right">Unmatched</Th><Th>Duration</Th></tr></THead>
                 <tbody>
                   {jobs.data.map((j) => (
                     <Tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
                       <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(j.createdAt)}</Td>
                       <Td className="text-xs">{j.mode === "FULL" ? "Full" : "Incremental"} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}</Td>
                       <Td><Badge tone={JOB_TONE[j.status]}>{JOB_LABEL[j.status]}</Badge></Td>
+                      <Td className="num text-right">{j.ordersAddedCount}</Td>
                       <Td className="num text-right">{j.addedCount}</Td>
                       <Td className="num text-right">{j.updatedCount}</Td>
                       <Td className="num text-right text-muted">{j.unchangedCount}</Td>

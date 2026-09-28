@@ -8,6 +8,8 @@ export type MdmParcel = {
   reference: string | null;
   /** Store order ID echoed by MDM, when present (third matching key). */
   sourceOrderId: string | null;
+  /** MDM's tracking ID of the order this parcel ships, when the adapter knows it. */
+  mdmOrderId?: string | null;
   status: string | null;
   statusAt: Date | null;
   /** Integer minor units in `currency`. */
@@ -25,6 +27,36 @@ export type MdmParcel = {
 };
 
 export type MdmPage = { items: MdmParcel[]; nextCursor: string | null; total?: number | null };
+
+export type MdmUtm = { source: string | null; medium: string | null; campaign: string | null; content: string | null };
+
+export type MdmOrderProduct = { ref: string | null; variantOf: string | null; name: string | null; quantity: number; unitPrice: number | null };
+
+/**
+ * An order as MDM's call center sees it. The customer's name, address and IP are never
+ * read into this shape; the phone is carried only so it can be hashed and masked.
+ */
+export type MdmOrder = {
+  trackingId: string;
+  /** The store's order ID or number (Shopify, EasySell…), when MDM has it. */
+  externalId: string | null;
+  status: string | null;
+  statusAt: Date | null;
+  /** MDM's own "confirmed" flag, used only when the status is not mapped. */
+  confirmed: boolean | null;
+  placedAt: Date;
+  /** Integer minor units in `currency`. */
+  total: number | null;
+  currency: string;
+  phone: string | null;
+  wilaya: string | null;
+  city: string | null;
+  utm: MdmUtm;
+  products: MdmOrderProduct[];
+};
+
+/** `unreadable`: tracking IDs (or "?") of orders on the page that could not be read; the rest still sync. */
+export type MdmOrdersPage = { items: MdmOrder[]; nextCursor: string | null; total?: number | null; unreadable?: string[] };
 
 export type MdmErrorKind = "AUTH" | "RATE_LIMIT" | "SERVER" | "NETWORK" | "BAD_RESPONSE" | "NOT_AVAILABLE" | "CONFIG";
 
@@ -47,4 +79,8 @@ export interface MdmAdapter {
   /** Read-only call proving the credential works. Must not create or change anything at MDM. */
   testConnection(signal?: AbortSignal): Promise<{ accountLabel: string | null; providerStatuses?: string[] }>;
   listParcels(query: { cursor: string | null; updatedSince: Date | null; pageSize: number }, signal?: AbortSignal): Promise<MdmPage>;
+  /** Orders created or changed since `updatedSince`. Adapters without order access leave it out. */
+  listOrders?(query: { cursor: string | null; updatedSince: Date | null; pageSize: number }, signal?: AbortSignal): Promise<MdmOrdersPage>;
+  /** UTM tags found in an order's status history (the landing URL the store sent), or null. */
+  orderUtm?(trackingId: string, signal?: AbortSignal): Promise<MdmUtm | null>;
 }

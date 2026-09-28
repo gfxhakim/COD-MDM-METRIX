@@ -1,4 +1,4 @@
-import { MdmError, type MdmAdapter, type MdmPage, type MdmParcel } from "./types";
+import { MdmError, type MdmAdapter, type MdmOrder, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
 
 /**
  * Mocked MDM adapter serving clearly labelled DEMO fixtures. It never makes a
@@ -13,10 +13,20 @@ export type MockOptions = {
   credential: string | null;
   failures?: Record<number, MdmError[]>;
   latencyMs?: number;
+  /** When set, the adapter also serves MDM orders (tests only; the demo workspace has none). */
+  orders?: MdmOrder[];
+  /** UTM tags found in an order's status history, by order tracking ID. */
+  orderHistory?: Record<string, MdmUtm>;
+  /** Errors thrown by order reads: per order page, and per history lookup. */
+  orderFailures?: Record<number, MdmError[]>;
+  historyFailures?: Record<string, MdmError[]>;
 };
 
-export function createMockAdapter(opts: MockOptions): MdmAdapter {
+export function createMockAdapter(opts: MockOptions): MdmAdapter & { historyCalls: string[] } {
   const failures = new Map(Object.entries(opts.failures ?? {}).map(([k, v]) => [Number(k), [...v]]));
+  const orderFailures = new Map(Object.entries(opts.orderFailures ?? {}).map(([k, v]) => [Number(k), [...v]]));
+  const historyFailures = new Map(Object.entries(opts.historyFailures ?? {}).map(([k, v]) => [k, [...v]]));
+  const historyCalls: string[] = [];
   const wait = (signal?: AbortSignal) => (opts.latencyMs ? new Promise<void>((r, j) => { const t = setTimeout(r, opts.latencyMs); signal?.addEventListener("abort", () => { clearTimeout(t); j(new MdmError("Aborted", "NETWORK")); }); }) : Promise.resolve());
   const checkAuth = () => {
     if (!opts.credential) throw new MdmError("No credential saved for this workspace", "CONFIG");
@@ -40,5 +50,26 @@ export function createMockAdapter(opts: MockOptions): MdmAdapter {
       const more = (page + 1) * pageSize < all.length;
       return { items, nextCursor: more ? String(page + 1) : null, total: all.length };
     },
-  };
+    ...(opts.orders
+      ? {
+          async listOrders({ cursor, pageSize }: { cursor: string | null; pageSize: number }): Promise<MdmOrdersPage> {
+            checkAuth();
+            const page = cursor ? Number(cursor) : 0;
+            const queued = orderFailures.get(page);
+            if (queued?.length) throw queued.shift()!;
+            const all = opts.orders!;
+            const items = all.slice(page * pageSize, (page + 1) * pageSize);
+            return { items, nextCursor: (page + 1) * pageSize < all.length ? String(page + 1) : null, total: all.length };
+          },
+          async orderUtm(trackingId: string): Promise<MdmUtm | null> {
+            checkAuth();
+            historyCalls.push(trackingId);
+            const queued = historyFailures.get(trackingId);
+            if (queued?.length) throw queued.shift()!;
+            return opts.orderHistory?.[trackingId] ?? null;
+          },
+        }
+      : {}),
+    historyCalls,
+  } as MdmAdapter & { historyCalls: string[] };
 }
