@@ -8,7 +8,7 @@ import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/sta
 import { normalizeReference } from "@/lib/normalize";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { redactPayload, sha256, stableStringify } from "./redact";
-import { applyStatusDefaults, parcelStatusSelect, setParcelStatus, workspaceStatusOverrides } from "./statuses";
+import { applyStatusDefaults, parcelStatusSelect, reconcileOrderStatuses, setParcelStatus, workspaceStatusOverrides } from "./statuses";
 import { MdmError, type MdmAdapter, type MdmPage, type MdmParcel } from "./types";
 
 const PROVIDER = "MDM_EXPRESS" as const;
@@ -334,10 +334,8 @@ async function upsertParcel(workspaceId: string, jobId: string, p: MdmParcel, ov
     }
     if (counter === "unchanged" && newEvents) counter = "updated";
 
-    // Orders: a parcel that left the warehouse means the order was confirmed.
-    if (match.orderId && SHIPPED_STATES.includes(normalized)) {
-      await tx.order.updateMany({ where: { id: match.orderId, workspaceId, status: "PENDING" }, data: { status: "CONFIRMED", confirmedAt: fields.dispatchedAt ?? new Date() } });
-    }
+    // Orders follow their parcels: confirmed once prepared or shipped, canceled when every parcel is.
+    if (match.orderId) await reconcileOrderStatuses(tx, workspaceId, [match.orderId]);
 
     const unmatchedKey = { workspaceId_provider_entityType_externalId: { workspaceId, provider: PROVIDER, entityType: "parcel", externalId: p.trackingId } };
     if ("reason" in match) {

@@ -1,6 +1,6 @@
 import type { NormalizedStatus, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
-import { DEFAULT_MDM_STATUS_MAP, normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/statusMapping";
+import { CONFIRMING_STATES, DEFAULT_MDM_STATUS_MAP, normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/statusMapping";
 
 const PROVIDER = "MDM_EXPRESS" as const;
 
@@ -28,10 +28,36 @@ export async function setParcelStatus(tx: Prisma.TransactionClient, workspaceId:
       returnedAt: s === "RETURNED" ? p.returnedAt ?? p.lastProviderUpdateAt : null,
     },
   });
-  // A parcel that left the warehouse means the order was confirmed.
-  if (p.orderId && shipped) {
-    await tx.order.updateMany({ where: { id: p.orderId, workspaceId, status: "PENDING" }, data: { status: "CONFIRMED", confirmedAt: dispatchedAt ?? new Date() } });
+  if (p.orderId) await reconcileOrderStatuses(tx, workspaceId, [p.orderId]);
+}
+
+/**
+ * Keep store orders in line with their MDM parcels:
+ * - a parcel being prepared or with the carrier confirms a pending order;
+ * - an order whose parcels are all canceled is canceled and no longer counts as
+ *   confirmed, even if it was confirmed before (the client canceled after confirming).
+ * Without `orderIds`, checks every order in the workspace that has a parcel.
+ */
+export async function reconcileOrderStatuses(tx: Prisma.TransactionClient, workspaceId: string, orderIds?: string[]) {
+  const orders = await tx.order.findMany({
+    where: { workspaceId, status: { not: "CANCELED" }, ...(orderIds ? { id: { in: orderIds } } : { parcels: { some: {} } }) },
+    select: { id: true, status: true, parcels: { select: { normalizedStatus: true, dispatchedAt: true, lastProviderUpdateAt: true } } },
+  });
+  let confirmed = 0;
+  let canceled = 0;
+  for (const o of orders) {
+    if (!o.parcels.length) continue;
+    if (o.parcels.every((p) => p.normalizedStatus === "CANCELED")) {
+      const at = o.parcels.map((p) => p.lastProviderUpdateAt).find(Boolean) ?? new Date();
+      await tx.order.update({ where: { id: o.id }, data: { status: "CANCELED", confirmedAt: null, canceledAt: at } });
+      canceled++;
+    } else if (o.status === "PENDING" && o.parcels.some((p) => CONFIRMING_STATES.includes(p.normalizedStatus))) {
+      const dispatched = o.parcels.map((p) => p.dispatchedAt).filter((d): d is Date => d !== null).sort((a, b) => a.getTime() - b.getTime())[0];
+      await tx.order.update({ where: { id: o.id }, data: { status: "CONFIRMED", confirmedAt: dispatched ?? new Date() } });
+      confirmed++;
+    }
   }
+  return { confirmed, canceled };
 }
 
 export async function workspaceStatusOverrides(workspaceId: string, tx: Prisma.TransactionClient = db) {
@@ -72,14 +98,16 @@ export async function applyStatusDefaults(workspaceId: string) {
       if (s !== "UNKNOWN") byStatus.set(s, [...(byStatus.get(s) ?? []), e.id]);
     }
     for (const [s, ids] of byStatus) await tx.parcelStatusEvent.updateMany({ where: { id: { in: ids } }, data: { normalizedStatus: s } });
+    // Orders whose parcels were mapped before orders followed parcel statuses.
+    const orders = await reconcileOrderStatuses(tx, workspaceId);
 
     const parcels = Object.values(moved).reduce((a, b) => a + b, 0);
-    if (missing.length || parcels) {
+    if (missing.length || parcels || orders.confirmed || orders.canceled) {
       await tx.auditLog.create({
-        data: { workspaceId, actorUserId: null, action: "status_mapping.defaults_applied", entityType: "StatusMapping", metadata: { added: missing.map(([k]) => k), parcels: moved } },
+        data: { workspaceId, actorUserId: null, action: "status_mapping.defaults_applied", entityType: "StatusMapping", metadata: { added: missing.map(([k]) => k), parcels: moved, orders } },
       });
     }
-    return { added: missing.map(([k]) => k), parcels };
+    return { added: missing.map(([k]) => k), parcels, orders };
   });
 }
 

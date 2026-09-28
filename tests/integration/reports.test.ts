@@ -55,20 +55,20 @@ describe("economics reports", () => {
   it("dashboard computes metrics from stored facts", async () => {
     const r = await t.caller.reports.dashboard({ revenueView: "DELIVERED" });
     const m = r.metrics;
-    expect(m).toMatchObject({ placed: 5, confirmed: 4, shipped: 4, delivered: 2, returned: 1, inTransit: 1 });
+    expect(m).toMatchObject({ placed: 5, confirmed: 4, shipped: 4, finished: 3, delivered: 2, returned: 1, inTransit: 1 });
     expect(m.deliveredRevenue).toBe(780000);
     expect(m.remittedCash).toBe(390000);
     expect(m.cashInTransit).toBe(390000);
     expect(m.adSpend).toBe(370000);
     expect(m.cogs).toBe(180000);
-    expect(m.outboundShipping).toBe(240000);
+    expect(m.outboundShipping).toBe(180000); // the parcel still in transit counts once it finishes
     expect(m.rtoCost).toBe(25000);
     expect(m.callCenterCost).toBe(48000); // CONFIRMED_ORDER basis × 4
-    expect(m.packagingCost).toBe(20000);
+    expect(m.packagingCost).toBe(15000);
     expect(m.allocatedOverhead).toBe(100000);
-    expect(m.trueNetProfit).toBe(780000 - 370000 - 180000 - 240000 - 25000 - 48000 - 20000 - 100000);
-    expect(m.deliveryRate).toBe(0.5);
-    expect(m.returnRate).toBe(0.25);
+    expect(m.trueNetProfit).toBe(780000 - 370000 - 180000 - 180000 - 25000 - 48000 - 15000 - 100000);
+    expect(m.deliveryRate).toBeCloseTo(2 / 3);
+    expect(m.returnRate).toBeCloseTo(1 / 3);
     expect(r.wilayas.length).toBeGreaterThan(0);
   });
 
@@ -114,7 +114,7 @@ describe("economics reports", () => {
 
   it("simulator returns observed rates for a product and saves scenarios", async () => {
     const o = await t.caller.simulator.observed({ productId: ids.product.id });
-    expect(o.rates.deliveryRate).toBe(0.5);
+    expect(o.rates.deliveryRate).toBeCloseTo(2 / 3);
     expect(o.costs.salePrice).toBe(390000);
     const calc = await t.caller.simulator.calculate({ salePrice: 390000, sourcingCost: 90000, outboundShipping: 60000, rtoFee: 25000, callCenterCost: 12000, deliveryProbability: 0.5, returnProbability: 0.5 });
     expect(calc.breakevenCpa).toBe(240000 * 0.5 - 25000 * 0.5 - 12000);

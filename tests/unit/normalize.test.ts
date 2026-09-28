@@ -46,7 +46,15 @@ describe("status normalization", () => {
     expect(normalizeProviderStatus("deliveryAttemptFailed")).toBe("SHIPPED");
     expect(normalizeProviderStatus("postponed")).toBe("SHIPPED");
     expect(normalizeProviderStatus("received")).toBe("SHIPPED");
-    expect(normalizeProviderStatus("out-of-stock")).toBe("CONFIRMED");
+    expect(normalizeProviderStatus("out-of-stock")).toBe("PENDING");
+    // Confirmation calls, as the business described them.
+    expect(normalizeProviderStatus("NOT ANSWERED")).toBe("PENDING");
+    expect(normalizeProviderStatus("notAnswer")).toBe("PENDING");
+    expect(normalizeProviderStatus("call-later")).toBe("PENDING");
+    expect(normalizeProviderStatus("CANCELLED")).toBe("CANCELED");
+    expect(normalizeProviderStatus("canceled-after-confirmation")).toBe("CANCELED");
+    expect(normalizeProviderStatus("packaged")).toBe("CONFIRMED");
+    expect(normalizeProviderStatus("dispatched")).toBe("SHIPPED");
     expect(normalizeProviderStatus("out-for-delivery")).toBe("SHIPPED");
     // Partial deliveries stay for review.
     expect(normalizeProviderStatus("delivered-partially")).toBe("UNKNOWN");

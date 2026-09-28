@@ -271,7 +271,7 @@ describe("built-in status defaults", () => {
     expect(byId["P-DF"]).toMatchObject({ normalizedStatus: "RETURNED", returnedAt: at });
     expect(byId["P-DAF"]).toMatchObject({ normalizedStatus: "SHIPPED", dispatchedAt: at, returnedAt: null });
     expect(byId["P-REC"]).toMatchObject({ normalizedStatus: "CONFIRMED", dispatchedAt: null });
-    expect(byId["P-OOS"]).toMatchObject({ normalizedStatus: "CONFIRMED", dispatchedAt: null });
+    expect(byId["P-OOS"]).toMatchObject({ normalizedStatus: "PENDING", dispatchedAt: null });
     expect(byId["P-ODD"].normalizedStatus).toBe("UNKNOWN");
     expect(byId["P-RR"].events[0].normalizedStatus).toBe("RETURNED");
     expect(byId["P-ODD"].events[0].normalizedStatus).toBe("UNKNOWN");
@@ -284,8 +284,33 @@ describe("built-in status defaults", () => {
     expect(await db.auditLog.count({ where: { workspaceId: d.ws.id, action: "status_mapping.defaults_applied" } })).toBe(1);
 
     // Running again changes nothing and logs nothing.
-    expect(await applyStatusDefaults(d.ws.id)).toEqual({ added: [], parcels: 0 });
+    expect(await applyStatusDefaults(d.ws.id)).toEqual({ added: [], parcels: 0, orders: { confirmed: 0, canceled: 0 } });
     expect(await db.auditLog.count({ where: { workspaceId: d.ws.id, action: "status_mapping.defaults_applied" } })).toBe(1);
+  });
+
+  it("makes orders follow their parcels: confirmed once prepared, canceled when the client cancels, untouched while calling", async () => {
+    const d = await makeTenant("SyncOrders");
+    await connect(d);
+    const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    const mk = (n: string, status: "PENDING" | "CONFIRMED") => d.caller.orders.create({ orderNumber: n, placedAt: new Date("2026-09-18T10:00:00Z"), status, codAmount: 390000, lines: [{ productId: product.id, quantity: 1, unitPrice: 390000 }] });
+    const packaged = await mk("ES-21", "PENDING");
+    const calling = await mk("ES-22", "PENDING");
+    const canceledLate = await mk("ES-23", "CONFIRMED");
+    const f = (trackingId: string, reference: string, status: string) =>
+      parcel(trackingId, { reference, status, dispatchedAt: null, events: [{ status, at: new Date("2026-09-20T10:00:00Z") }] });
+    const { job } = await startSync(d.ctx, { mode: "FULL" });
+    const fixtures = [f("M-21", "ES-21", "packaged"), f("M-22", "ES-22", "not-answered"), f("M-23", "ES-23", "canceled-after-confirmation")];
+    const factory = async () => ({ adapter: createMockAdapter({ fixtures, credential: SECRET }), connection: null });
+    expect(await runSyncJob(job.id, { adapterFactory: factory, sleep: noSleep })).toMatchObject({ status: "SUCCEEDED", unknownStatusCount: 0 });
+
+    const get = (id: string) => db.order.findUniqueOrThrow({ where: { id } });
+    expect(await get(packaged.id)).toMatchObject({ status: "CONFIRMED" });
+    expect((await get(packaged.id)).confirmedAt).not.toBeNull();
+    expect(await get(calling.id)).toMatchObject({ status: "PENDING", confirmedAt: null });
+    // Counted as canceled, not confirmed, even though it was confirmed before.
+    expect(await get(canceledLate.id)).toMatchObject({ status: "CANCELED", confirmedAt: null });
+    const report = await d.caller.reports.dashboard({ from: new Date("2026-09-01T00:00:00Z"), to: new Date("2026-09-30T23:59:59Z") });
+    expect(report.metrics).toMatchObject({ placed: 3, confirmed: 1, shipped: 0 });
   });
 
   it("runs at the start of every sync, even for parcels MDM doesn't send again", async () => {

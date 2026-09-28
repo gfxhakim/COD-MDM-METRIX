@@ -24,7 +24,7 @@ export const verdictThresholdsSchema = z.object({
   maxRtoRate: z.number().min(0).max(1).default(0.3),
   /** Placed CPA considered "acceptable" for BAD_TRAFFIC detection (minor units). */
   acceptablePlacedCpa: z.number().int().min(0).default(80000),
-  /** Shipped parcels needed before delivery/RTO rates can trigger BAD_TRAFFIC. */
+  /** Delivered or returned parcels needed before delivery/RTO rates can trigger BAD_TRAFFIC. */
   minShippedForRates: z.number().int().min(1).default(10),
 });
 export type VerdictThresholds = z.infer<typeof verdictThresholdsSchema>;

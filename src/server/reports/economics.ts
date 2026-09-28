@@ -153,10 +153,10 @@ export async function dashboardReport(ctx: WorkspaceContext, input: DashboardInp
     series,
     topCreatives: [...creativeOnly].filter((r) => r.metrics.placed > 0).sort((a, b) => b.metrics.trueNetProfit - a.metrics.trueNetProfit).slice(0, 5).map(summary),
     worstRtoCreatives: creativeOnly
-      .filter((r) => r.metrics.shipped > 0 && r.metrics.returnRate !== null)
+      .filter((r) => r.metrics.finished > 0 && r.metrics.returnRate !== null)
       .sort((a, b) => (b.metrics.returnRate ?? 0) - (a.metrics.returnRate ?? 0) || b.metrics.returned - a.metrics.returned)
       .slice(0, 5)
-      .map((r) => ({ ...summary(r), belowSample: r.metrics.shipped < minShipped })),
+      .map((r) => ({ ...summary(r), belowSample: r.metrics.finished < minShipped })),
     health: await getDataHealth(ctx),
   };
 }

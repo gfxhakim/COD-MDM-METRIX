@@ -132,8 +132,14 @@ export function orderEconomics(order: OrderFact, resolveCost: CostResolver, defa
     if (p.status !== "CANCELED") activeParcels++;
     if (p.status === "UNKNOWN") t.unknownStatus++;
     if (!isShipped(p)) continue;
-    const ship = p.shippingFee ?? terms.forwardShippingFee;
     t.shipped++;
+    // Still with the carrier: nothing is counted until it is delivered or returned.
+    if (isInTransit(p)) {
+      t.inTransit++;
+      t.cashInTransit += p.codAmount;
+      continue;
+    }
+    const ship = p.shippingFee ?? terms.forwardShippingFee;
     t.outboundShipping += ship;
     t.packagingCost += terms.packagingFee;
     if (p.status === "DELIVERED") {
@@ -148,9 +154,6 @@ export function orderEconomics(order: OrderFact, resolveCost: CostResolver, defa
       t.lost++;
     } else if (p.status === "EXCHANGED") {
       t.exchanged++;
-    } else if (isInTransit(p)) {
-      t.inTransit++;
-      t.cashInTransit += p.codAmount;
     }
   }
 
@@ -198,6 +201,8 @@ export function sumTotals(list: Iterable<Totals>): Totals {
 export type RevenueView = "DELIVERED" | "REMITTED";
 
 export type Metrics = Totals & {
+  /** Shipped parcels whose delivery is finished (delivered, returned, lost or exchanged). */
+  finished: number;
   revenueView: RevenueView;
   /** Revenue used for profit under the selected view. */
   revenue: number;
@@ -218,8 +223,10 @@ export function computeMetrics(totals: Totals, adSpend: number, allocatedOverhea
   const revenue = view === "DELIVERED" ? totals.deliveredRevenue : totals.remittedCash;
   const trueNetProfit =
     revenue - adSpend - totals.cogs - totals.outboundShipping - totals.rtoCost - totals.callCenterCost - totals.packagingCost - allocatedOverhead;
+  const finished = totals.shipped - totals.inTransit;
   return {
     ...totals,
+    finished,
     revenueView: view,
     revenue,
     adSpend,
@@ -228,8 +235,9 @@ export function computeMetrics(totals: Totals, adSpend: number, allocatedOverhea
     truePoas: safeRate(trueNetProfit, adSpend),
     confirmationRate: safeRate(totals.confirmed, totals.placed),
     shippingRate: safeRate(totals.shipped, totals.confirmed),
-    deliveryRate: safeRate(totals.delivered, totals.shipped),
-    returnRate: safeRate(totals.returned, totals.shipped),
+    // Parcels still with the carrier would drag these down until they finish, so they are left out.
+    deliveryRate: safeRate(totals.delivered, finished),
+    returnRate: safeRate(totals.returned, finished),
     placedCpa: perUnit(adSpend, totals.placed),
     cpco: perUnit(adSpend, totals.confirmed),
     cpdo: perUnit(adSpend, totals.delivered),
@@ -295,7 +303,7 @@ export function allocateOverhead(groups: readonly AllocationGroup[], expenses: r
 
 export type Verdict = "KILL" | "BAD_TRAFFIC" | "SCALE" | "WATCH" | "INSUFFICIENT_DATA";
 
-export type VerdictInput = Pick<Metrics, "placed" | "shipped" | "adSpend" | "trueNetProfit" | "truePoas" | "placedCpa" | "deliveryRate" | "returnRate">;
+export type VerdictInput = Pick<Metrics, "placed" | "finished" | "adSpend" | "trueNetProfit" | "truePoas" | "placedCpa" | "deliveryRate" | "returnRate">;
 export type VerdictThresholdsInput = {
   minSampleOrders: number;
   targetPoas: number;
@@ -308,7 +316,7 @@ export type VerdictThresholdsInput = {
 /**
  * Precedence:
  *   1. KILL          true net profit < 0, once there is a sample OR the spend alone could have bought one
- *   2. BAD_TRAFFIC   placed CPA acceptable but delivery rate too low or RTO too high (enough shipped parcels)
+ *   2. BAD_TRAFFIC   placed CPA acceptable but delivery rate too low or RTO too high (enough finished parcels)
  *   3. SCALE         true POAS ≥ target and sample size met
  *   4. INSUFFICIENT_DATA sample below threshold
  *   5. WATCH         otherwise
@@ -318,7 +326,7 @@ export function creativeVerdict(m: VerdictInput, t: VerdictThresholdsInput): Ver
   const spentEnoughForSample = m.adSpend >= t.minSampleOrders * t.acceptablePlacedCpa && m.adSpend > 0;
   if (m.trueNetProfit < 0 && (sampleMet || spentEnoughForSample)) return "KILL";
   const cpaOk = m.placedCpa !== null && m.placedCpa <= t.acceptablePlacedCpa;
-  const ratesKnown = m.shipped >= t.minShippedForRates;
+  const ratesKnown = m.finished >= t.minShippedForRates;
   const badDelivery = m.deliveryRate !== null && m.deliveryRate < t.minDeliveryRate;
   const badRto = m.returnRate !== null && m.returnRate > t.maxRtoRate;
   if (cpaOk && ratesKnown && (badDelivery || badRto)) return "BAD_TRAFFIC";

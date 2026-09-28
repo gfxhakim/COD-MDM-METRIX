@@ -45,6 +45,12 @@ describe("parcel classification", () => {
     const t = orderEconomics(order([parcel("UNKNOWN", { dispatched: true })]), resolve, defaults);
     expect(t).toMatchObject({ shipped: 1, delivered: 0, returned: 0, inTransit: 1, unknownStatus: 1, cashInTransit: 390000, deliveredRevenue: 0 });
   });
+
+  it("counts nothing for a parcel still with the carrier until it is delivered or returned", () => {
+    const t = orderEconomics(order([parcel("SHIPPED")]), resolve, defaults);
+    expect(t).toMatchObject({ confirmed: 1, shipped: 1, inTransit: 1, cashInTransit: 390000, outboundShipping: 0, packagingCost: 0, rtoCost: 0, deliveredRevenue: 0, cogs: 0 });
+    expect(computeMetrics(t, 0, 0, "DELIVERED")).toMatchObject({ finished: 0, deliveryRate: null, returnRate: null });
+  });
 });
 
 describe("per-order economics", () => {
@@ -109,14 +115,15 @@ describe("profit metrics", () => {
 
   it("computes the spec formulas", () => {
     const m = computeMetrics(totals, 200000, 10000, "DELIVERED");
-    expect(m).toMatchObject({ placed: 5, confirmed: 4, shipped: 4, delivered: 2, returned: 1, inTransit: 1, cashInTransit: 390000 });
+    expect(m).toMatchObject({ placed: 5, confirmed: 4, shipped: 4, finished: 3, delivered: 2, returned: 1, inTransit: 1, cashInTransit: 390000 });
     expect(m.confirmationRate).toBe(0.8);
     expect(m.shippingRate).toBe(1);
-    expect(m.deliveryRate).toBe(0.5);
-    expect(m.returnRate).toBe(0.25);
-    // revenue 780000 − ads 200000 − cogs 180000 − ship 240000 − rto 25000 − call 48000 − pack 20000 − overhead 10000
-    expect(m.trueNetProfit).toBe(57000);
-    expect(m.truePoas).toBeCloseTo(0.285);
+    // The parcel still in transit is left out of the rates and of the costs.
+    expect(m.deliveryRate).toBeCloseTo(2 / 3);
+    expect(m.returnRate).toBeCloseTo(1 / 3);
+    // revenue 780000 − ads 200000 − cogs 180000 − ship 180000 − rto 25000 − call 48000 − pack 15000 − overhead 10000
+    expect(m.trueNetProfit).toBe(122000);
+    expect(m.truePoas).toBeCloseTo(0.61);
     expect(m.placedCpa).toBe(40000);
     expect(m.cpco).toBe(50000);
     expect(m.cpdo).toBe(100000);
@@ -125,7 +132,7 @@ describe("profit metrics", () => {
   it("switches revenue basis between delivered and remitted", () => {
     const m = computeMetrics(totals, 200000, 10000, "REMITTED");
     expect(m.revenue).toBe(390000);
-    expect(m.trueNetProfit).toBe(57000 - 390000);
+    expect(m.trueNetProfit).toBe(122000 - 390000);
   });
 });
 
@@ -164,16 +171,16 @@ describe("overhead allocation", () => {
 
 describe("creative verdict precedence", () => {
   const t = { minSampleOrders: 20, targetPoas: 0.3, minDeliveryRate: 0.55, maxRtoRate: 0.3, acceptablePlacedCpa: 80000, minShippedForRates: 10 };
-  const base = { placed: 40, shipped: 30, adSpend: 1_000_000, trueNetProfit: 500_000, truePoas: 0.5, placedCpa: 25000, deliveryRate: 0.7, returnRate: 0.2 };
+  const base = { placed: 40, finished: 30, adSpend: 1_000_000, trueNetProfit: 500_000, truePoas: 0.5, placedCpa: 25000, deliveryRate: 0.7, returnRate: 0.2 };
 
   it("SCALE when POAS meets target with enough sample", () => expect(creativeVerdict(base, t)).toBe("SCALE"));
   it("KILL beats everything when profit is negative", () => expect(creativeVerdict({ ...base, trueNetProfit: -1, truePoas: -0.01, deliveryRate: 0.3 }, t)).toBe("KILL"));
   it("KILL also applies when spend alone could have bought a sample", () =>
-    expect(creativeVerdict({ ...base, placed: 2, shipped: 0, adSpend: 20 * 80000, trueNetProfit: -1_000_000, truePoas: -0.6 }, t)).toBe("KILL"));
+    expect(creativeVerdict({ ...base, placed: 2, finished: 0, adSpend: 20 * 80000, trueNetProfit: -1_000_000, truePoas: -0.6 }, t)).toBe("KILL"));
   it("BAD_TRAFFIC when CPA looks good but delivery is poor", () => expect(creativeVerdict({ ...base, deliveryRate: 0.4 }, t)).toBe("BAD_TRAFFIC"));
   it("BAD_TRAFFIC when RTO is too high", () => expect(creativeVerdict({ ...base, returnRate: 0.45 }, t)).toBe("BAD_TRAFFIC"));
   it("not BAD_TRAFFIC when CPA is not acceptable", () => expect(creativeVerdict({ ...base, placedCpa: 90000, deliveryRate: 0.4 }, t)).toBe("SCALE"));
-  it("not BAD_TRAFFIC before enough parcels shipped", () => expect(creativeVerdict({ ...base, shipped: 5, deliveryRate: 0.2 }, t)).toBe("SCALE"));
+  it("not BAD_TRAFFIC before enough parcels are delivered or returned", () => expect(creativeVerdict({ ...base, finished: 5, deliveryRate: 0.2 }, t)).toBe("SCALE"));
   it("WATCH when enough data but below target", () => expect(creativeVerdict({ ...base, truePoas: 0.1 }, t)).toBe("WATCH"));
-  it("INSUFFICIENT_DATA below the sample threshold", () => expect(creativeVerdict({ ...base, placed: 5, shipped: 2, adSpend: 100000 }, t)).toBe("INSUFFICIENT_DATA"));
+  it("INSUFFICIENT_DATA below the sample threshold", () => expect(creativeVerdict({ ...base, placed: 5, finished: 2, adSpend: 100000 }, t)).toBe("INSUFFICIENT_DATA"));
 });

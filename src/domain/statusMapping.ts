@@ -9,48 +9,58 @@ import type { NormalizedStatus } from "@prisma/client";
  * mappings) always wins over these defaults.
  */
 export const DEFAULT_MDM_STATUS_MAP: Record<string, NormalizedStatus> = {
-  pending: "PENDING",
+  // Generic carrier vocabulary.
   created: "PENDING",
-  preparing: "CONFIRMED",
-  packaged: "CONFIRMED",
   confirmed: "CONFIRMED",
-  dispatched: "SHIPPED",
   shipped: "SHIPPED",
-  in_transit: "SHIPPED",
   in_delivery: "SHIPPED",
-  out_for_delivery: "SHIPPED",
-  delivered: "DELIVERED",
-  returning: "RETURNED",
   return_received: "RETURNED",
-  returned: "RETURNED",
-  lost: "LOST",
-  // MDM Express vocabulary. The API sends kebab-case ("out-for-delivery"); some
-  // endpoints use camelCase. Their lifecycle, from MDM's shipping-performance
-  // transitions: preparing → packaged → received → in-transit → ready-for-delivery
-  // → out-for-delivery → delivery-attempt-failed (retried) → delivered, or
-  // delivery-failed → return-ready → returned.
-  waiting_collection: "CONFIRMED",
-  ready_for_dispatch: "CONFIRMED",
-  // Waiting for stock: never left the warehouse.
-  out_of_stock: "CONFIRMED",
-  // MDM's hub has the parcel; it is in the carrier's hands.
-  received: "SHIPPED",
-  ready_for_delivery: "SHIPPED",
-  // Still out with the carrier and will be tried again.
-  delivery_attempt_failed: "SHIPPED",
-  postponed: "SHIPPED",
-  waiting_for_client: "SHIPPED",
-  // MDM is still searching; only "lost" is final.
-  missing: "SHIPPED",
-  // Final failure: the next MDM steps are return-ready and returned.
-  delivery_failed: "RETURNED",
-  return_ready: "RETURNED",
-  payment_ready: "DELIVERED",
   settled: "DELIVERED",
   refunded: "RETURNED",
   exchanged: "EXCHANGED",
   canceled: "CANCELED",
+
+  // MDM Express, as the business owner described each status (2026-09-28). MDM sends
+  // kebab-case ("out-for-delivery"); some endpoints use camelCase.
+  // Confirmation calls: not confirmed yet, nothing counted.
+  pending: "PENDING",
+  not_answer: "PENDING",
+  not_answered: "PENDING",
+  no_answer: "PENDING",
+  call_later: "PENDING",
+  // Waiting for stock: neither confirmed nor canceled yet.
+  out_of_stock: "PENDING",
+  // Canceled by the client, before or after confirming: counted as canceled, not confirmed.
   cancelled: "CANCELED",
+  canceled_after_confirmation: "CANCELED",
+  cancelled_after_confirmation: "CANCELED",
+  // Confirmed and being prepared in the warehouse.
+  preparing: "CONFIRMED",
+  packaged: "CONFIRMED",
+  ready_for_dispatch: "CONFIRMED",
+  waiting_collection: "CONFIRMED",
+  // With the carrier, result not known yet: dispatched → received at the station →
+  // in-transit to the wilaya's stop desk → ready-for-delivery → out-for-delivery, with
+  // postponements and failed attempts that are tried again.
+  dispatched: "SHIPPED",
+  received: "SHIPPED",
+  in_transit: "SHIPPED",
+  ready_for_delivery: "SHIPPED",
+  out_for_delivery: "SHIPPED",
+  postponed: "SHIPPED",
+  delivery_attempt_failed: "SHIPPED",
+  waiting_for_client: "SHIPPED",
+  // MDM is still searching; only "lost" is final.
+  missing: "SHIPPED",
+  // Delivered and paid by the client.
+  delivered: "DELIVERED",
+  payment_ready: "DELIVERED",
+  // Delivery stopped after repeated failures, and the way back to the warehouse.
+  delivery_failed: "RETURNED",
+  returning: "RETURNED",
+  return_ready: "RETURNED",
+  returned: "RETURNED",
+  lost: "LOST",
 };
 
 export function statusKey(providerStatus: string): string {
@@ -71,3 +81,6 @@ export function normalizeProviderStatus(
 
 /** Statuses that mean the parcel left the warehouse. */
 export const SHIPPED_STATES: NormalizedStatus[] = ["SHIPPED", "DELIVERED", "RETURNED", "LOST", "EXCHANGED"];
+
+/** A parcel in one of these means its order was confirmed. */
+export const CONFIRMING_STATES: NormalizedStatus[] = ["CONFIRMED", ...SHIPPED_STATES];
