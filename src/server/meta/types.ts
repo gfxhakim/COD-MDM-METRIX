@@ -36,6 +36,8 @@ export class MetaError extends Error {
     message: string,
     public kind: MetaErrorKind,
     public retryAfterMs?: number,
+    /** Meta's error number, e.g. "200" or "100, subcode 33". Never Meta's own text. */
+    public metaCode?: string,
   ) {
     super(message);
     this.name = "MetaError";

@@ -1,12 +1,13 @@
 import { MoneyError, parseToMinor } from "@/lib/money";
-import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaSpendPage, type MetaSpendRow } from "./types";
+import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaErrorKind, type MetaSpendPage, type MetaSpendRow } from "./types";
 
 /**
  * Live Meta Marketing API client (read-only).
  *
  * - Host is fixed to graph.facebook.com; nothing user-supplied goes into the URL path.
  * - The access token travels only in the Authorization header, never in a URL.
- * - Only GET requests: ad accounts (`/me/adaccounts`) and insights (`/act_<id>/insights`).
+ * - Only GET requests: ad accounts (`/me/adaccounts`), insights (`/act_<id>/insights`), and the
+ *   token's granted permissions (`/me/permissions`) to explain a refused listing.
  * - Insights are read per ad per day (`level=ad`, `time_increment=1`), including ads
  *   that were paused, archived or deleted since, so their spend still counts.
  * - Spend comes back as a string in the account currency's major units ("1234.56").
@@ -33,18 +34,50 @@ const int = (v: unknown): number | null => {
   return Number.isFinite(n) ? Math.round(n) : null;
 };
 
-/** Fixed, user-facing messages per Graph error; the provider's own text is never shown or stored. */
+/**
+ * Fixed, user-facing messages per Graph error; the provider's own text is never shown or stored.
+ * Meta's error number is kept (it is only a number) so a failure can be diagnosed from a screenshot.
+ */
 export function metaErrorFrom(status: number, body: unknown, retryAfterMs?: number): MetaError {
   const err = isObj(body) && isObj(body.error) ? body.error : {};
   const code = typeof err.code === "number" ? err.code : null;
+  const subcode = typeof err.error_subcode === "number" ? err.error_subcode : null;
   const msg = typeof err.message === "string" ? err.message : "";
-  if (code === 190 || status === 401) return new MetaError("Meta rejected the access token. It may have expired or been revoked: generate a new one and save it here.", "AUTH");
-  if (code === 4 || code === 17 || code === 32 || code === 613 || (code !== null && code >= 80000 && code <= 80014)) return new MetaError("Meta's rate limit was reached. The sync will try again shortly.", "RATE_LIMIT", retryAfterMs ?? 60_000);
-  if (code === 10 || (code !== null && code >= 200 && code <= 299) || status === 403) return new MetaError("The token can't read this ad account. Give the system user access to it with the ads_read permission.", "PERMISSION");
-  if (code === 100 && /appsecret_proof/i.test(msg)) return new MetaError("Your Meta app requires an app secret proof. In the app's Advanced settings, turn off \"Require app secret\", or use a token from an app without it.", "CONFIG");
-  if (code === 1 || code === 2 || status >= 500) return new MetaError(`Meta had a temporary problem (${status}). The sync will try again.`, "SERVER", retryAfterMs);
-  if (code === 100 || status === 400) return new MetaError("Meta refused the request as invalid.", "BAD_REQUEST");
-  return new MetaError(`Meta returned ${status}.`, "BAD_RESPONSE");
+  const metaCode = code !== null ? `${code}${subcode !== null ? `, subcode ${subcode}` : ""}` : undefined;
+  const e = (message: string, kind: MetaErrorKind, retry?: number) => new MetaError(metaCode ? `${message} (Meta error ${metaCode})` : message, kind, retry, metaCode);
+  if (code === 190 || status === 401) return e("Meta rejected the access token. It may have expired or been revoked: generate a new one and save it here.", "AUTH");
+  if (code === 4 || code === 17 || code === 32 || code === 613 || (code !== null && code >= 80000 && code <= 80014)) return e("Meta's rate limit was reached. The sync will try again shortly.", "RATE_LIMIT", retryAfterMs ?? 60_000);
+  if (code === 10 || (code !== null && code >= 200 && code <= 299) || status === 403) return e("The token can't read this ad account. Give the system user access to it with the ads_read permission.", "PERMISSION");
+  if (code === 100 && /appsecret_proof/i.test(msg)) return e("Your Meta app requires an app secret proof. In the app's Advanced settings, turn off \"Require app secret\", or use a token from an app without it.", "CONFIG");
+  if (code === 1 || code === 2 || status >= 500) return e(`Meta had a temporary problem (${status}). The sync will try again.`, "SERVER", retryAfterMs);
+  if (code === 100 || status === 400) return e("Meta refused the request as invalid.", "BAD_REQUEST");
+  return e(`Meta returned ${status}.`, "BAD_RESPONSE");
+}
+
+/** Permissions the token was granted (`/me/permissions`), or null when Meta won't say. */
+async function grantedPermissions(token: string, signal?: AbortSignal): Promise<Set<string> | null> {
+  try {
+    const body = await metaGet(token, "/me/permissions", { limit: "100" }, signal);
+    if (!Array.isArray(body.data)) return null;
+    return new Set(body.data.filter((p) => isObj(p) && p.status === "granted" && typeof p.permission === "string").map((p) => (p as Obj).permission as string));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Meta refused to list the token's ad accounts at all (as opposed to listing none).
+ * Says which side to fix: a token made without ads_read, or an app Meta won't let read ads.
+ */
+async function listingRefused(token: string, e: MetaError, signal?: AbortSignal): Promise<MetaError> {
+  const granted = await grantedPermissions(token, signal);
+  const suffix = e.metaCode ? ` (Meta error ${e.metaCode})` : "";
+  const message = !granted
+    ? "Meta won't let this token list its ad accounts. Generate a new token for the system user with ads_read ticked, and check that your Meta app has the Marketing API."
+    : granted.has("ads_read") || granted.has("ads_management")
+      ? "The token has ads_read, but Meta still won't list its ad accounts. Check that your Meta app has the Marketing API and is connected to this Business Manager, then generate a new token."
+      : "This token was made without the ads_read permission, so Meta won't list its ad accounts. Generate a new token for the system user with ads_read ticked, then use Replace token.";
+  return new MetaError(message + suffix, "PERMISSION", undefined, e.metaCode);
 }
 
 /** Hardened read-only GET to the Graph API. The token only goes in the Authorization header. */
@@ -138,7 +171,12 @@ export function createLiveMetaAdapter(token: string | null): MetaAdapter {
       const out: MetaAdAccount[] = [];
       let cursor: string | null = null;
       for (let page = 0; page < 20; page++) {
-        const body = await metaGet(t, "/me/adaccounts", { fields: "id,account_id,name,currency,timezone_name,account_status", limit: "100", ...(cursor ? { after: cursor } : {}) }, signal);
+        let body: Obj;
+        try {
+          body = await metaGet(t, "/me/adaccounts", { fields: "id,account_id,name,currency,timezone_name,account_status", limit: "100", ...(cursor ? { after: cursor } : {}) }, signal);
+        } catch (e) {
+          throw e instanceof MetaError && e.kind === "PERMISSION" ? await listingRefused(t, e, signal) : e;
+        }
         if (!Array.isArray(body.data)) throw new MetaError("Unexpected response from Meta (ad accounts).", "BAD_RESPONSE");
         for (const a of body.data) {
           const m = mapAdAccount(a);

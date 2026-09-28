@@ -21,10 +21,10 @@ const STATUS_LABEL = { CONNECTED: "Connected", ERROR: "Needs attention", UNTESTE
 const ACCOUNT_STATUS: Record<number, string> = { 1: "Active", 2: "Disabled", 3: "Unsettled", 7: "Under review", 8: "Pending settlement", 9: "Grace period", 100: "Closing", 101: "Closed" };
 
 const SETUP_STEPS = [
-  "In Meta for Developers, create an app of type Business (or use one you already have) and connect it to this Business Manager.",
+  "In Meta for Developers, create an app of type Business (or use one you already have), add the Marketing API to it, and connect it to this Business Manager.",
   "In Meta Business Settings, open Users → System users and add one, for example \"COD Flow Tracker\".",
   "Choose Assign assets: give it the app, then every ad account you run ads from, with View performance access.",
-  "Choose Generate new token, pick your app, tick the ads_read permission, and set the expiry to Never.",
+  "Choose Generate new token, pick your app, tick the ads_read permission (it only shows once the app has the Marketing API), and set the expiry to Never.",
   "Copy the token and paste it below. Never send it in a chat or an email.",
 ];
 
@@ -145,7 +145,8 @@ export function MetaTab() {
                   <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                 </div>
                 {t.lastError ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-2 text-xs text-negative">{t.lastError}</p> : null}
-                {result?.id === t.id ? <p className={`rounded-lg border p-2 text-xs ${result.ok ? "border-positive/30 bg-positive-soft text-positive" : "border-negative/30 bg-negative-soft text-negative"}`} role="status">{result.message}</p> : null}
+                {/* A failed test is saved as the token's error above: show it once. */}
+                {result?.id === t.id && (result.ok || result.message !== t.lastError) ? <p className={`rounded-lg border p-2 text-xs ${result.ok ? "border-positive/30 bg-positive-soft text-positive" : "border-negative/30 bg-negative-soft text-negative"}`} role="status">{result.message}</p> : null}
                 {canManage ? (
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant={t.status === "CONNECTED" ? "outline" : "primary"} onClick={() => test.mutate({ id: t.id })} disabled={test.isPending}><PlugZap /> {test.isPending && test.variables?.id === t.id ? "Testing…" : "Test connection"}</Button>
