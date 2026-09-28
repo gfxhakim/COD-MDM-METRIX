@@ -24,6 +24,8 @@ enum Role {
 
 enum IntegrationProvider {
   MDM_EXPRESS
+  /// Meta Marketing API (ad spend). The credential is a system-user access token.
+  META_ADS
 }
 
 enum ConnectionStatus {
@@ -226,6 +228,7 @@ model Workspace {
   cashEvents       CashEvent[]
   creatives        Creative[]
   adSpend          AdSpend[]
+  adAccounts       AdAccount[]
   expenses         Expense[]
   bankTransactions BankTransaction[]
   importBatches    ImportBatch[]
@@ -292,6 +295,11 @@ model IntegrationConnection {
   /// Last successful sync that also read MDM orders. Until one has run, the next sync re-reads
   /// every parcel once so parcels synced earlier get linked to their MDM orders.
   ordersSyncedAt        DateTime?
+  /// Meta only: held while a spend sync runs, so two never overlap.
+  syncLeaseUntil        DateTime?
+  lastSyncAttemptAt     DateTime?
+  /// Meta only: what the last spend sync read (accounts, rows, days, per-account errors).
+  lastSyncSummary       Json?
   lastError             String?
   syncIntervalMinutes   Int                 @default(45)
   credentialUpdatedAt   DateTime?
@@ -709,13 +717,19 @@ model AdSpend {
   clicks             Int?
   sourceRowHash      String
   importBatchId      String?
+  /// Meta ad account (act_…) for rows read from the Meta API.
+  adAccountId        String?
+  /// Set on CSV rows once the Meta API has the same ad and day; reports then count the API row only.
+  supersededAt       DateTime?
   createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @default(now()) @updatedAt
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   creative    Creative?    @relation(fields: [creativeId], references: [id], onDelete: SetNull)
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, source, sourceRowHash])
+  @@index([workspaceId, adId, date])
   @@index([workspaceId, date])
   @@index([workspaceId, creativeId, date])
 }
@@ -858,4 +872,29 @@ model SimulatorScenario {
   product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+}
+
+/// A Meta ad account the workspace's token can read. New accounts are synced by default.
+model AdAccount {
+  id            String     @id @default(uuid())
+  workspaceId   String
+  platform      AdPlatform @default(META)
+  /// "act_<id>"
+  externalId    String
+  name          String?
+  currency      String?
+  timezone      String?
+  /// Meta's account_status (1 = active, 2 = disabled, 101 = closed, …).
+  accountStatus Int?
+  enabled       Boolean    @default(true)
+  /// Last time the token could see this account.
+  lastSeenAt    DateTime?
+  lastSyncedAt  DateTime?
+  lastError     String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, platform, externalId])
 }

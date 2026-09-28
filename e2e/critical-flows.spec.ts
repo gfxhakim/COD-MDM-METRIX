@@ -189,6 +189,24 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByText("MDM-DEMO-ORPHAN-1")).toBeVisible();
   });
 
+  test("12. connect Meta ads without the token reaching the browser, and sync spend", async ({ page }) => {
+    const token = "demo-meta-token-00000000000000007777";
+    const seen: string[] = [];
+    page.on("response", async (r) => { if (r.url().includes("/api/trpc")) seen.push(await r.text().catch(() => "")); });
+    await page.goto("/settings?tab=meta");
+    await expect(page.getByText("Demo workspace: a mocked Meta account")).toBeVisible();
+    await page.fill("#meta-token", token);
+    await page.click("button:has-text('Encrypt & save')");
+    await expect(page.getByText("••••7777")).toBeVisible();
+    await page.click("button:has-text('Test connection')");
+    await expect(page.getByText("It can read 1 ad account")).toBeVisible();
+    await expect(page.getByText("Demo ad account (not a real Meta account)")).toBeVisible();
+    await page.click("button:has-text('Sync spend now')");
+    await expect(page.getByText("Last spend sync")).toBeVisible({ timeout: 30_000 });
+    expect(await page.content()).not.toContain(token);
+    expect(seen.join("\n")).not.toContain(token);
+  });
+
   test("10. review an unmatched parcel", async ({ page }) => {
     await page.goto("/syncs");
     const row = page.locator("tr", { hasText: "MDM-DEMO-ORPHAN-1" });

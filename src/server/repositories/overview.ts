@@ -15,7 +15,7 @@ export async function getDataHealth(ctx: WorkspaceContext) {
     db.importRowError.count({ where: w }),
     db.syncItem.count({ where: { ...w, result: "FAILED" } }),
     db.bankTransaction.count({ where: { ...w, reviewStatus: "PENDING" } }),
-    db.adSpend.count({ where: { ...w, creativeId: null } }),
+    db.adSpend.count({ where: { ...w, creativeId: null, supersededAt: null } }),
   ]);
   return {
     connectionStatus: connection?.status ?? "NOT_CONFIGURED",

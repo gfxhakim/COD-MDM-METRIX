@@ -85,7 +85,7 @@ export async function reopenBank(ctx: WorkspaceContext, id: string) {
 export async function unmatchedSpend(ctx: WorkspaceContext) {
   const groups = await db.adSpend.groupBy({
     by: ["externalCreativeId"],
-    where: { workspaceId: ctx.workspaceId, creativeId: null },
+    where: { workspaceId: ctx.workspaceId, creativeId: null, supersededAt: null },
     _sum: { spend: true, impressions: true, clicks: true },
     _count: true,
     _min: { date: true },
@@ -117,7 +117,7 @@ export async function resolveUnmatchedSpend(
   assertCan(ctx, "catalog.write");
   const ws = ctx.workspaceId;
   return db.$transaction(async (tx) => {
-    const count = await tx.adSpend.count({ where: { workspaceId: ws, creativeId: null, externalCreativeId: input.externalCreativeId } });
+    const count = await tx.adSpend.count({ where: { workspaceId: ws, creativeId: null, supersededAt: null, externalCreativeId: input.externalCreativeId } });
     if (!count) throw new NotFoundError("No unmatched spend for that creative ID");
     let creativeId: string;
     if (input.creativeId) {

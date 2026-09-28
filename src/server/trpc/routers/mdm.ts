@@ -3,6 +3,8 @@ import { z } from "zod";
 import { NormalizedStatus } from "@prisma/client";
 import * as conn from "@/server/mdm/connection";
 import * as sync from "@/server/mdm/sync";
+import * as meta from "@/server/meta/connection";
+import { startMetaSync } from "@/server/meta/sync";
 import { kickSync } from "@/server/mdm/runner";
 import { permitted, router, workspaceProcedure } from "@/server/trpc/init";
 import { id } from "@/server/trpc/schemas";
@@ -18,6 +20,17 @@ export const integrationsRouter = router({
   setSyncInterval: permitted("integrations.manage")
     .input(z.object({ minutes: z.number().int().min(15).max(24 * 60) }))
     .mutation(({ ctx, input }) => conn.setSyncInterval(ctx.ws, input.minutes)),
+
+  meta: workspaceProcedure.query(({ ctx }) => meta.getMeta(ctx.ws)),
+  /** The token travels once, in a POST body, and is encrypted before it touches the database. Only a mask comes back. */
+  saveMetaToken: permitted("integrations.manage").input(z.object({ token: z.string().min(1).max(1024) })).mutation(({ ctx, input }) => meta.saveMetaToken(ctx.ws, input)),
+  removeMetaToken: permitted("integrations.manage").mutation(({ ctx }) => meta.removeMetaToken(ctx.ws)),
+  testMeta: permitted("integrations.manage").mutation(({ ctx }) => meta.testMeta(ctx.ws)),
+  setMetaInterval: permitted("integrations.manage")
+    .input(z.object({ minutes: z.number().int().min(15).max(24 * 60) }))
+    .mutation(({ ctx, input }) => meta.setMetaInterval(ctx.ws, input.minutes)),
+  setAdAccountEnabled: permitted("integrations.manage").input(z.object({ id, enabled: z.boolean() })).mutation(({ ctx, input }) => meta.setAdAccountEnabled(ctx.ws, input)),
+  syncMeta: permitted("sync.run").input(z.object({ full: z.boolean().default(false) })).mutation(({ ctx, input }) => startMetaSync(ctx.ws, input)),
 });
 
 export const syncRouter = router({

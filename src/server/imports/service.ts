@@ -15,6 +15,7 @@ import { validateOrders, type ImportedOrder } from "@/domain/imports/orders";
 import { validateSpend, type ImportedSpend } from "@/domain/imports/spend";
 import { validateBank, validateExpenses, type ImportedBankRow, type ImportedExpense } from "@/domain/imports/finance";
 import { parseExchangeRates } from "@/domain/settings";
+import { supersedeCsvSpend } from "@/server/meta/supersede";
 
 export { InputError as ImportInputError };
 
@@ -290,6 +291,7 @@ export async function commitImport(ctx: WorkspaceContext, req: ImportRequest & {
   let imported = 0;
   let updated = 0;
   let createdCreatives = 0;
+  let superseded = 0;
   try {
     switch (validated.kind) {
       case "ORDERS":
@@ -301,6 +303,9 @@ export async function commitImport(ctx: WorkspaceContext, req: ImportRequest & {
         imported = r.imported;
         updated = r.updated;
         createdCreatives = r.createdCreatives;
+        // Days and ads the Meta connection already synced keep Meta's numbers; these rows don't count twice.
+        const days = validated.items.map((x) => x.date.getTime());
+        if (days.length) superseded = await supersedeCsvSpend(ctx.workspaceId, { from: new Date(days.reduce((a, b) => Math.min(a, b))), to: new Date(days.reduce((a, b) => Math.max(a, b))) });
         break;
       }
       case "EXPENSES":
@@ -318,7 +323,7 @@ export async function commitImport(ctx: WorkspaceContext, req: ImportRequest & {
   const relinked = req.kind === "ORDERS" || req.kind === "AD_SPEND" ? await relinkAttribution(ctx) : { attributions: 0, spend: 0 };
   const errorRows = new Set(issues.map((i) => i.line)).size;
   const status: ImportStatus = errorRows === 0 ? "COMMITTED" : imported + updated + c.duplicate > 0 ? "PARTIAL" : "FAILED";
-  const summary = { dateFormat, warnings: warnings.slice(0, 200), warningCount: warnings.length, skippedZeroRows: skipped, createdCreatives, relinked, truncated: csv.truncated, storedErrors: errorData.length };
+  const summary = { dateFormat, warnings: warnings.slice(0, 200), warningCount: warnings.length, skippedZeroRows: skipped, createdCreatives, supersededByMeta: superseded, relinked, truncated: csv.truncated, storedErrors: errorData.length };
   const done = await db.importBatch.update({
     where: { id: batch.id },
     data: { status, importedRows: imported, updatedRows: updated, duplicateRows: c.duplicate, errorRows, summary: summary as Prisma.InputJsonValue, finishedAt: new Date() },
@@ -505,7 +510,7 @@ async function writeBank(ctx: WorkspaceContext, batchId: string, items: Imported
  * and spend rows whose creative was created later, get linked by normalized key.
  * Manual attributions are never touched.
  */
-export async function relinkAttribution(ctx: WorkspaceContext, tx: Prisma.TransactionClient = db) {
+export async function relinkAttribution(ctx: Pick<WorkspaceContext, "workspaceId">, tx: Prisma.TransactionClient = db) {
   const ws = ctx.workspaceId;
   const creatives = await tx.creative.findMany({ where: { workspaceId: ws }, select: { id: true, normalizedKey: true } });
   const byKey = new Map(creatives.map((c) => [c.normalizedKey, c.id]));

@@ -42,7 +42,7 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promis
         cashEvents: { select: { type: true, amount: true } },
       },
     }),
-    db.adSpend.findMany({ where: { workspaceId: w, date: between(range) }, select: { creativeId: true, date: true, spend: true, creative: { select: { productId: true } } } }),
+    db.adSpend.findMany({ where: { workspaceId: w, date: between(range), supersededAt: null }, select: { creativeId: true, date: true, spend: true, creative: { select: { productId: true } } } }),
     db.expense.findMany({ where: { workspaceId: w, date: between(range) }, select: { amount: true, allocation: true, productId: true, date: true } }),
     db.creative.findMany({ where: { workspaceId: w }, select: { id: true, externalCreativeId: true, name: true, campaignName: true, platform: true, productId: true } }),
     db.product.findMany({ where: { workspaceId: w }, select: { id: true, name: true, sku: true } }),

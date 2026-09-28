@@ -18,6 +18,7 @@ import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { MdmTab, StatusMappingsTab } from "./mdm-settings";
+import { MetaTab } from "./meta-settings";
 import { CURRENCIES, parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, humanize } from "@/lib/utils";
@@ -336,6 +337,7 @@ export function SettingsView({ initialTab }: { initialTab: string }) {
           <TabsTrigger value="members">Members & roles</TabsTrigger>
           <TabsTrigger value="economics">Economics & currencies</TabsTrigger>
           <TabsTrigger value="mdm">MDM Express</TabsTrigger>
+          <TabsTrigger value="meta">Meta ads</TabsTrigger>
           <TabsTrigger value="mappings">Status mappings</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
         </TabsList>
@@ -343,6 +345,7 @@ export function SettingsView({ initialTab }: { initialTab: string }) {
         <TabsContent value="members"><MembersTab /></TabsContent>
         <TabsContent value="economics"><EconomicsAndRates /></TabsContent>
         <TabsContent value="mdm"><MdmTab /></TabsContent>
+        <TabsContent value="meta"><MetaTab /></TabsContent>
         <TabsContent value="mappings"><StatusMappingsTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>

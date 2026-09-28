@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { cleanupExpired, scheduleDueSyncs, schedulerEnabled } from "./schedule";
 import { processDueJobs, runSyncJob } from "./sync";
 import { applyStatusDefaultsOnce } from "./statuses";
+import { runDueMetaSyncs } from "@/server/meta/sync";
 
 /**
  * In-process background execution. The HTTP request that queues a sync returns
@@ -33,7 +34,7 @@ async function runAndReschedule(jobId: string) {
 let lastCleanup = 0;
 
 /**
- * One scheduler pass: queue due syncs, run due jobs, and clean up expired rows about once an hour.
+ * One scheduler pass: queue due MDM syncs, run due jobs, run due Meta spend syncs, and clean up expired rows about once an hour.
  * The first pass after a start also applies new built-in status defaults to every workspace.
  */
 export async function runSchedulerTick(opts: { schedule?: boolean } = {}) {
@@ -41,11 +42,13 @@ export async function runSchedulerTick(opts: { schedule?: boolean } = {}) {
   await applyStatusDefaultsOnce();
   const scheduled = (opts.schedule ?? schedulerEnabled()) ? await scheduleDueSyncs(now) : [];
   const processed = await processDueJobs();
+  // Meta ad spend follows the same schedule; a missing or failing Meta connection never blocks MDM.
+  const metaSynced = (opts.schedule ?? schedulerEnabled()) ? await runDueMetaSyncs(now).catch((e) => (console.error("[meta] scheduler failed", e), 0)) : 0;
   if (now.getTime() - lastCleanup > 3_600_000) {
     lastCleanup = now.getTime();
     await cleanupExpired(now);
   }
-  return { scheduled: scheduled.length, processed: processed.length };
+  return { scheduled: scheduled.length, processed: processed.length, metaSynced };
 }
 
 let poller: NodeJS.Timeout | null = null;
