@@ -1,0 +1,5 @@
+Name,Id,Created at,Lineitem sku,Lineitem quantity,Lineitem price,Total,Financial Status,Status,Billing Phone,Shipping Province,Landing Site
+#E2E-1,77001,15/09/2026 10:12,E2E-LAMP,1,3900,3900,pending,Confirmé,0551112233,Alger,/p?utm_source=facebook&utm_content=cr_e2e_hook_01
+#E2E-2,77002,15/09/2026 11:30,E2E-LAMP,1,3900,3900,pending,Confirmé,0551112244,Oran,/p?utm_source=facebook&utm_content=cr_e2e_hook_01
+#E2E-3,77003,16/09/2026 09:00,E2E-LAMP,2,3900,7800,pending,,0662223344,Blida,/p?utm_source=facebook&utm_content=cr_e2e_hook_01
+#E2E-4,77004,31/09/2026 11:00,E2E-LAMP,1,3900,3900,pending,,0773334455,Setif,
