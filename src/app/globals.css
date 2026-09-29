@@ -41,10 +41,31 @@ body {
   background-repeat: no-repeat;
   color: var(--color-fg);
   font-family: var(--font-sans);
+  /* Alexandria runs wide: a touch of negative tracking and a calm line height read cleaner. */
+  letter-spacing: -0.006em;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.font-mono {
+  letter-spacing: 0;
 }
 
 .num {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.02em;
 }
 
@@ -131,4 +152,314 @@ body {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Motion: short and calm, transform and opacity only, so it stays smooth on phones. */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+}
+
+@keyframes rise-soft {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(6px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+
+@keyframes zoom-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slide-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(4px);
+  }
+}
+
+@utility animate-rise {
+  animation: rise 460ms var(--ease-out) backwards;
+}
+
+@utility animate-pop {
+  transform-origin: var(--radix-popper-transform-origin, top right);
+  animation: pop-in 180ms var(--ease-out) backwards;
+}
+
+@utility animate-fade {
+  animation: fade-in 220ms ease-out backwards;
+}
+
+@utility animate-grow-y {
+  transform-origin: bottom;
+  transform-box: fill-box;
+  animation: grow-y 760ms var(--ease-out) backwards;
+}
+
+@utility animate-grow-x {
+  transform-origin: left;
+  animation: grow-x 900ms var(--ease-out) backwards;
+}
+
+/* Children arrive one after another. Entry animations fill backwards only, so once they end
+   nothing is left behind (no stacking context that could hide a menu or pin a fixed element). */
+@utility stagger {
+  & > :not(.shimmer) {
+    animation: rise 460ms var(--ease-out) backwards;
+  }
+  & > *:nth-child(2) {
+    animation-delay: 45ms;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 90ms;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 135ms;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 180ms;
+  }
+  & > *:nth-child(6) {
+    animation-delay: 225ms;
+  }
+  & > *:nth-child(7) {
+    animation-delay: 270ms;
+  }
+  & > *:nth-child(8) {
+    animation-delay: 315ms;
+  }
+  & > *:nth-child(n + 9) {
+    animation-delay: 360ms;
+  }
+}
+
+/* Pressing shrinks a control a little, like a real button. */
+@utility press {
+  transition-property: color, background-color, border-color, box-shadow, filter, opacity, scale, translate, rotate;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-out);
+  &:active {
+    scale: 0.96;
+  }
+}
+
+/* Cards float up a little under the mouse. */
+@utility lift {
+  transition:
+    translate 320ms var(--ease-out),
+    box-shadow 320ms var(--ease-out);
+  @media (hover: hover) {
+    &:hover {
+      translate: 0 -3px;
+      box-shadow: 0 2px 4px rgb(20 16 18 / 0.04), 0 22px 40px -22px rgb(20 16 18 / 0.28);
+    }
+  }
+}
+
+/* Loading placeholders get a light sweeping across them. */
+@utility shimmer {
+  background-image: linear-gradient(100deg, rgb(255 255 255 / 0) 30%, rgb(255 255 255 / 0.65) 50%, rgb(255 255 255 / 0) 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Table rows fade in one after another when a table first shows. */
+tbody > tr.row-in {
+  animation: rise 380ms var(--ease-out) backwards;
+}
+tbody > tr.row-in:nth-child(2) {
+  animation-delay: 25ms;
+}
+tbody > tr.row-in:nth-child(3) {
+  animation-delay: 50ms;
+}
+tbody > tr.row-in:nth-child(4) {
+  animation-delay: 75ms;
+}
+tbody > tr.row-in:nth-child(5) {
+  animation-delay: 100ms;
+}
+tbody > tr.row-in:nth-child(6) {
+  animation-delay: 125ms;
+}
+tbody > tr.row-in:nth-child(7) {
+  animation-delay: 150ms;
+}
+tbody > tr.row-in:nth-child(8) {
+  animation-delay: 175ms;
+}
+tbody > tr.row-in:nth-child(n + 9) {
+  animation-delay: 200ms;
+}
+
+/* The red pill that slides to the active item of a pill menu. */
+.slide-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    transform 480ms var(--ease-out),
+    width 480ms var(--ease-out),
+    height 480ms var(--ease-out),
+    opacity 200ms ease-out;
+}
+[data-slide] > .slide-item,
+[data-slide] .slide-item {
+  position: relative;
+  z-index: 1;
+}
+/* Once the pill is in place, the active item lets it show through. */
+[data-slide-ready] .slide-item:is([aria-current="page"], [aria-pressed="true"], [data-state="active"], [data-active="true"]) {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Page changes: the old page fades up and out, the new one rises into focus. The header stays put. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(.page) {
+  animation: page-out 180ms ease-in both;
+}
+::view-transition-new(.page) {
+  animation: rise-soft 520ms var(--ease-out) 110ms both;
+}
+/* Everything outside the page and the header (the page background, the phone menu row) switches at once, so nothing is seen twice. */
+::view-transition-old(root) {
+  display: none;
+}
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-group(site-header),
+::view-transition-group(bottom-bar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header),
+::view-transition-old(bottom-bar) {
+  display: none;
+}
+::view-transition-new(site-header),
+::view-transition-new(bottom-bar) {
+  animation: none;
+}
+/* Browsers without view transitions still get the page rising in. */
+@supports not (view-transition-name: none) {
+  .page-shell {
+    animation: rise-soft 480ms var(--ease-out) backwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+  .shimmer {
+    animation: none;
+  }
+}
+
+/* Wide tables keep their first column in view while they scroll sideways on phones and tablets. */
+.sticky-first :is(th, td):first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--color-surface);
+  box-shadow: inset -1px 0 0 var(--color-border);
+}
+.sticky-first tbody tr:hover > td:first-child {
+  background-color: var(--color-surface-2);
+}
+@media (width >= 80rem) {
+  .sticky-first :is(th, td):first-child {
+    box-shadow: none;
+  }
 }

@@ -115,19 +115,19 @@ export function CampaignsView() {
         description="Pick an ad account to see each of its campaigns with its own orders, spend and profit. Link a campaign to a product so its spend and ads count for that product."
       />
       <Card>
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <Select aria-label="Ad account" value={account} onChange={(e) => { setAccount(e.target.value); setOpen(new Set()); }} className="w-full sm:w-72">
+        <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+          <Select aria-label="Ad account" value={account} onChange={(e) => { setAccount(e.target.value); setOpen(new Set()); }} className="col-span-2 w-full sm:w-72">
             <option value="">All ad accounts</option>
             {r?.accounts.map((a) => <option key={a.externalId} value={a.externalId}>{a.name ? `${a.name} (${a.externalId.replace("act_", "")})` : a.externalId}</option>)}
             {r?.unassignedCampaigns ? <option value={NO_ACCOUNT}>Imported spend (no ad account)</option> : null}
           </Select>
-          <Select aria-label="Campaigns shown" value={show} onChange={(e) => setShow(e.target.value as "running" | "all")} className="w-48">
+          <Select aria-label="Campaigns shown" value={show} onChange={(e) => setShow(e.target.value as "running" | "all")} className="col-span-2 w-full sm:w-48">
             <option value="running">Running campaigns</option>
             <option value="all">All campaigns</option>
           </Select>
-          <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-38" />
-          <Input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-38" />
-          <Select aria-label="Revenue basis" value={view || r?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as RevenueView)} className="w-52">
+          <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full sm:w-38" />
+          <Input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full sm:w-38" />
+          <Select aria-label="Revenue basis" value={view || r?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as RevenueView)} className="col-span-2 w-full sm:w-52">
             <option value="DELIVERED">Delivered revenue view</option>
             <option value="REMITTED">Cash remitted view</option>
           </Select>

@@ -12,7 +12,7 @@ export function Tooltip({ content, children }: { content: React.ReactNode; child
     <TooltipPrimitive.Root delayDuration={150}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content sideOffset={6} className="z-50 max-w-xs rounded-xl bg-ink px-3 py-2 text-xs leading-relaxed text-white shadow-xl">
+        <TooltipPrimitive.Content sideOffset={6} className="animate-pop z-50 max-w-xs rounded-xl bg-ink px-3 py-2 text-xs leading-relaxed text-white shadow-xl">
           {content}
           <TooltipPrimitive.Arrow className="fill-ink" />
         </TooltipPrimitive.Content>

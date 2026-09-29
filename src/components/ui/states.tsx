@@ -32,5 +32,5 @@ export function ErrorState({ message }: { message: string }) {
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-2xl bg-surface-3", className)} />;
+  return <div className={cn("shimmer rounded-2xl bg-surface-3", className)} />;
 }

@@ -70,29 +70,29 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
         actions={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> Manual order</Button> : null}
       />
       <Card>
-        <div className="flex flex-wrap gap-2 border-b border-border p-3">
-          <div className="relative min-w-52 flex-1">
+        <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+          <div className="relative col-span-2 min-w-52 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
             <label htmlFor="order-search" className="sr-only">Search orders</label>
             <Input id="order-search" placeholder="Order number or tracking ID" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-36">
+          <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full sm:w-36">
             <option value="">All orders</option>
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
           </Select>
-          <Select aria-label="Parcel status" value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-40">
+          <Select aria-label="Parcel status" value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full sm:w-40">
             <option value="">All parcel statuses</option>
             {PARCEL_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
           </Select>
-          <Select aria-label="Wilaya" value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-40">
+          <Select aria-label="Wilaya" value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full sm:w-40">
             <option value="">All wilayas</option>
             {facets.data?.wilayas.map((w) => <option key={w} value={w}>{w}</option>)}
           </Select>
-          <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-44">
+          <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full sm:w-44">
             <option value="">All products</option>
             {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
-          <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-44">
+          <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full sm:w-44">
             <option value="">All creatives</option>
             {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
           </Select>
@@ -100,7 +100,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
         {orders.error ? <ErrorState message={errorMessage(orders.error)} /> : orders.isLoading ? <Loading /> : !orders.data?.items.length ? (
           <EmptyState icon={<ClipboardList />} title="No orders match" description="Import an orders CSV from Imports, or add a manual order." />
         ) : (
-          <Table>
+          <Table className="sticky-first">
             <THead>
               <tr>
                 <Th>Order</Th><Th>Source</Th><Th>Product</Th><Th>Creative</Th><Th>Placed</Th><Th>Wilaya</Th><Th>Order status</Th>

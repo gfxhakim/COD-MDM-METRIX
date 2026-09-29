@@ -134,21 +134,21 @@ export function CreativesView() {
         }
       />
       <Card>
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <Input aria-label="Search creatives" placeholder="Search creative or campaign" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
-          <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-38" />
-          <Input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-38" />
-          <Select aria-label="Verdict" value={verdict} onChange={(e) => setVerdict(e.target.value as VerdictValue | "")} className="w-40">
+        <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+          <Input aria-label="Search creatives" placeholder="Search creative or campaign" value={search} onChange={(e) => setSearch(e.target.value)} className="col-span-2 w-full sm:w-56" />
+          <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full sm:w-38" />
+          <Input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full sm:w-38" />
+          <Select aria-label="Verdict" value={verdict} onChange={(e) => setVerdict(e.target.value as VerdictValue | "")} className="w-full sm:w-40">
             <option value="">All verdicts</option><option value="SCALE">Scale</option><option value="WATCH">Watch</option><option value="BAD_TRAFFIC">Bad traffic</option><option value="KILL">Kill</option><option value="INSUFFICIENT_DATA">Not enough data</option>
           </Select>
-          <label className="flex items-center gap-2 text-xs text-muted">
+          <label className="flex items-center justify-between gap-2 text-xs text-muted sm:justify-start">
             Min. placed
             <Input type="number" min={0} value={minSample} onChange={(e) => setMinSample(Math.max(0, Number.parseInt(e.target.value || "0", 10)))} className="w-20" />
           </label>
-          <Select aria-label="Revenue basis" value={view || data?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as "DELIVERED" | "REMITTED")} className="w-52">
+          <Select aria-label="Revenue basis" value={view || data?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as "DELIVERED" | "REMITTED")} className="col-span-2 w-full sm:w-52">
             <option value="DELIVERED">Delivered revenue view</option><option value="REMITTED">Cash remitted view</option>
           </Select>
-          <div className="relative ml-auto">
+          <div className="relative col-span-2 justify-self-end sm:ml-auto">
             <Button variant="ghost" size="sm" aria-expanded={showColumns} onClick={() => setShowColumns((s) => !s)}><Columns3 /> Columns</Button>
             {showColumns ? (
               <div className="absolute right-0 top-full z-20 mt-1 grid w-56 gap-1 rounded-lg border border-border-strong bg-surface-2 p-2 shadow-xl">
@@ -164,7 +164,7 @@ export function CreativesView() {
         {q.error ? <ErrorState message={errorMessage(q.error)} /> : q.isLoading ? <Loading /> : !data?.rows.length ? (
           <EmptyState icon={<Megaphone />} title="No creatives or spend yet" description="Import Meta spend and orders with utm_content to see creative profitability." />
         ) : (
-          <Table>
+          <Table className="sticky-first">
             <THead>
               <tr>
                 {columns.map((c) => {
