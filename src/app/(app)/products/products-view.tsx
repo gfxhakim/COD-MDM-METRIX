@@ -21,6 +21,7 @@ import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDate, toDateInput } from "@/lib/utils";
 import { useCan } from "@/components/app/use-can";
+import { AdLinksPicker, type AdLinks } from "./ad-links";
 
 const COST_FIELDS = [
   { key: "salePrice", label: "Sale price", hint: "COD amount collected per unit" },
@@ -73,10 +74,12 @@ type ProductRow = {
   currency: string;
   active: boolean;
   versionCount: number;
+  linkedCampaigns: number;
+  linkedAdAccounts: number;
   currentCost: (CostValues & SourcingOriginal & { effectiveFrom: Date }) | null;
 };
 
-function ProductDialog({ product, open, onOpenChange, currency, rates }: { product?: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; currency: string; rates: Rates }) {
+function ProductDialog({ product, open, onOpenChange, currency, rates, products }: { product?: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; currency: string; rates: Rates; products: { id: string; name: string }[] }) {
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -84,8 +87,15 @@ function ProductDialog({ product, open, onOpenChange, currency, rates }: { produ
   const [sku, setSku] = React.useState(product?.sku ?? "");
   const [active, setActive] = React.useState(product?.active ?? true);
   const [cost, setCost] = React.useState<CostForm>(() => emptyCost(currency));
+  const [links, setLinks] = React.useState<AdLinks | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const invalidate = () => qc.invalidateQueries({ queryKey: trpc.products.list.queryKey() });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: trpc.products.list.queryKey() });
+    if (links) {
+      qc.invalidateQueries({ queryKey: trpc.campaigns.links.queryKey() });
+      qc.invalidateQueries({ queryKey: trpc.campaigns.report.queryKey() });
+    }
+  };
   const create = useMutation(trpc.products.create.mutationOptions({ onSuccess: () => { invalidate(); toast("success", "Product created"); onOpenChange(false); }, onError: (e) => setError(errorMessage(e)) }));
   const update = useMutation(trpc.products.update.mutationOptions({ onSuccess: () => { invalidate(); toast("success", "Product updated"); onOpenChange(false); }, onError: (e) => setError(errorMessage(e)) }));
 
@@ -93,8 +103,8 @@ function ProductDialog({ product, open, onOpenChange, currency, rates }: { produ
     e.preventDefault();
     setError(null);
     try {
-      if (product) update.mutate({ id: product.id, name, sku, active });
-      else create.mutate({ name, sku, active, cost: parseCost(cost, currency) });
+      if (product) update.mutate({ id: product.id, name, sku, active, links: links ?? undefined });
+      else create.mutate({ name, sku, active, cost: parseCost(cost, currency), links: links ?? undefined });
     } catch (err) {
       setError((err as Error).message);
     }
@@ -112,6 +122,11 @@ function ProductDialog({ product, open, onOpenChange, currency, rates }: { produ
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-[#b6f24a]" /> Active
           </label>
           {!product ? <CostFields value={cost} onChange={setCost} currency={currency} rates={rates} /> : null}
+          <section className="flex flex-col gap-2 border-t border-border pt-4">
+            <h3 className="text-sm font-medium">Ads for this product</h3>
+            <p className="text-xs text-muted">Pick the ad accounts and campaigns that sell this product. Their spend and ads then count for it, so its profit and POAS use only its own ads. Orders keep the product they were placed for.</p>
+            <AdLinksPicker productId={product?.id} value={links} onChange={setLinks} products={products} />
+          </section>
           {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -243,6 +258,7 @@ export function ProductsView() {
                 <Th className="text-right"><Term label="RTO fee" definition="Fee charged by the carrier for each parcel returned to origin." /></Th>
                 <Th className="text-right">Call center</Th>
                 <Th className="text-right">Packaging</Th>
+                <Th><Term label="Ads" definition="Campaigns and whole ad accounts linked to this product. Edit the product to change them, or link campaigns on the Campaigns page." /></Th>
                 <Th>Costs since</Th>
                 <Th>Status</Th>
                 <Th><span className="sr-only">Actions</span></Th>
@@ -259,6 +275,13 @@ export function ProductsView() {
                       {k === "sourcingCost" && p.currentCost ? <OriginalAmount amount={p.currentCost.sourcingCostOriginal} currency={p.currentCost.sourcingCurrency} rate={p.currentCost.sourcingFxRate} /> : null}
                     </Td>
                   ))}
+                  <Td className="text-xs text-muted">
+                    {p.linkedCampaigns || p.linkedAdAccounts ? (
+                      <Link href="/campaigns" className="hover:text-fg hover:underline">
+                        {[p.linkedAdAccounts ? `${p.linkedAdAccounts} ad account${p.linkedAdAccounts === 1 ? "" : "s"}` : null, p.linkedCampaigns ? `${p.linkedCampaigns} campaign${p.linkedCampaigns === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ")}
+                      </Link>
+                    ) : <span className="text-subtle">Not linked</span>}
+                  </Td>
                   <Td className="text-xs text-muted">{p.currentCost ? formatDate(p.currentCost.effectiveFrom) : "—"} <span className="text-subtle">· v{p.versionCount}</span></Td>
                   <Td>{p.active ? <Badge tone="positive">Active</Badge> : <Badge>Inactive</Badge>}</Td>
                   <Td>
@@ -279,8 +302,8 @@ export function ProductsView() {
           </Table>
         )}
       </Card>
-      {creating ? <ProductDialog open onOpenChange={setCreating} currency={currency} rates={rates} /> : null}
-      {editing ? <ProductDialog product={editing} open onOpenChange={(o) => !o && setEditing(null)} currency={currency} rates={rates} /> : null}
+      {creating ? <ProductDialog open onOpenChange={setCreating} currency={currency} rates={rates} products={products.data ?? []} /> : null}
+      {editing ? <ProductDialog product={editing} open onOpenChange={(o) => !o && setEditing(null)} currency={currency} rates={rates} products={products.data ?? []} /> : null}
       {versioning ? <CostVersionDialog product={versioning} open onOpenChange={(o) => !o && setVersioning(null)} rates={rates} /> : null}
     </>
   );

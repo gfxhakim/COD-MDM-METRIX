@@ -248,6 +248,35 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     }
   });
 
+  test("13. see each campaign's own numbers and link campaigns to a product", async ({ page }) => {
+    const name = "LN-03 | Conversions | DZ";
+    await page.goto("/campaigns");
+    await expect(page.getByRole("heading", { name: "Ad accounts & campaigns" })).toBeVisible();
+    // The seeded spend came from a CSV, so its campaigns have no ad account.
+    await page.getByLabel("Ad account").selectOption("__none__");
+    const row = page.locator("tr", { hasText: "camp_LN-03" });
+    await expect(row).toContainText(name);
+    await page.getByRole("button", { name: `Show ads of ${name}` }).click();
+    await expect(page.locator("tr", { hasText: "cr_ln_story_02" })).toBeVisible();
+
+    // Linked to another product here, its lamp orders are flagged.
+    await page.getByLabel(`Product for ${name}`).selectOption({ label: "Mini Blender Go" });
+    await expect(page.getByText("Campaign linked")).toBeVisible();
+    await expect(row).toContainText("for another product");
+
+    // Unlinked again from the product form.
+    await page.goto("/products");
+    await page.getByRole("button", { name: "Edit Mini Blender Go" }).click();
+    const box = page.getByRole("dialog").getByRole("checkbox", { name: new RegExp(name.replaceAll("|", "\\|")) });
+    await expect(box).toBeChecked();
+    await box.uncheck();
+    await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Product updated")).toBeVisible();
+    await page.goto("/campaigns");
+    await page.getByLabel("Ad account").selectOption("__none__");
+    await expect(page.getByLabel(`Product for ${name}`)).toHaveValue("");
+  });
+
   test("10. review an unmatched parcel", async ({ page }) => {
     await page.goto("/syncs");
     const row = page.locator("tr", { hasText: "MDM-DEMO-ORPHAN-1" });

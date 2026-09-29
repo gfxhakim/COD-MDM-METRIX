@@ -72,6 +72,27 @@ describe("Meta client", () => {
     await expect(createLiveMetaAdapter(TOKEN).dailyAdSpend({ accountId: "act_1/../me", since: "2026-09-01", until: "2026-09-27", cursor: null, currency: "USD" })).rejects.toMatchObject({ kind: "CONFIG" });
   });
 
+  it("lists campaigns that aren't archived or deleted, with their status, following pages", async () => {
+    const calls = stubGraph((u) =>
+      u.searchParams.get("after")
+        ? { body: { data: [{ id: "702", name: "Idle", effective_status: "PAUSED" }] } }
+        : { body: { data: [{ id: "700", name: "Spring", effective_status: "ACTIVE" }, { id: "not-a-campaign" }, { id: "701", effective_status: "with_issues" }], paging: { cursors: { after: "c1" }, next: "https://graph.facebook.com/v25.0/act_111/campaigns?after=c1" } } },
+    );
+    const campaigns = await createLiveMetaAdapter(TOKEN).listCampaigns("act_111");
+    expect(campaigns).toEqual([
+      { id: "700", name: "Spring", status: "ACTIVE" },
+      { id: "701", name: null, status: "WITH_ISSUES" },
+      { id: "702", name: "Idle", status: "PAUSED" },
+    ]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].url.pathname).toBe("/v25.0/act_111/campaigns");
+    expect(calls[0].method).toBe("GET");
+    expect(JSON.parse(calls[0].url.searchParams.get("effective_status")!)).toEqual(["ACTIVE", "PAUSED", "IN_PROCESS", "WITH_ISSUES"]);
+    expect(calls[0].url.searchParams.get("fields")).toBe("id,name,effective_status");
+    expect(calls[0].url.toString()).not.toContain(TOKEN);
+    await expect(createLiveMetaAdapter(TOKEN).listCampaigns("../me")).rejects.toMatchObject({ kind: "CONFIG" });
+  });
+
   it("maps Graph errors to fixed messages, never Meta's own text", () => {
     const e = (code: number, message = "secret detail from Meta", status = 400) => metaErrorFrom(status, { error: { code, message, type: "OAuthException" } });
     expect(e(190)).toMatchObject({ kind: "AUTH" });

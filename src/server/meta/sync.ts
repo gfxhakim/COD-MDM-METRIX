@@ -9,8 +9,9 @@ import { normalizeCreativeKey } from "@/lib/normalize";
 import { sha256 } from "@/server/mdm/redact";
 import { META, metaAdapterForToken, recordAdAccounts, refreshMetaStatus, safeMetaMessage, savedMetaTokens, type MetaAdapterFactory } from "./connection";
 import { relinkAttribution } from "@/server/imports/service";
+import { ensureCampaigns, recordMetaCampaigns } from "@/server/repositories/campaigns";
 import { API_SOURCE, supersedeCsvSpend } from "./supersede";
-import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaSpendRow } from "./types";
+import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaCampaign, type MetaSpendRow } from "./types";
 
 /**
  * Meta ad spend sync. For every enabled ad account a saved token can see, reads spend per
@@ -18,6 +19,7 @@ import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaSpendRow } fr
  * content ID is the ad ID. The first sync reads the last BACKFILL_DAYS days; later ones
  * re-read the days since the last sync plus REFRESH_DAYS, because Meta keeps adjusting
  * recent numbers. CSV rows for the same ad and day are then superseded, never counted twice.
+ * Each account's campaigns are then listed for their status (running or not).
  */
 export { API_SOURCE, supersedeCsvSpend };
 export const BACKFILL_DAYS = 180;
@@ -72,12 +74,12 @@ async function withRetry<T>(fn: () => Promise<T>, deps: MetaSyncDeps): Promise<T
 
 // ─────────────────────────── creatives ───────────────────────────
 
-type Env = { workspaceId: string; currency: string; rates: Record<string, number | undefined>; creatives: Map<string, string>; unnamed: Set<string>; onlyProduct: string | null };
+type Env = { workspaceId: string; currency: string; rates: Record<string, number | undefined>; creatives: Map<string, string>; unnamed: Set<string>; noCampaign: Set<string>; onlyProduct: string | null };
 
 async function loadEnv(workspaceId: string): Promise<Env> {
   const [ws, creatives, products] = await Promise.all([
     db.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { currency: true, exchangeRates: true } }),
-    db.creative.findMany({ where: { workspaceId }, select: { id: true, normalizedKey: true, name: true } }),
+    db.creative.findMany({ where: { workspaceId }, select: { id: true, normalizedKey: true, name: true, campaignId: true } }),
     db.product.findMany({ where: { workspaceId, active: true }, select: { id: true } }),
   ]);
   return {
@@ -86,13 +88,15 @@ async function loadEnv(workspaceId: string): Promise<Env> {
     rates: parseExchangeRates(ws.exchangeRates) as Record<string, number | undefined>,
     creatives: new Map(creatives.map((c) => [c.normalizedKey, c.id])),
     unnamed: new Set(creatives.filter((c) => !c.name).map((c) => c.normalizedKey)),
+    noCampaign: new Set(creatives.filter((c) => !c.campaignId).map((c) => c.normalizedKey)),
     onlyProduct: products.length === 1 ? products[0].id : null,
   };
 }
 
 /**
  * The creative for an ad: the one whose content ID is this ad ID, created if new.
- * Creatives first seen through orders (no name yet) get the ad's name and campaign.
+ * Creatives first seen through orders (no name yet) get the ad's name and campaign,
+ * and any creative without a campaign gets this ad's campaign.
  */
 async function creativeFor(env: Env, r: MetaSpendRow): Promise<string> {
   const key = normalizeCreativeKey(r.adId);
@@ -101,6 +105,10 @@ async function creativeFor(env: Env, r: MetaSpendRow): Promise<string> {
     if (env.unnamed.has(key) && r.adName) {
       await db.creative.update({ where: { id: known }, data: { name: r.adName, campaignId: r.campaignId, campaignName: r.campaignName, adsetName: r.adsetName } });
       env.unnamed.delete(key);
+      if (r.campaignId) env.noCampaign.delete(key);
+    } else if (env.noCampaign.has(key) && r.campaignId) {
+      await db.creative.update({ where: { id: known }, data: { campaignId: r.campaignId, campaignName: r.campaignName ?? undefined } });
+      env.noCampaign.delete(key);
     }
     return known;
   }
@@ -248,14 +256,22 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
     // 2. Enabled accounts a working token can see right now.
     accounts = await db.adAccount.findMany({ where: { workspaceId, platform: "META", enabled: true, lastSeenAt: { gte: started }, tokenId: { in: [...adapters.keys()] } }, orderBy: { externalId: "asc" } });
     const env = await loadEnv(workspaceId);
+    const campaignLists = new Map<string, MetaCampaign[]>();
     for (const acc of accounts) {
       const token = tokens.find((t) => t.id === acc.tokenId)!;
       if (rejected.has(token.id)) continue;
       try {
-        const w = await syncAccount(adapters.get(token.id)!, env, acc, !!opts.full, deps, counts);
+        const adapter = adapters.get(token.id)!;
+        const w = await syncAccount(adapter, env, acc, !!opts.full, deps, counts);
         from = !from || w.since < from ? w.since : from;
         until = !until || w.until > until ? w.until : until;
         await db.adAccount.update({ where: { id: acc.id }, data: { lastSyncedAt: started, lastError: null } });
+        // Campaign status only says which campaigns are on; spend is already saved, so a failure here is logged, not fatal.
+        try {
+          campaignLists.set(acc.externalId, await withRetry(() => adapter.listCampaigns(acc.externalId), deps));
+        } catch (e) {
+          console.error(`[meta] campaign status for ${acc.externalId} failed:`, safeMetaMessage(e));
+        }
       } catch (e) {
         if (!(e instanceof MetaError)) console.error(`[meta] account ${acc.externalId} failed`, e instanceof Error ? e.message : e);
         const message = safeMetaMessage(e);
@@ -267,6 +283,9 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
     if (from && until) superseded = await supersedeCsvSpend(workspaceId, { from: dayDate(addDays(from, -1)), to: dayDate(addDays(until, 1)) }, started);
     // Orders whose content ID arrived before Meta created its creative.
     await relinkAttribution({ workspaceId });
+    // Campaigns seen in spend first, so ones Meta no longer lists are marked as such.
+    await ensureCampaigns(workspaceId);
+    for (const [account, list] of campaignLists) await recordMetaCampaigns(workspaceId, account, list, started);
   } catch (e) {
     if (!(e instanceof MetaError)) console.error("[meta] sync failed", e instanceof Error ? e.message : e);
     fatal = safeMetaMessage(e);

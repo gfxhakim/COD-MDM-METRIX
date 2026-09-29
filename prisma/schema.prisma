@@ -231,6 +231,7 @@ model Workspace {
   creatives        Creative[]
   adSpend          AdSpend[]
   adAccounts       AdAccount[]
+  campaigns        Campaign[]
   metaTokens       MetaToken[]
   expenses         Expense[]
   bankTransactions BankTransaction[]
@@ -457,6 +458,8 @@ model Product {
   creatives    Creative[]
   expenses     Expense[]
   scenarios    SimulatorScenario[]
+  campaigns    Campaign[]
+  adAccounts   AdAccount[]
 
   @@unique([workspaceId, sku])
   @@index([workspaceId, active])
@@ -879,31 +882,61 @@ model SimulatorScenario {
 
 /// A Meta ad account the workspace's token can read. New accounts are synced by default.
 model AdAccount {
-  id            String     @id @default(uuid())
-  workspaceId   String
-  platform      AdPlatform @default(META)
+  id               String     @id @default(uuid())
+  workspaceId      String
+  platform         AdPlatform @default(META)
   /// "act_<id>"
-  externalId    String
-  name          String?
-  currency      String?
-  timezone      String?
+  externalId       String
+  name             String?
+  currency         String?
+  timezone         String?
   /// Meta's account_status (1 = active, 2 = disabled, 101 = closed, …).
-  accountStatus Int?
-  enabled       Boolean    @default(true)
+  accountStatus    Int?
+  enabled          Boolean    @default(true)
   /// The saved token (Business Manager) that reads this account. Null when no saved token can see it.
-  tokenId       String?
+  tokenId          String?
   /// Last time a token could see this account.
-  lastSeenAt    DateTime?
-  lastSyncedAt  DateTime?
-  lastError     String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  lastSeenAt       DateTime?
+  lastSyncedAt     DateTime?
+  lastError        String?
+  /// Product the account's campaigns count for unless a campaign is linked to its own product.
+  defaultProductId String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  token     MetaToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  workspace      Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  token          MetaToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  defaultProduct Product?   @relation(fields: [defaultProductId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, platform, externalId])
   @@index([tokenId])
+}
+
+/// An ad campaign, known from Meta's campaign list or from ad spend rows. Its product link
+/// decides which product its spend and ads count for.
+model Campaign {
+  id              String     @id @default(uuid())
+  workspaceId     String
+  platform        AdPlatform @default(META)
+  /// The platform's campaign ID.
+  externalId      String
+  name            String?
+  /// "act_<id>" of the ad account running it. Null when only known from a CSV without it.
+  adAccountId     String?
+  /// Meta's effective_status (ACTIVE, PAUSED, …), or NOT_LISTED once Meta stops listing it
+  /// (archived or deleted). Null = never read from Meta.
+  status          String?
+  statusCheckedAt DateTime?
+  /// Null = the ad account's default product, else each ad's own product.
+  productId       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, platform, externalId])
+  @@index([workspaceId, adAccountId])
 }
 
 /// A read-only Meta access token, usually one per Business Manager. A workspace can save
