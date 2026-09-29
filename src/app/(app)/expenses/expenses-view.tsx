@@ -180,20 +180,20 @@ export function ExpensesView() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_20rem]">
         <Card>
-          <div className="flex flex-wrap gap-2 border-b border-border p-3">
-            <Select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className="w-40">
+          <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+            <Select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className="col-span-2 w-full sm:w-40">
               <option value="">All categories</option>
               {EXPENSE_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </Select>
-            <Select aria-label="Allocation" value={allocation} onChange={(e) => setAllocation(e.target.value)} className="w-40">
+            <Select aria-label="Allocation" value={allocation} onChange={(e) => setAllocation(e.target.value)} className="w-full sm:w-40">
               <option value="">All allocations</option><option value="GLOBAL">Global</option><option value="PRODUCT">Product</option>
             </Select>
-            <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-40">
+            <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full sm:w-40">
               <option value="">All products</option>
               {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
-            <Input aria-label="From" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-38" />
-            <Input aria-label="To" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-38" />
+            <Input aria-label="From" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full sm:w-38" />
+            <Input aria-label="To" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full sm:w-38" />
           </div>
           {list.error ? <ErrorState message={errorMessage(list.error)} /> : list.isLoading ? <Loading /> : !list.data?.length ? (
             <EmptyState icon={<Receipt />} title="No expenses" description="Add software, call-center, packaging and other costs so profit reflects the whole business." />

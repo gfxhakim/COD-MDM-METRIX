@@ -66,7 +66,7 @@ function WorkspaceTab() {
             }}
           >
             <Field label="Business name" htmlFor="wsn"><Input id="wsn" value={name ?? ws.data.name} onChange={(e) => setName(e.target.value)} disabled={!canManage} /></Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Currency" htmlFor="wsc" hint={`Reports and totals are shown in this currency. Amounts stay stored in ${book} and are converted with your exchange rates.`}>
                 <Select id="wsc" value={shownIn} onChange={(e) => setReport(e.target.value)} disabled={!canEconomics}>
                   {reportChoices.map((c) => <option key={c} value={c}>{c === book ? `${c} (stored)` : c}</option>)}

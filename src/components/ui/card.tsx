@@ -9,8 +9,8 @@ export function CardHeader({ title, description, actions, className }: { title: 
   return (
     <div className={cn("flex flex-wrap items-start justify-between gap-3 px-5 pb-3 pt-5", className)}>
       <div className="min-w-0">
-        <h2 className="text-base font-bold tracking-tight text-fg">{title}</h2>
-        {description ? <p className="mt-0.5 text-xs text-muted">{description}</p> : null}
+        <h2 className="text-[17px] font-bold tracking-[-0.02em] text-fg">{title}</h2>
+        {description ? <p className="mt-1 text-[13px] leading-snug text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>

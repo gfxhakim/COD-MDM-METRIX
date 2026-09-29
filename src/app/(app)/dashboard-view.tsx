@@ -17,6 +17,7 @@ import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Term } from "@/components/ui/tooltip";
 import { DEF } from "@/lib/definitions";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
+import { useSlidingPill } from "@/components/ui/sliding-pill";
 import { cn, formatDateTime, formatPercent, timeAgo } from "@/lib/utils";
 
 type RevenueView = "DELIVERED" | "REMITTED";
@@ -101,15 +102,15 @@ function niceTop(max: number) {
 /** Round arrow button in the corner of a card. */
 function CornerLink({ href, label, onRed }: { href: string; label: string; onRed?: boolean }) {
   return (
-    <Link href={href} aria-label={label} title={label} className={cn("grid size-9 shrink-0 place-items-center rounded-full transition-colors", onRed ? "bg-white/20 text-white hover:bg-white/30" : "bg-surface-3 text-fg hover:bg-brand-soft hover:text-brand-strong")}>
-      <ArrowUpRight className="size-4" aria-hidden="true" />
+    <Link href={href} aria-label={label} title={label} className={cn("press group/corner grid size-9 shrink-0 place-items-center rounded-full", onRed ? "bg-white/20 text-white hover:bg-white/30" : "bg-surface-3 text-fg hover:bg-brand-soft hover:text-brand-strong")}>
+      <ArrowUpRight className="size-4 transition-transform duration-300 group-hover/corner:-translate-y-0.5 group-hover/corner:translate-x-0.5" aria-hidden="true" />
     </Link>
   );
 }
 
 function Panel({ className, children, ...rest }: React.HTMLAttributes<HTMLElement>) {
   return (
-    <section className={cn("flex min-w-0 flex-col rounded-[22px] bg-surface p-5 shadow-card", className)} {...rest}>
+    <section className={cn("lift flex min-w-0 flex-col rounded-[22px] bg-surface p-5 shadow-card", className)} {...rest}>
       {children}
     </section>
   );
@@ -132,7 +133,7 @@ function PoasBlocks({ poas, target }: { poas: number | null; target: number }) {
   return (
     <svg width="78" height="34" viewBox="0 -4 78 38" role="img" aria-label={`POAS ${poas === null ? "not known yet" : poas.toFixed(2)}, target ${target.toFixed(2)}`} className="shrink-0">
       {Array.from({ length: 10 }, (_, i) => (
-        <rect key={i} x={i * 8} y={0} width={5.5} height={30} rx={2} fill={i < filled ? "#ffffff" : "rgb(255 255 255 / 0.28)"} />
+        <rect key={i} x={i * 8} y={0} width={5.5} height={30} rx={2} fill={i < filled ? "#ffffff" : "rgb(255 255 255 / 0.28)"} className="animate-grow-y" style={{ animationDelay: `${200 + i * 45}ms` }} />
       ))}
       <rect x={Math.min(75.5, Math.max(0, tick - 2))} y={-4} width={2.5} height={38} rx={1.2} fill="#2a0006" />
     </svg>
@@ -150,7 +151,7 @@ function DayBars({ days, pick, label, unit }: { days: Day[]; pick: (d: Day) => n
       {last.map((d, i) => {
         const h = Math.max(2, (pick(d) / max) * 40);
         return (
-          <rect key={d.date} x={i * pitch} y={40 - h} width={Math.max(1, pitch * 0.6)} height={h} rx={1.2}>
+          <rect key={d.date} x={i * pitch} y={40 - h} width={Math.max(1, pitch * 0.6)} height={h} rx={1.2} className="animate-grow-y" style={{ animationDelay: `${200 + i * 18}ms` }}>
             <title>{`${dayLabel(utc(d.date))}: ${count(pick(d))} ${unit}`}</title>
           </rect>
         );
@@ -165,7 +166,7 @@ function TransitSquares({ inTransit, shipped }: { inTransit: number; shipped: nu
   return (
     <svg width="34" height="27" viewBox="0 0 34 27" role="img" aria-label={`${shipped > 0 ? formatPercent(inTransit / shipped, 0) : "0%"} of shipped parcels are still on the road`} className="shrink-0">
       {Array.from({ length: 20 }, (_, i) => (
-        <rect key={i} x={(i % 5) * 7} y={(3 - Math.floor(i / 5)) * 7} width={5.5} height={5.5} rx={1.2} fill={i < red ? "#e1182c" : "#ffd3d8"} />
+        <rect key={i} x={(i % 5) * 7} y={(3 - Math.floor(i / 5)) * 7} width={5.5} height={5.5} rx={1.2} fill={i < red ? "#e1182c" : "#ffd3d8"} className="animate-[fade-in_400ms_ease-out_backwards]" style={{ animationDelay: `${200 + i * 30}ms` }} />
       ))}
     </svg>
   );
@@ -213,11 +214,11 @@ function initials(text: string) {
 
 function HealthRow({ icon, label, value, href, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; href: string; tone?: "negative" | "warning" }) {
   return (
-    <Link href={href} className="group flex items-center gap-3 rounded-2xl px-2 py-2 text-sm hover:bg-surface-2">
+    <Link href={href} className="press group flex items-center gap-3 rounded-2xl px-2 py-2 text-sm hover:bg-surface-2">
       <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 text-muted [&_svg]:size-4", tone === "negative" && "bg-negative-soft text-negative", tone === "warning" && "bg-warning-soft text-warning")}>{icon}</span>
       <span className="min-w-0 flex-1 text-muted">{label}</span>
       <span className={cn("num text-right font-semibold", tone === "negative" && "text-negative", tone === "warning" && "text-warning")}>{value}</span>
-      <ArrowUpRight className="size-3.5 shrink-0 text-subtle group-hover:text-brand-strong" aria-hidden="true" />
+      <ArrowUpRight className="size-3.5 shrink-0 text-subtle transition-[color,translate] duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand-strong" aria-hidden="true" />
     </Link>
   );
 }
@@ -265,12 +266,12 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
                       onBlur={() => setActive(null)}
                     >
                       <span
-                        className={cn("absolute inset-x-0 bottom-0 mx-auto max-w-9 rounded-[9px] transition-opacity", hi ? "[background-image:repeating-linear-gradient(45deg,#c8102e_0_3px,#ff4a5a_3px_7px)] [filter:drop-shadow(0_6px_10px_rgb(225_24_44/0.35))]" : "bg-[#ebe8e8]", dim)}
-                        style={{ height: `${Math.max(b.placed > 0 ? 2 : 0, (b.placed / top) * 100)}%` }}
+                        className={cn("animate-grow-y absolute inset-x-0 bottom-0 mx-auto max-w-9 rounded-[9px] transition-[height,opacity] duration-500 ease-[var(--ease-out)]", hi ? "[background-image:repeating-linear-gradient(45deg,#c8102e_0_3px,#ff4a5a_3px_7px)] [filter:drop-shadow(0_6px_10px_rgb(225_24_44/0.35))]" : "bg-[#ebe8e8]", dim)}
+                        style={{ height: `${Math.max(b.placed > 0 ? 2 : 0, (b.placed / top) * 100)}%`, animationDelay: `${150 + i * 55}ms` }}
                       />
                       <span
-                        className={cn("absolute inset-x-0 bottom-0 mx-auto max-w-9 rounded-[9px] border-t-2 border-surface transition-opacity", hi ? "bg-brand-deep" : "bg-[#b9b0b2]", dim)}
-                        style={{ height: `${Math.max(b.delivered > 0 ? 2 : 0, (b.delivered / top) * 100)}%` }}
+                        className={cn("animate-grow-y absolute inset-x-0 bottom-0 mx-auto max-w-9 rounded-[9px] border-t-2 border-surface transition-[height,opacity] duration-500 ease-[var(--ease-out)]", hi ? "bg-brand-deep" : "bg-[#b9b0b2]", dim)}
+                        style={{ height: `${Math.max(b.delivered > 0 ? 2 : 0, (b.delivered / top) * 100)}%`, animationDelay: `${250 + i * 55}ms` }}
                       />
                     </button>
                   );
@@ -324,7 +325,7 @@ function ParcelStrip({ delivered, returned, inTransit, other }: { delivered: num
       <defs>
         <linearGradient id="dash-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ff4a58" /><stop offset="1" stopColor="#b80e1e" /></linearGradient>
       </defs>
-      {fills.map((f, i) => <rect key={i} x={i * 6.4} y={0} width={3.6} height={48} rx={1.8} fill={f} />)}
+      {fills.map((f, i) => <rect key={i} x={i * 6.4} y={0} width={3.6} height={48} rx={1.8} fill={f} className="animate-grow-y" style={{ animationDelay: `${150 + i * 6}ms` }} />)}
     </svg>
   );
 }
@@ -346,7 +347,7 @@ function RateCard({ title, icon, value, of, caption, rateLabel, rate, def, note 
           <Rate value={rate} className="font-bold text-fg" />
         </div>
         <div className="h-1.5 rounded-full bg-[#f1eeee]">
-          <div className="bg-brand-bar h-1.5 rounded-full shadow-[0_0_8px_rgb(255_45_66/0.6)]" style={{ width: `${Math.max(0, Math.min(1, rate ?? 0)) * 100}%` }} />
+          <div className="bg-brand-bar animate-grow-x h-1.5 rounded-full shadow-[0_0_8px_rgb(255_45_66/0.6)] transition-[width] duration-700 ease-[var(--ease-out)] [animation-delay:250ms]" style={{ width: `${Math.max(0, Math.min(1, rate ?? 0)) * 100}%` }} />
         </div>
         {note ? <span className="text-[11px] text-muted">{note}</span> : null}
       </div>
@@ -364,6 +365,7 @@ export function DashboardView() {
   const [creativeId, setCreativeId] = React.useState("");
   const [view, setView] = React.useState<RevenueView | "">("");
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const { boxRef: presetsRef, pill: presetPill } = useSlidingPill<HTMLDivElement>();
   const facets = useQuery(trpc.orders.facets.queryOptions());
   const ws = useQuery(trpc.workspace.getCurrent.queryOptions());
   const money = useMoney();
@@ -428,25 +430,26 @@ export function DashboardView() {
   }
 
   const filterField = "h-10 rounded-full border-transparent bg-surface shadow-card";
-  const neonButton = "neon relative flex h-12 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#ff4254_0%,#d8142a_60%,#a80b1c_100%)] text-[15px] font-bold text-white transition-[filter] hover:brightness-110";
+  const neonButton = "neon shine press flex h-12 items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,#ff4254_0%,#d8142a_60%,#a80b1c_100%)] text-[15px] font-bold text-white hover:brightness-110";
 
   return (
     <>
-      <section className="mb-6 flex flex-col gap-3">
+      <section className="stagger mb-6 flex flex-col gap-3">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="flex min-w-0 flex-col gap-2">
             <span className="text-base text-muted sm:text-lg">Ready to grow your profit?</span>
             <h1 className="break-words text-[30px] font-extrabold leading-tight tracking-[-0.035em] sm:text-[46px]">Welcome back, {firstName}.</h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div role="group" aria-label="Period" className="no-scrollbar flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-surface p-1 shadow-card">
+            <div ref={presetsRef} data-slide="" role="group" aria-label="Period" className="no-scrollbar relative flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-surface p-1 shadow-card">
+              {presetPill}
               {PRESETS.map((p) => (
-                <button key={p.days} type="button" aria-pressed={preset === p.days} onClick={() => pickPreset(p.days)} className={cn("h-8 whitespace-nowrap rounded-full px-3.5 text-xs font-medium transition-colors", preset === p.days ? "bg-brand glow" : "text-muted hover:bg-surface-3 hover:text-fg")}>
+                <button key={p.days} type="button" aria-pressed={preset === p.days} onClick={() => pickPreset(p.days)} className={cn("slide-item press h-8 whitespace-nowrap rounded-full px-3.5 text-xs font-medium", preset === p.days ? "bg-brand glow" : "text-muted hover:bg-surface-3 hover:text-fg")}>
                   {p.label}
                 </button>
               ))}
             </div>
-            <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("relative grid size-10 shrink-0 place-items-center rounded-full shadow-card md:hidden", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label="More filters">
+            <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("press relative grid size-10 shrink-0 place-items-center rounded-full shadow-card md:hidden", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label="More filters">
               <SlidersHorizontal className="size-4" aria-hidden="true" />
               {from || to || productId || creativeId || view ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
             </button>
@@ -475,7 +478,7 @@ export function DashboardView() {
 
       {report.error ? <ErrorState message={errorMessage(report.error)} /> : null}
 
-      <div className="grid grid-cols-1 gap-[18px] md:grid-cols-2 xl:grid-cols-4">
+      <div className={cn("stagger grid grid-cols-1 gap-[18px] transition-opacity duration-300 md:grid-cols-2 xl:grid-cols-4", report.isPlaceholderData && "opacity-60")} aria-busy={report.isFetching}>
         {!m || !r ? (
           <>
             <Skeleton className="h-40 rounded-[22px] md:col-span-2 xl:col-span-1" />
@@ -667,10 +670,10 @@ export function DashboardView() {
                 <p className="py-6 text-center text-sm text-muted">No wilaya data yet.</p>
               ) : (
                 <ul className="flex flex-col gap-3 text-[13px]">
-                  {[...r.wilayas].sort((a, b) => b.shipped - a.shipped).slice(0, 6).map((w) => (
+                  {[...r.wilayas].sort((a, b) => b.shipped - a.shipped).slice(0, 6).map((w, i) => (
                     <li key={w.wilaya} className="flex flex-col gap-1.5">
                       <div className="flex justify-between gap-2"><span className="truncate font-semibold">{w.wilaya}</span><Rate value={w.deliveryRate} className="font-bold" /></div>
-                      <div className="h-1.5 rounded-full bg-[#f1eeee]"><div className={cn("h-1.5 rounded-full", (w.returnRate ?? 0) > 0.3 ? "bg-ink" : "bg-brand-bar")} style={{ width: `${Math.max(0, Math.min(1, w.deliveryRate ?? 0)) * 100}%` }} /></div>
+                      <div className="h-1.5 rounded-full bg-[#f1eeee]"><div className={cn("animate-grow-x h-1.5 rounded-full transition-[width] duration-700 ease-[var(--ease-out)]", (w.returnRate ?? 0) > 0.3 ? "bg-ink" : "bg-brand-bar")} style={{ width: `${Math.max(0, Math.min(1, w.deliveryRate ?? 0)) * 100}%`, animationDelay: `${250 + i * 60}ms` }} /></div>
                     </li>
                   ))}
                 </ul>
@@ -681,7 +684,7 @@ export function DashboardView() {
         )}
       </div>
 
-      <div className="mt-[18px] grid grid-cols-1 gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
+      <div className={cn("stagger mt-[18px] grid grid-cols-1 gap-[18px] transition-opacity duration-300 lg:grid-cols-2 xl:grid-cols-3", report.isPlaceholderData && "opacity-60")}>
         <Card>
           <CardHeader title="Profit breakdown" description={m ? `Revenue basis: ${m.revenueView === "DELIVERED" ? "delivered revenue" : "cash remitted"}` : undefined} />
           <CardBody className="p-3 pt-0">
