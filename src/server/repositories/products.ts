@@ -34,7 +34,7 @@ async function costColumns(ctx: WorkspaceContext, cost: CostInput, tx: Prisma.Tr
 export async function listProducts(ctx: WorkspaceContext, input: { includeInactive?: boolean } = {}) {
   const products = await db.product.findMany({
     where: { workspaceId: ctx.workspaceId, ...(input.includeInactive ? {} : { active: true }) },
-    include: { costVersions: { orderBy: { effectiveFrom: "desc" } } },
+    include: { costVersions: { orderBy: { effectiveFrom: "desc" } }, _count: { select: { campaigns: true, adAccounts: true } } },
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });
   const now = new Date();
@@ -47,6 +47,9 @@ export async function listProducts(ctx: WorkspaceContext, input: { includeInacti
     createdAt: p.createdAt,
     currentCost: selectCostVersion(p.costVersions, now),
     versionCount: p.costVersions.length,
+    /** Campaigns linked to it, and ad accounts whose campaigns count for it by default. */
+    linkedCampaigns: p._count.campaigns,
+    linkedAdAccounts: p._count.adAccounts,
   }));
 }
 

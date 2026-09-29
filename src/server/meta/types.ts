@@ -29,6 +29,9 @@ export type MetaSpendRow = {
 
 export type MetaSpendPage = { rows: MetaSpendRow[]; next: string | null };
 
+/** A campaign of one ad account, with Meta's effective_status (ACTIVE, PAUSED, IN_PROCESS, WITH_ISSUES). */
+export type MetaCampaign = { id: string; name: string | null; status: string | null };
+
 export type MetaErrorKind = "AUTH" | "PERMISSION" | "RATE_LIMIT" | "SERVER" | "NETWORK" | "BAD_REQUEST" | "BAD_RESPONSE" | "CONFIG";
 
 export class MetaError extends Error {
@@ -53,6 +56,8 @@ export interface MetaAdapter {
   listAdAccounts(signal?: AbortSignal): Promise<MetaAdAccount[]>;
   /** Spend per ad per day for `since`..`until` (inclusive, account time zone), one page at a time. */
   dailyAdSpend(q: { accountId: string; since: string; until: string; cursor: string | null; currency: string }, signal?: AbortSignal): Promise<MetaSpendPage>;
+  /** Campaigns that are not archived or deleted, with their delivery status. Read-only. */
+  listCampaigns(accountId: string, signal?: AbortSignal): Promise<MetaCampaign[]>;
 }
 
 /** Encryption context for a saved Meta token: bound to its workspace and its own ID. */

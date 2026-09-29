@@ -17,13 +17,13 @@ import { loadFacts, type DateRange, type WorkspaceFacts } from "./facts";
 export const UNATTRIBUTED = "__unattributed__";
 export const UNMATCHED_SPEND = "__unmatched_spend__";
 
-type Evaluated = WorkspaceFacts["orders"][number] & { totals: Totals };
+export type Evaluated = WorkspaceFacts["orders"][number] & { totals: Totals };
 
-function evaluate(facts: WorkspaceFacts): Evaluated[] {
+export function evaluate(facts: WorkspaceFacts): Evaluated[] {
   return facts.orders.map((o) => ({ ...o, totals: orderEconomics(o, facts.resolveCost, facts.defaults) }));
 }
 
-function groupTotals<K extends string>(orders: Evaluated[], keyOf: (o: Evaluated) => K): Map<K, Totals> {
+export function groupTotals<K extends string>(orders: Evaluated[], keyOf: (o: Evaluated) => K): Map<K, Totals> {
   const buckets = new Map<K, Totals[]>();
   for (const o of orders) {
     const k = keyOf(o);
@@ -48,8 +48,11 @@ export type CreativeRow = {
   verdict: Verdict | null;
 };
 
-/** Creative-level economics including the unattributed-orders and unmatched-spend buckets. */
-function creativeRows(facts: WorkspaceFacts, evaluated: Evaluated[], view: RevenueView): { rows: CreativeRow[]; unallocatedOverhead: number } {
+/**
+ * Order totals, ad spend and allocated overhead per creative, keyed by creative ID, plus the
+ * UNATTRIBUTED (orders without a creative) and UNMATCHED_SPEND (spend without one) buckets.
+ */
+export function creativeBreakdown(facts: WorkspaceFacts, evaluated: Evaluated[]) {
   const totalsByCreative = groupTotals(evaluated, (o) => o.creativeId ?? UNATTRIBUTED);
   const spendByCreative = new Map<string, number>();
   for (const s of facts.spend) {
@@ -63,6 +66,12 @@ function creativeRows(facts: WorkspaceFacts, evaluated: Evaluated[], view: Reven
     return { key: k, productId: creativeIndex.get(k)?.productId ?? null, deliveredOrders: t?.deliveredOrders ?? 0, deliveredRevenue: t?.deliveredRevenue ?? 0 };
   });
   const { allocated, unallocated } = allocateOverhead(groups, facts.expenses, facts.defaults.overheadPolicy);
+  return { keys, totalsByCreative, spendByCreative, allocated, unallocated, creativeIndex };
+}
+
+/** Creative-level economics including the unattributed-orders and unmatched-spend buckets. */
+function creativeRows(facts: WorkspaceFacts, evaluated: Evaluated[], view: RevenueView): { rows: CreativeRow[]; unallocatedOverhead: number } {
+  const { keys, totalsByCreative, spendByCreative, allocated, unallocated, creativeIndex } = creativeBreakdown(facts, evaluated);
   const rows: CreativeRow[] = [...keys].map((k) => {
     const c = creativeIndex.get(k);
     const metrics = computeMetrics(totalsByCreative.get(k) ?? sumTotals([]), spendByCreative.get(k) ?? 0, allocated.get(k) ?? 0, view);

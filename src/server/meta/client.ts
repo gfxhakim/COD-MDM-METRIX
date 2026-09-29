@@ -1,13 +1,14 @@
 import { MoneyError, parseToMinor } from "@/lib/money";
-import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaErrorKind, type MetaSpendPage, type MetaSpendRow } from "./types";
+import { MetaError, type MetaAdAccount, type MetaAdapter, type MetaCampaign, type MetaErrorKind, type MetaSpendPage, type MetaSpendRow } from "./types";
 
 /**
  * Live Meta Marketing API client (read-only).
  *
  * - Host is fixed to graph.facebook.com; nothing user-supplied goes into the URL path.
  * - The access token travels only in the Authorization header, never in a URL.
- * - Only GET requests: ad accounts (`/me/adaccounts`), insights (`/act_<id>/insights`), and the
- *   token's granted permissions (`/me/permissions`) to explain a refused listing.
+ * - Only GET requests: ad accounts (`/me/adaccounts`), insights (`/act_<id>/insights`), campaigns
+ *   and their status (`/act_<id>/campaigns`), and the token's granted permissions
+ *   (`/me/permissions`) to explain a refused listing.
  * - Insights are read per ad per day (`level=ad`, `time_increment=1`), including ads
  *   that were paused, archived or deleted since, so their spend still counts.
  * - Spend comes back as a string in the account currency's major units ("1234.56").
@@ -23,6 +24,8 @@ const MAX_BODY_BYTES = 20 * 1024 * 1024;
 export const INSIGHTS_PAGE_SIZE = 500;
 
 const INSIGHT_FIELDS = ["date_start", "ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name", "spend", "impressions", "inline_link_clicks", "account_currency"].join(",");
+/** Campaign states listed for status; archived and deleted campaigns are left out (Meta can hold thousands). */
+export const LISTED_CAMPAIGN_STATES = ["ACTIVE", "PAUSED", "IN_PROCESS", "WITH_ISSUES"];
 /** Every ad state, so spend of ads paused, archived or deleted later is still read. */
 const ALL_AD_STATES = ["ACTIVE", "PAUSED", "DELETED", "ARCHIVED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES", "DISAPPROVED", "PENDING_REVIEW", "PREAPPROVED", "PENDING_BILLING_INFO"];
 
@@ -152,6 +155,13 @@ export function mapSpendRow(raw: unknown, fallbackCurrency: string): MetaSpendRo
   };
 }
 
+export function mapCampaign(raw: unknown): MetaCampaign | null {
+  if (!isObj(raw)) return null;
+  const id = str(raw.id);
+  if (!id || !/^\d{1,30}$/.test(id)) return null;
+  return { id, name: str(raw.name), status: str(raw.effective_status)?.toUpperCase() ?? null };
+}
+
 const after = (body: Obj): string | null => {
   const paging = isObj(body.paging) ? body.paging : {};
   const cursors = isObj(paging.cursors) ? paging.cursors : {};
@@ -207,6 +217,23 @@ export function createLiveMetaAdapter(token: string | null): MetaAdapter {
       if (!Array.isArray(body.data)) throw new MetaError("Unexpected response from Meta (insights).", "BAD_RESPONSE");
       const rows = body.data.map((r) => mapSpendRow(r, currency)).filter((r): r is MetaSpendRow => r !== null);
       return { rows, next: after(body) };
+    },
+    async listCampaigns(accountId, signal) {
+      const t = ready();
+      if (!/^act_\d{1,30}$/.test(accountId)) throw new MetaError("Unexpected ad account ID.", "CONFIG");
+      const out: MetaCampaign[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < 20; page++) {
+        const body = await metaGet(t, `/${accountId}/campaigns`, { fields: "id,name,effective_status", effective_status: JSON.stringify(LISTED_CAMPAIGN_STATES), limit: "200", ...(cursor ? { after: cursor } : {}) }, signal);
+        if (!Array.isArray(body.data)) throw new MetaError("Unexpected response from Meta (campaigns).", "BAD_RESPONSE");
+        for (const c of body.data) {
+          const m = mapCampaign(c);
+          if (m) out.push(m);
+        }
+        cursor = after(body);
+        if (!cursor) break;
+      }
+      return out;
     },
   };
 }

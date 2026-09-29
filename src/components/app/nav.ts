@@ -1,9 +1,10 @@
-import { Calculator, ClipboardList, FileUp, LayoutDashboard, Megaphone, Package, RefreshCw, Receipt, Settings } from "lucide-react";
+import { Calculator, ClipboardList, FileUp, LayoutDashboard, Megaphone, Package, RefreshCw, Receipt, Settings, Target } from "lucide-react";
 
 export const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Products", icon: Package },
   { href: "/simulator", label: "Breakeven CPA", icon: Calculator },
+  { href: "/campaigns", label: "Campaigns", icon: Target },
   { href: "/creatives", label: "Creatives", icon: Megaphone },
   { href: "/orders", label: "Orders & parcels", icon: ClipboardList },
   { href: "/expenses", label: "Expenses", icon: Receipt },
