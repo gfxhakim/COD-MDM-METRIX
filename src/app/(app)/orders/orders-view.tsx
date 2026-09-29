@@ -111,7 +111,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
               {orders.data.items.map((o) => (
                 <Tr key={o.id} className="cursor-pointer" onClick={() => setOpenId(o.id)}>
                   <Td>
-                    <button className="font-mono text-xs font-medium text-fg hover:text-positive" onClick={(e) => { e.stopPropagation(); setOpenId(o.id); }}>{o.orderNumber}</button>
+                    <button className="font-mono text-xs font-medium text-fg hover:text-brand-strong" onClick={(e) => { e.stopPropagation(); setOpenId(o.id); }}>{o.orderNumber}</button>
                   </Td>
                   <Td className="text-xs text-muted">{o.source.toLowerCase()}</Td>
                   <Td className="max-w-40 truncate">{o.product ?? "—"}{o.extraLines ? <span className="text-subtle"> +{o.extraLines}</span> : null}</Td>

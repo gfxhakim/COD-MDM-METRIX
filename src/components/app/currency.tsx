@@ -117,12 +117,12 @@ export function CurrencyPicker() {
   const title = v.view === v.book ? `Amounts are kept in ${v.book}.` : `Converted from ${v.book} at your Settings rate: 1 ${v.view} = ${v.rates[v.view]} ${v.book}. Stored amounts don't change.`;
   return (
     <label className="flex items-center gap-2 text-xs text-muted" title={title}>
-      <span className="hidden sm:inline">Show in</span>
+      <span className="hidden whitespace-nowrap 2xl:inline">Show in</span>
       <Select
         aria-label="Show amounts in"
         value={v.view}
         onChange={(e) => (e.target.value === "__add" ? router.push("/settings?tab=economics") : v.setView(e.target.value))}
-        className={v.view !== v.report ? "h-8 w-24 border-info/50 text-info" : "h-8 w-24"}
+        className={v.view !== v.report ? "h-9 w-24 rounded-full border-brand/40 bg-brand-soft font-semibold text-brand-strong" : "h-9 w-24 rounded-full shadow-card"}
       >
         {v.available.map((c) => <option key={c} value={c}>{c}</option>)}
         <option value="__add">Add a rate…</option>

@@ -1,54 +1,111 @@
 @import "tailwindcss";
 
-/* COD Flow Tracker — dark operations palette. */
+/* COD Flow Tracker — red and white. Brand red for chrome and highlights; green and red keep their meaning for gains and losses. */
 @theme inline {
-  --color-bg: #111418;
-  --color-surface: #171b21;
-  --color-surface-2: #1d222a;
-  --color-surface-3: #252b35;
-  --color-sidebar: #0a0c0f;
-  --color-border: #262c36;
-  --color-border-strong: #343c49;
-  --color-fg: #eceff3;
-  --color-muted: #8b95a5;
-  --color-subtle: #5d6676;
-  --color-positive: #b6f24a;
-  --color-positive-soft: rgb(182 242 74 / 0.12);
-  --color-mint: #5eead4;
-  --color-warning: #f5b544;
-  --color-warning-soft: rgb(245 181 68 / 0.12);
-  --color-negative: #ff6b5e;
-  --color-negative-soft: rgb(255 107 94 / 0.12);
-  --color-info: #7aa7ff;
-  --color-info-soft: rgb(122 167 255 / 0.12);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-bg: #f2f0f0;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f5f5;
+  --color-surface-3: #efebec;
+  --color-sidebar: #ffffff;
+  --color-border: #ebe5e6;
+  --color-border-strong: #d9d1d3;
+  --color-fg: #141012;
+  --color-muted: #5f5558;
+  --color-subtle: #6f6467;
+  --color-ink: #141012;
+  --color-brand: #e1182c;
+  --color-brand-strong: #c8102e;
+  --color-brand-deep: #8a0716;
+  --color-brand-soft: #ffe8ea;
+  --color-positive: #0d7a3e;
+  --color-positive-soft: rgb(13 122 62 / 0.1);
+  --color-mint: #0f766e;
+  --color-warning: #9a5b00;
+  --color-warning-soft: rgb(245 158 11 / 0.14);
+  --color-negative: #b91c1c;
+  --color-negative-soft: rgb(185 28 28 / 0.08);
+  --color-info: #1d5fc2;
+  --color-info-soft: rgb(29 95 194 / 0.1);
+  --font-sans: var(--font-alexandria), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 2px rgb(20 16 18 / 0.04), 0 10px 30px -18px rgb(20 16 18 / 0.18);
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  background: var(--color-bg);
+  background-color: var(--color-bg);
+  background-image: radial-gradient(900px 420px at 96% -8%, rgb(232 24 44 / 0.12), rgb(232 24 44 / 0) 70%);
+  background-repeat: no-repeat;
   color: var(--color-fg);
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01";
 }
 
 .num {
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Brand surfaces: red gradients, glow and shine. */
+@utility bg-brand {
+  background-image: linear-gradient(135deg, #f23446 0%, #c9111f 100%);
+  color: #ffffff;
+}
+
+@utility bg-brand-hero {
+  background-image: linear-gradient(140deg, #f23446 0%, #cc1325 50%, #8a0716 100%);
+  color: #ffffff;
+}
+
+@utility bg-brand-bar {
+  background-image: linear-gradient(90deg, #ff5a67, #c8102e);
+}
+
+@utility glow {
+  box-shadow: 0 8px 22px rgb(225 24 44 / 0.36), inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+
+@utility glow-soft {
+  box-shadow: 0 0 10px rgb(255 45 66 / 0.5);
+}
+
+@utility neon {
+  box-shadow: 0 0 0 1px rgb(255 120 130 / 0.5), 0 0 22px rgb(255 45 66 / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+
+/* A soft light streak across a red surface; it sweeps across on hover. */
+@utility shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -25%;
+    width: 45%;
+    background: linear-gradient(100deg, rgb(255 255 255 / 0), rgb(255 255 255 / 0.2), rgb(255 255 255 / 0));
+    transform: skewX(-20deg);
+    pointer-events: none;
+    z-index: -1;
+    transition: left 0.9s ease;
+  }
+  &:hover::after {
+    left: 90%;
+  }
 }
 
 *:focus-visible {
-  outline: 2px solid var(--color-positive);
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
   border-radius: 6px;
 }
 
 ::selection {
-  background: rgb(182 242 74 / 0.3);
+  background: rgb(225 24 44 / 0.18);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -66,4 +123,12 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
+}
+
+/* Horizontal pill rows scroll without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

@@ -57,7 +57,7 @@ export function AdLinksPicker({ productId, value, onChange, products }: { produc
           <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle">Whole ad accounts</legend>
           {data.accounts.map((a) => (
             <label key={a.id} className="flex items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#b6f24a]" checked={current.adAccountIds.includes(a.id)} onChange={(e) => onChange({ ...current, adAccountIds: toggle(current.adAccountIds, a.id, e.target.checked) })} />
+              <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#e1182c]" checked={current.adAccountIds.includes(a.id)} onChange={(e) => onChange({ ...current, adAccountIds: toggle(current.adAccountIds, a.id, e.target.checked) })} />
               <span className="flex min-w-0 flex-wrap items-center gap-x-2">
                 <span className="break-words">Every campaign of {accountLabel(a.externalId)}</span>
                 {elsewhere(a.defaultProductId)}
@@ -77,7 +77,7 @@ export function AdLinksPicker({ productId, value, onChange, products }: { produc
                 <span className="text-[11px] font-medium text-muted">{accountLabel(acct)}</span>
                 {[...list].sort((x, y) => Number(y.running) - Number(x.running)).map((c) => (
                   <label key={c.id} className="flex items-start gap-2 pl-1 text-sm">
-                    <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#b6f24a]" checked={current.campaignIds.includes(c.id)} onChange={(e) => onChange({ ...current, campaignIds: toggle(current.campaignIds, c.id, e.target.checked) })} />
+                    <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#e1182c]" checked={current.campaignIds.includes(c.id)} onChange={(e) => onChange({ ...current, campaignIds: toggle(current.campaignIds, c.id, e.target.checked) })} />
                     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="break-words">{c.name ?? c.externalId}</span>
                       {c.status ? <Badge tone={c.running ? "positive" : "neutral"}>{STATUS[c.status] ?? c.status}</Badge> : null}
