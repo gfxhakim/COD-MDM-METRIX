@@ -1,53 +1,41 @@
 "use client";
 
 import type { Role } from "@prisma/client";
-import { ChevronsUpDown, LogOut, Menu, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Plus, RefreshCw, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import { logoutAction, switchWorkspaceAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/app/logo";
-import { NAV } from "@/components/app/nav";
+import { isActive, NAV } from "@/components/app/nav";
 import { CurrencyPicker, CurrencyProvider } from "@/components/app/currency";
 import { DataFreshness } from "@/components/app/data-freshness";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type ShellWorkspace = { id: string; name: string; isDemo: boolean; role: Role };
+type ShellUser = { name: string; email: string };
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
-  return (
-    <nav aria-label="Main" className="flex flex-col gap-0.5">
-      {NAV.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-              active ? "bg-surface-2 text-fg" : "text-muted hover:bg-surface/80 hover:text-fg",
-            )}
-          >
-            <Icon className={cn("size-4", active ? "text-positive" : "")} aria-hidden="true" />
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+const ShellCtx = React.createContext<{ user: ShellUser; workspace: ShellWorkspace } | null>(null);
+
+/** The signed-in person and the workspace being viewed. */
+export function useShell() {
+  const v = React.useContext(ShellCtx);
+  if (!v) throw new Error("useShell must be used inside AppShell");
+  return v;
 }
 
-function WorkspaceSwitcher({ current, workspaces }: { current: ShellWorkspace; workspaces: ShellWorkspace[] }) {
-  const router = useRouter();
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+/** Open state for a small menu that closes on an outside click or Escape. */
+function usePopover() {
   const [open, setOpen] = React.useState(false);
-  const [pending, start] = React.useTransition();
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
+    if (!open) return;
     const onDoc = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
@@ -56,106 +44,257 @@ function WorkspaceSwitcher({ current, workspaces }: { current: ShellWorkspace; w
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
+const pill = "flex h-9 items-center whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors";
+const pillActive = "bg-brand glow";
+const pillIdle = "text-muted hover:bg-surface-3 hover:text-fg";
+
+/** Computer menu: a row of pills with the less used pages under "More". */
+function TopNav() {
+  const pathname = usePathname();
+  const { open: moreOpen, setOpen: setMoreOpen, ref: moreRef } = usePopover();
+  const inMore = NAV.filter((n) => n.tier > 1);
+  const moreActive = inMore.some((n) => isActive(n.href, pathname));
+  return (
+    <nav aria-label="Main" className="hidden items-center gap-0.5 rounded-full bg-surface p-1 shadow-card lg:flex">
+      {NAV.filter((n) => n.tier < 3).map(({ href, short, tier }) => {
+        const active = isActive(href, pathname);
+        return (
+          <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn(pill, active ? pillActive : pillIdle, tier === 2 && "hidden 2xl:flex")}>
+            {short}
+          </Link>
+        );
+      })}
+      <div ref={moreRef} className="relative">
+        <button type="button" aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)} className={cn(pill, "gap-1", moreActive ? "text-brand-strong" : pillIdle)}>
+          More <ChevronDown className="size-3.5" />
+        </button>
+        {moreOpen ? (
+          <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-border bg-surface p-1.5 shadow-xl">
+            {inMore.map(({ href, label, icon: Icon, tier }) => {
+              const active = isActive(href, pathname);
+              return (
+                <Link key={href} role="menuitem" href={href} onClick={() => setMoreOpen(false)} aria-current={active ? "page" : undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-2 text-sm", active ? "bg-brand-soft font-semibold text-brand-strong" : "text-fg hover:bg-surface-2", tier === 2 && "2xl:hidden")}>
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </nav>
+  );
+}
+
+/** Phone and tablet menu: every page as a pill in one row that scrolls sideways. */
+function PillRow() {
+  const pathname = usePathname();
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const row = rowRef.current;
+    const el = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (row && el) row.scrollTo({ left: el.offsetLeft - 16, behavior: "smooth" });
+  }, [pathname]);
+  return (
+    <nav aria-label="Pages" className="-mx-4 lg:hidden">
+      <div ref={rowRef} className="no-scrollbar flex gap-1 overflow-x-auto px-4">
+        <div className="flex gap-0.5 rounded-full bg-surface p-1 shadow-card">
+          {NAV.map(({ href, short }) => {
+            const active = isActive(href, pathname);
+            return (
+              <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn(pill, "h-8 px-3.5", active ? pillActive : pillIdle)}>
+                {short}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function WorkspaceList({ current, workspaces, onDone }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; onDone: () => void }) {
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  return (
+    <div role="listbox" aria-label="Workspaces" className="flex flex-col gap-0.5">
+      {workspaces.map((w) => (
+        <button
+          key={w.id}
+          type="button"
+          role="option"
+          aria-selected={w.id === current.id}
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const res = await switchWorkspaceAction(w.id);
+              if (res && "ok" in res) {
+                onDone();
+                router.refresh();
+              }
+            })
+          }
+          className={cn("flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2", w.id === current.id && "font-semibold text-brand-strong")}
+        >
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-3 text-[11px] font-bold text-fg">{initials(w.name)}</span>
+          <span className="min-w-0 flex-1 truncate">{w.name}</span>
+          {w.isDemo ? <Badge tone="warning">demo</Badge> : null}
+          {w.id === current.id ? <Check className="size-4" aria-hidden="true" /> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Avatar button: switch workspace, settings, sign out. */
+function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser }) {
+  const { open, setOpen, ref } = usePopover();
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={`Account and workspace: ${current.name}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-left text-sm hover:border-border-strong"
+        className="flex items-center gap-2.5 rounded-full bg-surface p-1 shadow-card transition-shadow hover:shadow-md min-[1400px]:pr-3"
       >
-        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-3 text-[11px] font-semibold">{current.name.slice(0, 2).toUpperCase()}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{current.name}</span>
-          <span className="block text-[11px] text-subtle">{current.role.toLowerCase()}</span>
+        <span className="bg-brand-hero grid size-9 shrink-0 place-items-center rounded-full text-sm font-extrabold">{initials(user.name)}</span>
+        <span className="hidden min-w-0 flex-col text-left leading-tight min-[1400px]:flex">
+          <span className="max-w-36 truncate text-sm font-bold">{user.name}</span>
+          <span className="max-w-36 truncate text-[11px] text-muted">{current.name}</span>
         </span>
-        <ChevronsUpDown className="size-4 text-subtle" />
+        <ChevronDown className="hidden size-4 text-muted min-[1400px]:block" aria-hidden="true" />
       </button>
       {open ? (
-        <div role="listbox" aria-label="Workspaces" className="absolute inset-x-0 top-full z-50 mt-1 rounded-lg border border-border-strong bg-surface-2 p-1 shadow-xl">
-          {workspaces.map((w) => (
-            <button
-              key={w.id}
-              role="option"
-              aria-selected={w.id === current.id}
-              disabled={pending}
-              onClick={() =>
-                start(async () => {
-                  const res = await switchWorkspaceAction(w.id);
-                  if (res && "ok" in res) {
-                    setOpen(false);
-                    router.refresh();
-                  }
-                })
-              }
-              className={cn("flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-3", w.id === current.id && "text-positive")}
-            >
-              <span className="truncate">{w.name}</span>
-              {w.isDemo ? <Badge tone="warning">demo</Badge> : null}
-            </button>
-          ))}
-          <Link href="/settings?tab=new-workspace" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-md border-t border-border px-2 py-1.5 text-sm text-muted hover:bg-surface-3 hover:text-fg">
-            <Plus className="size-4" /> New workspace
-          </Link>
+        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-border bg-surface p-2 shadow-xl">
+          <div className="px-3 py-2">
+            <p className="truncate text-sm font-bold">{user.name}</p>
+            <p className="truncate text-xs text-muted">{user.email}</p>
+          </div>
+          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-subtle">Workspaces</p>
+          <WorkspaceList current={current} workspaces={workspaces} onDone={() => setOpen(false)} />
+          <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1">
+            <Link role="menuitem" href="/settings?tab=new-workspace" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-surface-2"><Plus className="size-4" /> New workspace</Link>
+            <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-surface-2"><Settings className="size-4" /> Settings</Link>
+            <form action={logoutAction}>
+              <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-negative hover:bg-negative-soft"><LogOut className="size-4" /> Sign out</button>
+            </form>
+          </div>
         </div>
       ) : null}
     </div>
   );
 }
 
-function SidebarContent({ current, workspaces, user, onNavigate }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: { name: string; email: string }; onNavigate?: () => void }) {
+/** Phone drawer: every page, the workspaces and sign out. */
+function Drawer({ current, workspaces, user, onClose }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; onClose: () => void }) {
+  const pathname = usePathname();
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <div className="flex h-full flex-col gap-5 p-4">
-      <div className="px-1 pt-1"><Logo /></div>
-      <WorkspaceSwitcher current={current} workspaces={workspaces} />
-      <NavLinks onNavigate={onNavigate} />
-      <div className="mt-auto flex items-center gap-2 border-t border-border pt-4">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm">{user.name}</p>
-          <p className="truncate text-[11px] text-subtle">{user.email}</p>
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+      <div className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
+      <aside className="absolute inset-y-0 right-0 flex w-[min(20rem,88vw)] flex-col gap-4 overflow-y-auto rounded-l-[28px] bg-surface p-4 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <Logo />
+          <button type="button" className="grid size-10 place-items-center rounded-full bg-surface-3 text-fg" onClick={onClose} aria-label="Close navigation"><X className="size-5" /></button>
         </div>
-        <form action={logoutAction}>
-          <Button variant="ghost" size="icon" type="submit" aria-label="Sign out"><LogOut /></Button>
-        </form>
-      </div>
+        <nav aria-label="Main" className="flex flex-col gap-0.5">
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const active = isActive(href, pathname);
+            return (
+              <Link key={href} href={href} onClick={onClose} aria-current={active ? "page" : undefined} className={cn("flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium", active ? "bg-brand glow" : "text-fg hover:bg-surface-2")}>
+                <Icon className="size-4" aria-hidden="true" />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="border-t border-border pt-3">
+          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-subtle">Workspaces</p>
+          <WorkspaceList current={current} workspaces={workspaces} onDone={onClose} />
+          <Link href="/settings?tab=new-workspace" onClick={onClose} className="mt-0.5 flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-surface-2"><Plus className="size-4" /> New workspace</Link>
+        </div>
+        <div className="mt-auto flex items-center gap-2 border-t border-border pt-3">
+          <div className="min-w-0 flex-1 px-1">
+            <p className="truncate text-sm font-semibold">{user.name}</p>
+            <p className="truncate text-[11px] text-muted">{user.email}</p>
+          </div>
+          <form action={logoutAction}>
+            <button type="submit" aria-label="Sign out" className="grid size-10 place-items-center rounded-full bg-negative-soft text-negative"><LogOut className="size-4" /></button>
+          </form>
+        </div>
+      </aside>
     </div>
   );
 }
 
-export function AppShell({ current, workspaces, user, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: { name: string; email: string }; children: React.ReactNode }) {
+/** Phone shortcut bar at the bottom of the screen. */
+function BottomBar({ onMenu }: { onMenu: () => void }) {
+  const pathname = usePathname();
+  const item = (href: string, label: string, Icon: typeof LayoutDashboard) => {
+    const active = isActive(href, pathname);
+    return (
+      <Link href={href} aria-label={label} aria-current={active ? "page" : undefined} className={cn("grid size-11 place-items-center rounded-full", active ? "text-brand-strong" : "text-muted")}>
+        <Icon className="size-5" aria-hidden="true" />
+      </Link>
+    );
+  };
+  return (
+    <nav aria-label="Shortcuts" className="fixed inset-x-3 bottom-3 z-40 flex h-16 items-center justify-around rounded-full bg-surface/95 px-2 shadow-[0_12px_30px_rgb(20_16_18/0.16)] backdrop-blur md:hidden">
+      {item("/", "Dashboard", LayoutDashboard)}
+      {item("/orders", "Orders & parcels", ClipboardList)}
+      <Link href="/syncs" aria-label="MDM sync" className="bg-brand-hero neon grid size-14 -translate-y-1 place-items-center rounded-full">
+        <RefreshCw className="size-5" aria-hidden="true" />
+      </Link>
+      {item("/creatives", "Creatives", Megaphone)}
+      <button type="button" onClick={onMenu} aria-label="All pages" className="grid size-11 place-items-center rounded-full text-muted"><Menu className="size-5" aria-hidden="true" /></button>
+    </nav>
+  );
+}
+
+export function AppShell({ current, workspaces, user, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const closeMobile = React.useCallback(() => setMobileOpen(false), []);
+  const shell = React.useMemo(() => ({ user, workspace: current }), [user, current]);
   return (
     <CurrencyProvider workspaceId={current.id}>
-    <div className="flex min-h-screen">
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-md focus:bg-positive focus:px-3 focus:py-2 focus:text-black">Skip to content</a>
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-border bg-sidebar lg:block">
-        <SidebarContent current={current} workspaces={workspaces} user={user} />
-      </aside>
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-72 border-r border-border bg-sidebar">
-            <button className="absolute right-3 top-4 rounded-md p-1 text-muted hover:text-fg" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X className="size-5" /></button>
-            <SidebarContent current={current} workspaces={workspaces} user={user} onNavigate={() => setMobileOpen(false)} />
-          </aside>
+    <ShellCtx.Provider value={shell}>
+    <div className="flex min-h-screen flex-col">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">Skip to content</a>
+      {current.isDemo ? (
+        <div className="border-b border-warning/20 bg-warning-soft px-4 py-1.5 text-center text-xs font-medium text-warning" role="note">
+          DEMO DATA · Synthetic workspace. Nothing here is a real business or real MDM data.
         </div>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {current.isDemo ? (
-          <div className="border-b border-warning/30 bg-warning-soft px-4 py-1.5 text-center text-xs font-medium text-warning" role="note">
-            DEMO DATA · Synthetic workspace. Nothing here is a real business or real MDM data.
+      <header className="z-30 bg-bg/80 backdrop-blur-md md:sticky md:top-0">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
+          <Link href="/" aria-label="COD Flow dashboard" className="mr-1 shrink-0 rounded-full"><Logo /></Link>
+          <TopNav />
+          {/* One copy for every screen size: its own row on phones, beside the account button from md up. */}
+          <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ml-auto md:w-auto md:overflow-visible"><CurrencyPicker /><DataFreshness /></div>
+          <div className="ml-auto flex items-center gap-2 md:ml-0">
+            <AccountMenu current={current} workspaces={workspaces} user={user} />
+            <button type="button" className="grid size-11 place-items-center rounded-full bg-surface text-fg shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu className="size-5" /></button>
           </div>
-        ) : null}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-bg/85 px-4 backdrop-blur lg:px-8">
-          <button className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-fg lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu className="size-5" /></button>
-          <div className="lg:hidden"><Logo compact /></div>
-          <div className="ml-auto flex items-center gap-3"><CurrencyPicker /><DataFreshness /></div>
-        </header>
-        <main id="main" className="flex-1 px-4 py-6 lg:px-8">{children}</main>
+        </div>
+      </header>
+      <div className="mx-auto w-full max-w-[1600px] px-4 pt-1 lg:hidden">
+        <PillRow />
       </div>
+      {mobileOpen ? <Drawer current={current} workspaces={workspaces} user={user} onClose={closeMobile} /> : null}
+      <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-28 pt-5 md:pb-10 lg:px-8">{children}</main>
+      <BottomBar onMenu={() => setMobileOpen(true)} />
     </div>
+    </ShellCtx.Provider>
     </CurrencyProvider>
   );
 }

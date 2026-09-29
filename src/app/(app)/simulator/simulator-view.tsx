@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Save, Trash2 } from "lucide-react";
 import * as React from "react";
 import { useCurrencyView } from "@/components/app/currency";
+import { FitText } from "@/components/app/fit-money";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
@@ -61,11 +62,11 @@ function PctInput({ id, value, onChange, disabled }: { id: string; value: string
   );
 }
 
-/** Diverging cell color: coral for loss, neutral near zero, lime for profit. Values also printed as text. */
+/** Diverging cell color: red for loss, neutral near zero, green for profit. Values also printed as text. */
 function cellStyle(v: number, scale: number): React.CSSProperties {
   const t = Math.max(-1, Math.min(1, v / (scale || 1)));
-  const a = Math.abs(t) * 0.35 + 0.04;
-  return { background: t >= 0 ? `rgb(182 242 74 / ${a})` : `rgb(255 107 94 / ${a})` };
+  const a = Math.abs(t) * 0.2 + 0.03;
+  return { background: t >= 0 ? `rgb(13 122 62 / ${a})` : `rgb(225 24 44 / ${a})` };
 }
 
 export function SimulatorView({ initialProductId }: { initialProductId: string }) {
@@ -140,7 +141,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
         }
       />
       {!f ? <Skeleton className="h-96" /> : (
-        <div className="grid gap-6 xl:grid-cols-[26rem_1fr]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[26rem_minmax(0,1fr)]">
           <Card>
             <CardHeader title="Formula inputs" description={view === currency ? `Currency: ${currency}` : `Currency: ${currency}. The simulator always works in ${currency}, the currency your amounts are kept in.`} actions={
               <Select aria-label="Model" value={f.model} onChange={(e) => set("model")(e.target.value as Form["model"])} className="w-36">
@@ -161,7 +162,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                 <Field label="Return probability Q" htmlFor="Q" hint={`Observed: ${formatPercent(o?.rates.returnRate)}`}><PctInput id="Q" value={f.returnIsComplement ? String(Math.round((result?.returnProbabilityUsed ?? 0) * 1000) / 10) : f.returnProbability} onChange={set("returnProbability")} disabled={f.returnIsComplement} /></Field>
               </div>
               <label className="flex items-start gap-2 text-sm text-muted">
-                <input type="checkbox" className="mt-0.5 size-4 accent-[#b6f24a]" checked={f.returnIsComplement} onChange={(e) => set("returnIsComplement")(e.target.checked)} />
+                <input type="checkbox" className="mt-0.5 size-4 accent-[#e1182c]" checked={f.returnIsComplement} onChange={(e) => set("returnIsComplement")(e.target.checked)} />
                 <span>Assume Q = 1 − D{f.model === "DETAILED" ? " − L" : ""} <span className="text-subtle">(every shipped parcel that is not delivered{f.model === "DETAILED" ? " or lost" : ""} comes back)</span></span>
               </label>
               {f.model === "DETAILED" ? (
@@ -186,20 +187,20 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
             {error ? <Card className="border-negative/40 p-4 text-sm text-negative" role="alert">{error}</Card> : null}
             {result ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Card className="p-4">
                     <p className="text-xs text-muted"><Term label="Breakeven CPA" definition={f.model === "DEFAULT" ? "(P − C − S) × D − R × Q − K. The most you can pay per order before losing money." : "Expected contribution per placed lead before ad spend: the most you can pay per lead."} /></p>
-                    <p className={cn("num mt-1 text-2xl font-semibold", result.breakevenCpa < 0 ? "text-negative" : "text-positive")}>{fmt(result.breakevenCpa)}</p>
+                    <div className="mt-1"><FitText max={24} min={14} className={result.breakevenCpa < 0 ? "text-negative" : "text-positive"}>{fmt(result.breakevenCpa)}</FitText></div>
                     <p className="text-[11px] text-subtle">{unit}</p>
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted"><Term label="Target CPA" definition="Breakeven CPA − target profit. Pay at most this to hit your profit target." /></p>
-                    <p className="num mt-1 text-2xl font-semibold">{fmt(result.targetCpa)}</p>
+                    <div className="mt-1"><FitText max={24} min={14}>{fmt(result.targetCpa)}</FitText></div>
                     <p className="text-[11px] text-subtle">{unit}</p>
                   </Card>
                   <Card className="p-4">
                     <p className="text-xs text-muted"><Term label="Expected profit" definition="Breakeven CPA − your current CPA." /></p>
-                    <p className={cn("num mt-1 text-2xl font-semibold", (result.expectedProfitAtCurrentCpa ?? 0) < 0 ? "text-negative" : "text-fg")}>{result.expectedProfitAtCurrentCpa === null ? "—" : fmt(result.expectedProfitAtCurrentCpa)}</p>
+                    <div className="mt-1"><FitText max={24} min={14} className={(result.expectedProfitAtCurrentCpa ?? 0) < 0 ? "text-negative" : "text-fg"}>{result.expectedProfitAtCurrentCpa === null ? "—" : fmt(result.expectedProfitAtCurrentCpa)}</FitText></div>
                     <p className="text-[11px] text-subtle">{unit} at current CPA</p>
                   </Card>
                 </div>
@@ -226,7 +227,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                           const scale = Math.max(...result.sensitivity.profit.flat().map(Math.abs));
                           return (
                             <tr key={d}>
-                              <th scope="row" className={cn("num px-2 py-1 text-left font-medium", isCurrent ? "text-positive" : "text-muted")}>{formatPercent(d, 0)}{isCurrent ? " ●" : ""}</th>
+                              <th scope="row" className={cn("num px-2 py-1 text-left font-medium", isCurrent ? "text-brand-strong" : "text-muted")}>{formatPercent(d, 0)}{isCurrent ? " ●" : ""}</th>
                               {result.sensitivity.profit[i].map((v, j) => (
                                 <td key={j} className={cn("num rounded px-2 py-1.5 text-right", v < 0 ? "text-negative" : "text-fg")} style={cellStyle(v, scale)}>{fmt(v)}</td>
                               ))}
@@ -252,7 +253,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                   <ul className="divide-y divide-border rounded-lg border border-border">
                     {scenarios.data.map((s) => (
                       <li key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                        <button className="flex-1 text-left hover:text-positive" onClick={() => setForm(fromInput(s.inputs as SimulatorInput, currency))}>{s.name}</button>
+                        <button className="flex-1 text-left hover:text-brand-strong" onClick={() => setForm(fromInput(s.inputs as SimulatorInput, currency))}>{s.name}</button>
                         {s.product ? <Badge>{s.product.name}</Badge> : null}
                         <span className="text-xs text-subtle">{formatDate(s.createdAt)}</span>
                         {canSave ? <Button size="icon" variant="ghost" aria-label={`Delete ${s.name}`} onClick={() => del.mutate({ id: s.id })}><Trash2 /></Button> : null}

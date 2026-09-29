@@ -7,6 +7,7 @@ import Link from "next/link";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
 import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
+import { FitMoney } from "@/components/app/fit-money";
 import { minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
@@ -167,13 +168,13 @@ export function ExpensesView() {
         ].map((k) => (
           <Card key={k.label} className="p-4">
             <p className="text-xs text-muted">{k.def ? <Term label={k.label} definition={k.def} /> : k.label}</p>
-            {k.value === undefined ? <Skeleton className="mt-2 h-7 w-32" /> : <p className={`num mt-1 text-2xl font-semibold ${k.tone}`}>{money.fmt(k.value, currency)}</p>}
+            {k.value === undefined ? <Skeleton className="mt-2 h-7 w-32" /> : <div className="mt-2"><FitMoney value={k.value} currency={currency} max={28} className={k.tone} /></div>}
           </Card>
         ))}
         <Card className="p-4">
           <p className="text-xs text-muted"><Term label="Bank rows awaiting review" definition="Imported bank rows do not affect profit until they are categorized or explicitly excluded." /></p>
           <p className="num mt-1 text-2xl font-semibold">{s?.pendingBankRows ?? "–"}</p>
-          <Link href="/imports?tab=bank" className="text-xs text-positive hover:underline">Review bank rows</Link>
+          <Link href="/imports?tab=bank" className="text-xs font-semibold text-brand-strong hover:underline">Review bank rows</Link>
         </Card>
       </div>
 

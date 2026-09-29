@@ -11,7 +11,7 @@ export function LoginForm({ showDemoHint }: { showDemoHint: boolean }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
   return (
     <Card className="p-6">
-      <h1 className="text-lg font-semibold">Sign in</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight">Sign in</h1>
       <p className="mt-1 text-sm text-muted">See which products and creatives make delivered profit.</p>
       <form action={action} className="mt-6 flex flex-col gap-4">
         <Field label="Email" htmlFor="email"><Input id="email" name="email" type="email" autoComplete="email" required /></Field>
@@ -20,7 +20,7 @@ export function LoginForm({ showDemoHint }: { showDemoHint: boolean }) {
         <Button variant="primary" type="submit" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</Button>
       </form>
       <p className="mt-6 text-center text-sm text-muted">
-        New here? <Link className="text-positive hover:underline" href="/signup">Create a workspace</Link>
+        New here? <Link className="font-semibold text-brand-strong hover:underline" href="/signup">Create a workspace</Link>
       </p>
       {showDemoHint ? (
         <p className="mt-4 rounded-lg border border-border bg-surface-2 p-3 text-xs text-muted">

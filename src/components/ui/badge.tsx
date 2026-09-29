@@ -2,15 +2,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export const badgeVariants = cva("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-4 whitespace-nowrap border", {
+export const badgeVariants = cva("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4 whitespace-nowrap border", {
   variants: {
     tone: {
-      neutral: "bg-surface-3 text-muted border-border-strong",
-      positive: "bg-positive-soft text-positive border-positive/25",
-      warning: "bg-warning-soft text-warning border-warning/25",
-      negative: "bg-negative-soft text-negative border-negative/25",
-      info: "bg-info-soft text-info border-info/25",
-      mint: "bg-mint/10 text-mint border-mint/25",
+      neutral: "bg-surface-3 text-muted border-border",
+      positive: "bg-positive-soft text-positive border-positive/20",
+      warning: "bg-warning-soft text-warning border-warning/20",
+      negative: "bg-negative-soft text-negative border-negative/20",
+      info: "bg-info-soft text-info border-info/20",
+      mint: "bg-mint/10 text-mint border-mint/20",
+      brand: "bg-brand-soft text-brand-strong border-brand/20",
     },
   },
   defaultVariants: { tone: "neutral" },

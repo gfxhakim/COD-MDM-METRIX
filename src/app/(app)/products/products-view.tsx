@@ -119,7 +119,7 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
             <Field label="SKU" htmlFor="psku"><Input id="psku" value={sku} onChange={(e) => setSku(e.target.value)} required className="font-mono" /></Field>
           </div>
           <label className="flex items-center gap-2 text-sm text-muted">
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-[#b6f24a]" /> Active
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-[#e1182c]" /> Active
           </label>
           {!product ? <CostFields value={cost} onChange={setCost} currency={currency} rates={rates} /> : null}
           <section className="flex flex-col gap-2 border-t border-border pt-4">

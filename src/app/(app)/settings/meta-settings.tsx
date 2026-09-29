@@ -177,7 +177,7 @@ export function MetaTab() {
                     <tr className="bg-surface-2"><td colSpan={5} className={`px-3 py-2 text-xs font-medium ${g.key === "none" ? "text-warning" : "text-muted"}`}>{g.title}</td></tr>
                     {g.accounts.map((a) => (
                       <Tr key={a.id}>
-                        <Td><input type="checkbox" className="size-4 accent-[#b6f24a]" aria-label={`Sync ${a.name ?? a.externalId}`} checked={a.enabled} disabled={!canManage || toggle.isPending} onChange={(e) => toggle.mutate({ id: a.id, enabled: e.target.checked })} /></Td>
+                        <Td><input type="checkbox" className="size-4 accent-[#e1182c]" aria-label={`Sync ${a.name ?? a.externalId}`} checked={a.enabled} disabled={!canManage || toggle.isPending} onChange={(e) => toggle.mutate({ id: a.id, enabled: e.target.checked })} /></Td>
                         <Td><p className="font-medium">{a.name ?? "Unnamed account"}</p><p className="font-mono text-xs text-muted">{a.externalId}</p>{a.lastError ? <p className="mt-1 text-xs text-negative">{a.lastError}</p> : null}</Td>
                         <Td className="text-xs">{a.currency ?? "—"}{a.currency && a.currency !== cur ? <span className="block text-muted">converted to {cur}</span> : null}</Td>
                         <Td className="text-xs">{a.accountStatus != null ? ACCOUNT_STATUS[a.accountStatus] ?? `Code ${a.accountStatus}` : "—"}</Td>

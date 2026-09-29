@@ -226,7 +226,7 @@ export function SyncView() {
             <>
               <p className="mt-1 flex items-center gap-2 text-lg font-semibold">{connected ? "Connected" : c.status === "ERROR" ? "Error" : c.hasCredential ? "Not verified" : "Not connected"}{c.adapter === "mock" ? <Badge tone="info"><FlaskConical className="size-3" /> Demo fixtures</Badge> : null}</p>
               <p className="mt-1 text-xs text-muted">{c.maskedLabel ? <span className="font-mono">{c.maskedLabel}</span> : "No key saved"}{c.lastError ? <span className="block text-negative">{c.lastError}</span> : null}</p>
-              {!connected ? <Link href="/settings?tab=mdm" className="mt-2 inline-flex items-center gap-1 text-xs text-positive hover:underline"><Settings className="size-3" /> {c.hasCredential ? "Test the connection in Settings" : "Add your MDM key in Settings"}</Link> : null}
+              {!connected ? <Link href="/settings?tab=mdm" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-strong hover:underline"><Settings className="size-3" /> {c.hasCredential ? "Test the connection in Settings" : "Add your MDM key in Settings"}</Link> : null}
             </>
           )}
         </Card>
@@ -239,7 +239,7 @@ export function SyncView() {
         <Card className="p-4">
           <p className="text-xs text-muted">Unknown MDM statuses</p>
           <p className={`num mt-1 text-lg font-semibold ${unknownCount ? "text-warning" : ""}`}>{unknownCount} parcel{unknownCount === 1 ? "" : "s"}</p>
-          <p className="mt-1 text-xs text-muted">Counted as neither delivered nor returned. {unknownCount ? <Link href="/settings?tab=mappings" className="text-positive hover:underline">Map statuses</Link> : null}</p>
+          <p className="mt-1 text-xs text-muted">Counted as neither delivered nor returned. {unknownCount ? <Link href="/settings?tab=mappings" className="font-semibold text-brand-strong hover:underline">Map statuses</Link> : null}</p>
         </Card>
       </div>
 

@@ -154,7 +154,7 @@ export function CreativesView() {
               <div className="absolute right-0 top-full z-20 mt-1 grid w-56 gap-1 rounded-lg border border-border-strong bg-surface-2 p-2 shadow-xl">
                 {MATRIX_COLUMNS.filter((c) => c.key !== "creative").map((c) => (
                   <label key={c.key} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-3">
-                    <input type="checkbox" className="size-4 accent-[#b6f24a]" checked={!hidden.includes(c.key)} onChange={() => toggleColumn(c.key)} /> {c.label}
+                    <input type="checkbox" className="size-4 accent-[#e1182c]" checked={!hidden.includes(c.key)} onChange={() => toggleColumn(c.key)} /> {c.label}
                   </label>
                 ))}
               </div>

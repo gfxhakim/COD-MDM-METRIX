@@ -8,14 +8,14 @@ export const Tabs = TabsPrimitive.Root;
 export const TabsContent = TabsPrimitive.Content;
 
 export function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
-  return <TabsPrimitive.List className={cn("flex gap-1 overflow-x-auto border-b border-border", className)} {...props} />;
+  return <TabsPrimitive.List className={cn("no-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1 shadow-card", className)} {...props} />;
 }
 
 export function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "-mb-px whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm text-muted transition-colors hover:text-fg data-[state=active]:border-positive data-[state=active]:text-fg",
+        "whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-fg data-[state=active]:bg-brand data-[state=active]:glow data-[state=active]:text-white",
         className,
       )}
       {...props}
