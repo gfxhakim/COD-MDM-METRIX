@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { CONFIRMING_STATES, normalizeProviderStatus } from "@/domain/statusMapping";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone } from "@/lib/pii";
+import { customerKey, normalizeCustomer, openCustomer, sealCustomer } from "@/server/customers";
 import { reconcileOrderStatuses } from "./statuses";
 import type { MdmOrder, MdmUtm } from "./types";
 
@@ -125,8 +126,9 @@ export type OrderOutcome = { counter: "added" | "updated" | "unchanged"; orderId
 /**
  * Save one MDM order. New orders are created with source MDM Express. An order already
  * imported from the store keeps its lines and amounts, and only gains what it lacks
- * (content ID, hashed phone, wilaya) plus MDM's status. The customer's name, address and
- * IP are never stored; the phone is kept only as a salted hash.
+ * (content ID, hashed phone, wilaya) plus MDM's status and customer details. The customer's
+ * name, phones and street address are stored encrypted (src/server/customers.ts); the IP
+ * is never stored.
  */
 export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrder, history: MdmUtm | null, historyChecked: boolean): Promise<OrderOutcome> {
   const ws = env.workspaceId;
@@ -146,14 +148,20 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
   return db.$transaction(async (tx) => {
     const existing = await find(tx);
     const statusAt = o.statusAt ?? o.placedAt;
+    // MDM's own status word is kept as sent, so exports can show and filter it exactly.
+    const mdm = { mdmStatus: o.status, mdmStatusAt: o.statusAt };
     const statusData =
       status === "CANCELED"
-        ? { status, confirmedAt: null, canceledAt: existing?.status === "CANCELED" && existing.canceledAt ? existing.canceledAt : statusAt }
+        ? { status, ...mdm, confirmedAt: null, canceledAt: existing?.status === "CANCELED" && existing.canceledAt ? existing.canceledAt : statusAt }
         : status === "CONFIRMED"
-          ? { status, confirmedAt: existing?.confirmedAt ?? (normalized === "CONFIRMED" ? statusAt : o.placedAt), canceledAt: null }
-          : { status, confirmedAt: null, canceledAt: null };
-    // Only the salted hash is kept (it spots repeat customers); not even a masked copy of the number.
+          ? { status, ...mdm, confirmedAt: existing?.confirmedAt ?? (normalized === "CONFIRMED" ? statusAt : o.placedAt), canceledAt: null }
+          : { status, ...mdm, confirmedAt: null, canceledAt: null };
+    // The salted hash spots repeat customers and finds orders by phone; the number itself is only in the encrypted customer.
     const phone = { phoneHash: o.phone ? hashPhone(o.phone, ws) : null };
+    const customer = normalizeCustomer({ name: o.customer?.name, phone: o.phone, phone2: o.customer?.phone2, address: o.customer?.address });
+    // Details MDM leaves out on a later read are kept rather than cleared.
+    const details = { ...(o.deliveryType ? { deliveryType: o.deliveryType } : {}), ...(o.storeName ? { storeName: o.storeName } : {}) };
+    const sealed = (e: ExistingOrder | null) => (!customer || (e && customerKey(openCustomer(e.customerEncrypted, ws)) === customerKey(customer)) ? {} : sealCustomer(customer, ws));
     const utmData = { utmSource: utm.source, utmMedium: utm.medium, utmCampaign: utm.campaign, utmContent: utm.content };
     const checked = historyChecked ? { mdmHistoryCheckedAt: new Date() } : {};
     const attribution = { rawUtmContent: utm.content, normalizedCreativeKey: key, creativeId, method: creativeId ? ("UTM_CONTENT" as const) : ("NONE" as const), confidence: creativeId ? 1 : 0 };
@@ -174,6 +182,8 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
           placedAt: o.placedAt,
           ...statusData,
           ...phone,
+          ...sealed(null),
+          ...details,
           wilaya: o.wilaya,
           city: o.city,
           codAmount: o.total ?? lines.reduce((a, l) => a + l.quantity * l.unitPrice, 0),
@@ -194,6 +204,8 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
       const data: Prisma.OrderUncheckedUpdateInput = {
         mdmOrderId: o.trackingId,
         ...statusData,
+        ...sealed(existing),
+        ...details,
         ...(fromMdm
           ? { placedAt: o.placedAt, ...phone, wilaya: o.wilaya, city: o.city, codAmount: o.total ?? existing.codAmount, currency: o.currency }
           : {

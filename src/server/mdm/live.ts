@@ -131,9 +131,8 @@ const utmValue = (v: unknown): string | null => {
 };
 
 /**
- * Read an MDM order. Only what the reports need is kept: the customer's name,
- * street address, GPS and IP are never copied, and the phone is only carried
- * so the sync can hash and mask it.
+ * Read an MDM order: what the reports need, plus the customer's name, phones and street
+ * address, which the sync stores encrypted. The IP and GPS position are never copied.
  */
 export function mapMdmOrder(raw: unknown): MdmOrder {
   const o = obj(raw, "order");
@@ -145,6 +144,8 @@ export function mapMdmOrder(raw: unknown): MdmOrder {
   const utm = isObj(o.utm) ? o.utm : {};
   const client = isObj(o.client) ? o.client : {};
   const dest = isObj(o.destination) ? o.destination : {};
+  const store = isObj(o.store) ? o.store : {};
+  const name = [str(client.firstName), str(client.lastName)].filter(Boolean).join(" ") || null;
   const products = (Array.isArray(o.products) ? o.products : []).filter(isObj).map((p) => {
     const q = typeof p.quantity === "number" && Number.isFinite(p.quantity) ? Math.round(p.quantity) : 1;
     return { ref: str(p.trackingId), variantOf: str(p.variantOf), name: str(p.name), quantity: Math.min(Math.max(q, 1), 1000), unitPrice: money(p.price, currency) };
@@ -159,6 +160,9 @@ export function mapMdmOrder(raw: unknown): MdmOrder {
     total: money(o.totalPrice, currency),
     currency,
     phone: str(client.phone),
+    customer: { name, phone2: str(client.phone2), address: str(dest.streetAddress) },
+    deliveryType: typeof o.isStopDesk === "boolean" ? (o.isStopDesk ? "STOP_DESK" : "HOME") : null,
+    storeName: str(store.name),
     wilaya: str(dest.stateName) ?? str(dest.stateCode),
     city: str(dest.cityName),
     utm: { source: utmValue(utm.source), medium: utmValue(utm.medium), campaign: utmValue(utm.campaign), content: utmValue(utm.content) },

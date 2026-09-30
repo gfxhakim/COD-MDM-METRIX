@@ -15,6 +15,7 @@ import { ErrorState, Loading } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, humanize } from "@/lib/utils";
+import { providerStatusLabel } from "@/domain/statusMapping";
 import { useInvalidateOrders } from "./orders-view";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -39,6 +40,13 @@ function KV({ items }: { items: [string, React.ReactNode][] }) {
   );
 }
 
+/** A phone number that calls when tapped; masked numbers stay plain text. */
+function PhoneLink({ value }: { value: string | null | undefined }) {
+  if (!value) return <>—</>;
+  const dial = value.replace(/[^\d+]/g, "");
+  return value.includes("•") || dial.length < 6 ? <>{value}</> : <a href={`tel:${dial}`} className="font-medium text-brand-strong hover:underline">{value}</a>;
+}
+
 export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: () => void }) {
   const money = useMoney();
   const trpc = useTRPC();
@@ -60,15 +68,28 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
       <DialogContent side="right" title={o ? `Order ${o.orderNumber}` : "Order"} description={o ? `${humanize(o.source)} · placed ${formatDateTime(o.placedAt)}` : undefined}>
         {q.error ? <ErrorState message={errorMessage(q.error)} /> : !o ? <Loading /> : (
           <>
+            <Section title="Customer">
+              <KV
+                items={[
+                  ["Name", o.customer?.name ?? "—"],
+                  ["Phone", <PhoneLink key="p" value={o.customer?.phone ?? o.phoneMasked} />],
+                  ["Second phone", <PhoneLink key="p2" value={o.customer?.phone2} />],
+                  ["Delivery", o.deliveryType === "STOP_DESK" ? "Stop desk" : o.deliveryType === "HOME" ? "Home delivery" : "—"],
+                  ["Address", o.customer?.address ?? "—"],
+                  ["Commune · wilaya", [o.city, o.wilaya].filter(Boolean).join(" · ") || "—"],
+                ]}
+              />
+            </Section>
+
             <Section title="Order">
               <KV
                 items={[
                   ["Status", <OrderStatusBadge key="s" status={o.status} />],
+                  ["MDM status", o.mdmStatus ? `${providerStatusLabel(o.mdmStatus)}${o.mdmStatusAt ? ` · ${formatDateTime(o.mdmStatusAt)}` : ""}` : "—"],
                   ["COD amount", <span key="c" className="num">{money.fmt(o.codAmount, o.currency)}</span>],
+                  ["MDM order ID", <span key="m" className="font-mono text-xs">{o.mdmOrderId ?? "—"}</span>],
                   ["External order ID", <span key="e" className="font-mono text-xs">{o.externalOrderId}</span>],
-                  ["Normalized reference", <span key="n" className="font-mono text-xs">{o.normalizedOrderNumber}</span>],
-                  ["Wilaya / city", [o.wilaya, o.city].filter(Boolean).join(" · ") || "—"],
-                  ["Customer phone", o.phoneMasked ?? "—"],
+                  ["Store", o.storeName ?? "—"],
                   ["Confirmed at", formatDateTime(o.confirmedAt)],
                   ["Tags", o.tags ?? "—"],
                 ]}

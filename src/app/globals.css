@@ -463,3 +463,33 @@ tbody > tr.row-in:nth-child(n + 9) {
     box-shadow: none;
   }
 }
+
+/* The printable orders page (Orders > Export > Print or PDF). Only the sheet prints, in landscape. */
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+  html.printing body > :not(.print-sheet) {
+    display: none !important;
+  }
+  .print-sheet {
+    position: static !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    animation: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-table {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .print-table thead {
+    display: table-header-group;
+  }
+  .print-table tr {
+    break-inside: avoid;
+  }
+}

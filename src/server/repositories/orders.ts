@@ -4,6 +4,7 @@ import { audit } from "@/server/audit";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone, maskPhone } from "@/lib/pii";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
+import { customerFor } from "@/server/customers";
 
 export type OrderListInput = {
   search?: string;
@@ -19,15 +20,19 @@ export type OrderListInput = {
   pageSize: number;
 };
 
-function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "page" | "pageSize">): Prisma.OrderWhereInput {
+export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "page" | "pageSize">): Prisma.OrderWhereInput {
   const and: Prisma.OrderWhereInput[] = [{ workspaceId: ctx.workspaceId }];
   if (input.search) {
     const q = input.search.trim();
+    // A phone number is found through its salted hash; the number itself is stored encrypted.
+    const phoneHash = /^[+\d][\d\s().-]{5,}$/.test(q) ? hashPhone(q, ctx.workspaceId) : null;
     and.push({
       OR: [
         { orderNumber: { contains: q } },
         { normalizedOrderNumber: { contains: normalizeReference(q) || q } },
+        { mdmOrderId: { contains: q } },
         { parcels: { some: { trackingId: { contains: q } } } },
+        ...(phoneHash ? [{ phoneHash }] : []),
       ],
     });
   }
@@ -65,6 +70,8 @@ export async function listOrders(ctx: WorkspaceContext, input: OrderListInput) {
       return {
         id: o.id,
         orderNumber: o.orderNumber,
+        mdmOrderId: o.mdmOrderId,
+        customer: customerFor(ctx.role, o.customerEncrypted, ctx.workspaceId),
         source: o.source,
         product: o.lines[0]?.product?.name ?? o.lines[0]?.productName ?? null,
         extraLines: Math.max(0, o.lines.length - 1),
@@ -110,9 +117,10 @@ export async function getOrderDetails(ctx: WorkspaceContext, id: string) {
     },
   });
   if (!order) throw new NotFoundError("Order not found");
-  const { phoneHash: _omit, ...safe } = order;
-  void _omit;
-  return safe;
+  const { phoneHash: _hash, customerEncrypted, customerKeyVersion: _version, ...safe } = order;
+  void _hash;
+  void _version;
+  return { ...safe, customer: customerFor(ctx.role, customerEncrypted, ctx.workspaceId) };
 }
 
 async function resolveCreative(ctx: WorkspaceContext, utmContent: string | null | undefined, tx: Prisma.TransactionClient) {
@@ -209,6 +217,8 @@ export async function updateOrderStatus(ctx: WorkspaceContext, input: { id: stri
       confirmedAt: input.status === "CONFIRMED" ? order.confirmedAt ?? new Date() : input.status === "PENDING" ? null : order.confirmedAt,
       canceledAt: input.status === "CANCELED" ? new Date() : null,
     },
+    // Never the phone hash or the encrypted customer.
+    select: { id: true, orderNumber: true, status: true, confirmedAt: true, canceledAt: true },
   });
   await audit(ctx, "order.status_changed", { type: "Order", id: order.id }, { from: order.status, to: input.status });
   return updated;

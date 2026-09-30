@@ -149,20 +149,26 @@ describe("encryption key rotation", () => {
     const { decryptSecret } = await import("@/server/crypto/secrets");
     const t = await makeTenant("Rotate");
     await t.caller.integrations.saveMdmCredential({ credential: SECRET });
+    const { openCustomer, sealCustomer } = await import("@/server/customers");
+    const customer = { name: "Test Customer", phone: "0550000001", phone2: null, address: null };
+    const order = await db.order.create({ data: { workspaceId: t.ws.id, source: "MDM_EXPRESS", externalOrderId: "ROT-1", orderNumber: "ROT-1", normalizedOrderNumber: "ROT1", placedAt: new Date(), codAmount: 0, ...sealCustomer(customer, t.ws.id) } });
     const oldKey = process.env.APP_ENCRYPTION_KEY!;
     const newKey = Buffer.alloc(32, 9).toString("base64");
     vi.stubEnv("APP_ENCRYPTION_KEY", newKey);
     vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", oldKey);
     vi.stubEnv("APP_ENCRYPTION_KEY_VERSION", "2");
     const r = await reencryptCredentials(2, { workspaceId: t.ws.id });
-    expect(r).toEqual({ reencrypted: 1, alreadyCurrent: 0, failed: [] });
+    expect(r).toEqual({ reencrypted: 2, alreadyCurrent: 0, failed: [], customersFailed: 0 });
     const row = await db.integrationConnection.findFirstOrThrow({ where: { workspaceId: t.ws.id } });
     expect(row.keyVersion).toBe(2);
     expect(row.encryptedCredential).toMatch(/^v1:2:/);
     // The old key is no longer needed.
     vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", "");
     expect(decryptSecret(row.encryptedCredential!, { workspaceId: t.ws.id, purpose: "integration:MDM_EXPRESS" })).toBe(SECRET);
+    const rotated = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(rotated).toMatchObject({ customerKeyVersion: 2, customerEncrypted: expect.stringMatching(/^v1:2:/) });
+    expect(openCustomer(rotated.customerEncrypted, t.ws.id)).toEqual(customer);
     // Running it again changes nothing.
-    expect(await reencryptCredentials(2, { workspaceId: t.ws.id })).toEqual({ reencrypted: 0, alreadyCurrent: 1, failed: [] });
+    expect(await reencryptCredentials(2, { workspaceId: t.ws.id })).toEqual({ reencrypted: 0, alreadyCurrent: 2, failed: [], customersFailed: 0 });
   });
 });

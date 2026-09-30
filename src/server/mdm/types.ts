@@ -33,8 +33,9 @@ export type MdmUtm = { source: string | null; medium: string | null; campaign: s
 export type MdmOrderProduct = { ref: string | null; variantOf: string | null; name: string | null; quantity: number; unitPrice: number | null };
 
 /**
- * An order as MDM's call center sees it. The customer's name, address and IP are never
- * read into this shape; the phone is carried only so it can be hashed and masked.
+ * An order as MDM's call center sees it. The customer's name, phones and street address are
+ * carried so the sync can store them encrypted (src/server/customers.ts); the IP and GPS
+ * position are never read.
  */
 export type MdmOrder = {
   trackingId: string;
@@ -49,6 +50,11 @@ export type MdmOrder = {
   total: number | null;
   currency: string;
   phone: string | null;
+  /** Name, second phone and street address; null when MDM has none. */
+  customer?: { name: string | null; phone2: string | null; address: string | null } | null;
+  /** "HOME" or "STOP_DESK" when MDM says. */
+  deliveryType?: "HOME" | "STOP_DESK" | null;
+  storeName?: string | null;
   wilaya: string | null;
   city: string | null;
   utm: MdmUtm;

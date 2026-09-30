@@ -2,7 +2,7 @@
 
 import type { NormalizedStatus, OrderStatus } from "@prisma/client";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ClipboardList, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, Download, Plus, Search } from "lucide-react";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
 import { PageHeader } from "@/components/app/page-header";
@@ -15,6 +15,7 @@ import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDate, timeAgo } from "@/lib/utils";
+import { ExportPanel, PrintSheet, type PrintData } from "./export-panel";
 import { OrderDrawer } from "./order-drawer";
 import { NewOrderDialog } from "./new-order-dialog";
 
@@ -34,6 +35,10 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
   const [creativeId, setCreativeId] = React.useState("");
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
+  const [printing, setPrinting] = React.useState<{ data: PrintData; title: string } | null>(null);
+  const closePrint = React.useCallback(() => setPrinting(null), []);
+  const workspace = useQuery(trpc.workspace.getCurrent.queryOptions());
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300);
@@ -67,14 +72,19 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
       <PageHeader
         title="Orders & parcels"
         description="Orders from your store and the carrier parcels linked to them. One order can have several parcels."
-        actions={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> Manual order</Button> : null}
+        actions={
+          <>
+            <Button onClick={() => setExporting(true)} disabled={!workspace.data}><Download /> Export</Button>
+            {canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> Manual order</Button> : null}
+          </>
+        }
       />
       <Card>
         <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
           <div className="relative col-span-2 min-w-52 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
             <label htmlFor="order-search" className="sr-only">Search orders</label>
-            <Input id="order-search" placeholder="Order number or tracking ID" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full sm:w-36">
             <option value="">All orders</option>
@@ -103,7 +113,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           <Table className="sticky-first">
             <THead>
               <tr>
-                <Th>Order</Th><Th>Source</Th><Th>Product</Th><Th>Creative</Th><Th>Placed</Th><Th>Wilaya</Th><Th>Order status</Th>
+                <Th>Order</Th><Th>Customer</Th><Th>Source</Th><Th>Product</Th><Th>Creative</Th><Th>Placed</Th><Th>Wilaya</Th><Th>Order status</Th>
                 <Th className="text-right">Parcels</Th><Th>Tracking</Th><Th>Provider status</Th><Th>Normalized</Th><Th className="text-right">COD</Th><Th>Last MDM update</Th>
               </tr>
             </THead>
@@ -112,6 +122,14 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                 <Tr key={o.id} className="cursor-pointer" onClick={() => setOpenId(o.id)}>
                   <Td>
                     <button className="font-mono text-xs font-medium text-fg hover:text-brand-strong" onClick={(e) => { e.stopPropagation(); setOpenId(o.id); }}>{o.orderNumber}</button>
+                  </Td>
+                  <Td className="max-w-48">
+                    {o.customer?.name || o.customer?.phone ? (
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate text-[13px] font-medium">{o.customer.name ?? "—"}</span>
+                        <span className="num truncate text-[11px] text-muted">{o.customer.phone ?? ""}</span>
+                      </span>
+                    ) : <span className="text-subtle">—</span>}
                   </Td>
                   <Td className="text-xs text-muted">{o.source.toLowerCase()}</Td>
                   <Td className="max-w-40 truncate">{o.product ?? "—"}{o.extraLines ? <span className="text-subtle"> +{o.extraLines}</span> : null}</Td>
@@ -141,6 +159,28 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
       </Card>
       {openId ? <OrderDrawer orderId={openId} onClose={() => setOpenId(null)} /> : null}
       {creating ? <NewOrderDialog onClose={() => setCreating(false)} /> : null}
+      {exporting && workspace.data ? (
+        <ExportPanel
+          workspaceId={workspace.data.id}
+          timezone={workspace.data.timezone}
+          filters={{
+            search: debounced || undefined,
+            status: status || undefined,
+            parcelStatus: parcelStatus || undefined,
+            wilaya: wilaya || undefined,
+            productId: productId || undefined,
+            productName: facets.data?.products.find((p) => p.id === productId)?.name,
+            creativeId: creativeId || undefined,
+            creativeName: facets.data?.creatives.find((c) => c.id === creativeId)?.externalCreativeId,
+          }}
+          onClose={() => setExporting(false)}
+          onPrint={(data, title) => {
+            setExporting(false);
+            setPrinting({ data, title });
+          }}
+        />
+      ) : null}
+      {printing ? <PrintSheet data={printing.data} title={printing.title} onClose={closePrint} /> : null}
     </>
   );
 }

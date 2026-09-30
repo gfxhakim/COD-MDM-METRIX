@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -7,6 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 8–10 use the seeded DEMO workspace, whose MDM connection runs on the
  * labelled mock adapter (no request ever reaches MDM).
  * Flow 11 signs in as a different business and probes both workspaces.
+ * Flows 12–14 came later: Meta ads, campaigns, and exporting orders.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -291,6 +293,36 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.locator("tr", { hasText: "MDM-DEMO-ORPHAN-1" })).toHaveCount(0);
     await page.getByRole("tab", { name: "Resolved" }).click();
     await expect(page.locator("tr", { hasText: "MDM-DEMO-ORPHAN-1" })).toBeVisible();
+  });
+
+  test("14. export orders to Excel, CSV and a printable page", async ({ page }) => {
+    await page.goto("/orders");
+    const open = () => page.getByRole("button", { name: "Export", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Export orders" });
+    await open();
+    await dialog.getByRole("button", { name: "All dates" }).click();
+    await dialog.getByRole("button", { name: "All orders" }).click();
+    await expect(dialog.getByText(/^[1-9][\d,]* orders · \d+ columns$/)).toBeVisible();
+    const [xlsx] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download Excel" }).click()]);
+    expect(xlsx.suggestedFilename()).toMatch(/^orders_all-dates_\d{4}-\d{2}-\d{2}\.xlsx$/);
+    expect(fs.readFileSync((await xlsx.path())!).subarray(0, 2).toString()).toBe("PK");
+
+    // The panel remembers the last choices.
+    await open();
+    await expect(dialog.getByRole("button", { name: "All orders" })).toHaveAttribute("aria-pressed", "true");
+    await dialog.getByRole("button", { name: /^CSV/ }).click();
+    await dialog.getByRole("button", { name: "Semicolon (French Excel)" }).click();
+    const [csv] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download CSV" }).click()]);
+    expect(fs.readFileSync((await csv.path())!, "utf8").startsWith("\uFEFFOrder number;")).toBe(true);
+
+    await open();
+    await dialog.getByRole("button", { name: /^Print or PDF/ }).click();
+    await dialog.getByRole("button", { name: "Open printable page" }).click();
+    const sheet = page.getByRole("dialog", { name: "Printable orders" });
+    await expect(sheet.getByRole("button", { name: "Print or save as PDF" })).toBeVisible();
+    await expect(sheet.getByRole("heading", { name: "Totals by status" })).toBeVisible();
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await expect(sheet).toHaveCount(0);
   });
 });
 
