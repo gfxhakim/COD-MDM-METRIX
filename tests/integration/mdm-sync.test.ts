@@ -108,6 +108,8 @@ describe("credentials", () => {
     expect(p).toMatchObject({ orderId: order.id, matchMethod: "MDM_ORDER", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "Oran" });
     const stored = JSON.stringify([await db.parcel.findMany({ where: { workspaceId: live.ws.id } }), await db.order.findMany({ where: { workspaceId: live.ws.id } }), await db.rawExternalRecord.findMany({ where: { workspaceId: live.ws.id } })]);
     expect(stored).not.toMatch(/Amina|Placeholder|0551111111|551111111|Courier|203\.0\.113\.7|12 rue X/);
+    // The customer is kept only encrypted, and shown to the owner through the app.
+    expect((await live.caller.orders.getDetails({ id: order.id })).customer).toEqual({ name: "Amina Placeholder", phone: "0551111111", phone2: null, address: "12 rue X" });
   });
 
   it("demo workspaces use the labelled mock adapter and can reject bad keys", async () => {

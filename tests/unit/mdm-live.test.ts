@@ -232,7 +232,7 @@ function order(i: number, over: Record<string, unknown> = {}) {
 }
 
 describe("MDM orders", () => {
-  it("keeps what reports need and drops the customer's name, address and IP", () => {
+  it("keeps the order, its customer and delivery details, and drops the IP and GPS", () => {
     const o = mapMdmOrder(order(1));
     expect(o).toEqual({
       trackingId: "ORD-TEST1",
@@ -248,9 +248,14 @@ describe("MDM orders", () => {
       city: "Bab Ezzouar",
       utm: { source: "facebook", medium: "paid", campaign: "Spring", content: "120000000000009" },
       products: [{ ref: "PRD-1", variantOf: null, name: "Lamp", quantity: 2, unitPrice: 200000 }],
+      customer: { name: "Amina Placeholder", phone2: "0662222222", address: "12 rue X" },
+      deliveryType: null,
+      storeName: "My store",
     });
-    // The phone is only carried to be hashed; nothing else about the customer is read.
-    expect(JSON.stringify(o)).not.toMatch(/Amina|Placeholder|203\.0\.113\.7|12 rue X|36\.7|0662222222/);
+    // The sync encrypts the customer before storing it; the IP, GPS and seller are never read.
+    expect(JSON.stringify(o)).not.toMatch(/203\.0\.113\.7|36\.7|Seller/);
+    expect(mapMdmOrder(order(3, { isStopDesk: true }))).toMatchObject({ deliveryType: "STOP_DESK" });
+    expect(mapMdmOrder(order(4, { isStopDesk: false, client: { firstName: "Amina", lastName: null, phone: "0551111111" } }))).toMatchObject({ deliveryType: "HOME", customer: { name: "Amina", phone2: null } });
   });
 
   it("treats unfilled ad macros as no content ID and tolerates missing fields", () => {

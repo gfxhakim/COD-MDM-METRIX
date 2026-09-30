@@ -14,6 +14,8 @@ export const PERMISSIONS = {
   "settings.economics": ["OWNER", "ADMIN"],
   "audit.read": ["OWNER", "ADMIN"],
   "data.read": ["OWNER", "ADMIN", "ANALYST", "OPERATOR"],
+  /** Customer names, phones and addresses in full (others see them masked, and exports leave them out). */
+  "customers.read": ["OWNER", "ADMIN", "OPERATOR"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -1,7 +1,23 @@
 import { z } from "zod";
+import { EXPORT_COLUMN_KEYS, EXPORT_FORMATS } from "@/domain/orderExport";
+import { exportOrders, orderExportPreview } from "@/server/exports/orders";
 import * as repo from "@/server/repositories/orders";
 import { permitted, router, workspaceProcedure } from "@/server/trpc/init";
 import { id, minor, normalizedStatusEnum, optionalText, orderSourceEnum, orderStatusEnum } from "@/server/trpc/schemas";
+
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+
+const exportFilters = z.object({
+  from: day.optional(),
+  to: day.optional(),
+  dateField: z.enum(["placed", "status"]).default("placed"),
+  scope: z.enum(["mdm", "all"]).default("mdm"),
+  search: z.string().trim().max(80).optional(),
+  wilaya: z.string().max(80).optional(),
+  productId: id.optional(),
+  creativeId: id.optional(),
+  source: orderSourceEnum.optional(),
+});
 
 export const ordersRouter = router({
   list: workspaceProcedure
@@ -22,6 +38,20 @@ export const ordersRouter = router({
     )
     .query(({ ctx, input }) => repo.listOrders(ctx.ws, input)),
   facets: workspaceProcedure.query(({ ctx }) => repo.listOrderFacets(ctx.ws)),
+  exportPreview: workspaceProcedure.input(exportFilters).query(({ ctx, input }) => orderExportPreview(ctx.ws, input)),
+  export: workspaceProcedure
+    .input(
+      exportFilters.extend({
+        statuses: z.array(z.string().trim().min(1).max(64)).max(200).optional(),
+        format: z.enum(EXPORT_FORMATS),
+        csvDelimiter: z.enum([",", ";"]).default(","),
+        layout: z.enum(["orders", "lines"]).default("orders"),
+        columns: z.array(z.enum(EXPORT_COLUMN_KEYS)).min(1).max(EXPORT_COLUMN_KEYS.length),
+        currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+        totals: z.boolean().default(true),
+      }),
+    )
+    .mutation(({ ctx, input }) => exportOrders(ctx.ws, input)),
   getDetails: workspaceProcedure.input(z.object({ id })).query(({ ctx, input }) => repo.getOrderDetails(ctx.ws, input.id)),
   create: permitted("orders.write")
     .input(

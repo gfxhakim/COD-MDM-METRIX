@@ -261,7 +261,7 @@ describe("Several Business Managers", () => {
     vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", oldKey);
     vi.stubEnv("APP_ENCRYPTION_KEY_VERSION", "2");
     try {
-      expect(await reencryptCredentials(2, { workspaceId: t.ws.id })).toEqual({ reencrypted: 1, alreadyCurrent: 0, failed: [] });
+      expect(await reencryptCredentials(2, { workspaceId: t.ws.id })).toEqual({ reencrypted: 1, alreadyCurrent: 0, failed: [], customersFailed: 0 });
       const row = await db.metaToken.findUniqueOrThrow({ where: { id } });
       expect(row).toMatchObject({ keyVersion: 2, encryptedCredential: expect.stringMatching(/^v1:2:/) });
       vi.stubEnv("APP_ENCRYPTION_KEY_PREVIOUS", "");

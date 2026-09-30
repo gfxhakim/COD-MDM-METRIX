@@ -527,6 +527,17 @@ model Order {
   importBatchId         String?
   /// MDM's order tracking ID (e.g. ORD-XXXXXX) once the sync has read this order from MDM.
   mdmOrderId            String?
+  /// MDM's own status for this order as the sync last read it (e.g. "not-answered"), and when MDM set it.
+  mdmStatus             String?
+  mdmStatusAt           DateTime?
+  /// The customer's name, phones and street address from MDM, AES-256-GCM encrypted with
+  /// APP_ENCRYPTION_KEY (src/server/customers.ts). Only readable server-side, by roles allowed to see customers.
+  customerEncrypted     String?
+  customerKeyVersion    Int?
+  /// "HOME" or "STOP_DESK", as MDM gave it.
+  deliveryType          String?
+  /// The store MDM received the order from.
+  storeName             String?
   /// When the sync last looked for a content ID in this order's MDM status history.
   mdmHistoryCheckedAt   DateTime?
   createdAt             DateTime    @default(now())

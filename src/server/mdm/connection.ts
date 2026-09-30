@@ -38,6 +38,8 @@ export function publicConnection(c: IntegrationConnection | null, ws: Pick<Works
     credentialUpdatedAt: c?.credentialUpdatedAt ?? null,
     adapter: kind,
     liveAdapterReady: LIVE_SCHEMA !== null,
+    /** Synced before, but the next sync re-reads every MDM order once (e.g. to fill in customer details). */
+    ordersFullReadPending: !!c?.lastSuccessfulSyncAt && !c.ordersSyncedAt,
   };
 }
 

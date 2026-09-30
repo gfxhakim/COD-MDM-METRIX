@@ -70,6 +70,12 @@ export function statusKey(providerStatus: string): string {
     .toLowerCase().replace(/[\s\-]+/g, "_");
 }
 
+/** "outForDelivery" or "not-answered" → "Out for delivery" or "Not answered". */
+export function providerStatusLabel(providerStatus: string): string {
+  const words = statusKey(providerStatus).replace(/_/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function normalizeProviderStatus(
   providerStatus: string | null | undefined,
   overrides: Record<string, NormalizedStatus> = {},

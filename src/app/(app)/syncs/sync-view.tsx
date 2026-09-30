@@ -250,10 +250,23 @@ export function SyncView() {
               <Loader2 className="size-5 animate-spin text-info" />
               <div>
                 <p className="font-medium">{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : `Syncing ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
+                {c?.ordersFullReadPending ? <p className="text-xs text-muted">Reading every MDM order once to fill in customer names, phones, addresses and order details, so this sync takes longer than usual.</p> : null}
                 <p className="text-xs text-muted">Orders: {running.ordersAddedCount} new · {running.ordersUpdatedCount} updated · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
               </div>
             </div>
             {canRun ? <Button size="sm" variant="ghost" disabled={running.cancelRequested} onClick={() => cancel.mutate({ id: running.id })}><Ban /> {running.cancelRequested ? "Canceling…" : "Cancel"}</Button> : null}
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {c?.ordersFullReadPending && !running ? (
+        <Card className="mb-6 border-info/30">
+          <CardBody className="flex items-start gap-3 text-sm">
+            <RefreshCw className="mt-0.5 size-5 shrink-0 text-info" />
+            <div>
+              <p className="font-medium">The next sync fills in customer details</p>
+              <p className="text-xs text-muted">It reads every MDM order once to add customer names, phones, addresses and order details to the orders already synced, so it takes longer than usual. Syncs after that are quick again.</p>
+            </div>
           </CardBody>
         </Card>
       ) : null}

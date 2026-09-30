@@ -16,3 +16,24 @@ export function toCsv<T>(rows: readonly T[], columns: readonly { header: string;
   for (const r of rows) lines.push(columns.map((c) => sanitizeCell(c.value(r))).join(","));
   return lines.join("\r\n") + "\r\n";
 }
+
+/**
+ * Rows for Excel in either locale: "," with a decimal point (English Excel) or ";" with a decimal
+ * comma (French Excel). Starts with a byte-order mark so accents and Arabic open correctly.
+ * Text cells get the same formula-injection guard as `sanitizeCell`.
+ */
+export function toDelimited(rows: readonly (readonly (string | number | null | undefined)[])[], delimiter: "," | ";"): string {
+  const needsQuotes = delimiter === "," ? /[",\n\r]/ : /[";\n\r]/;
+  const cell = (v: string | number | null | undefined): string => {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "number") {
+      if (!Number.isFinite(v)) return "";
+      const s = String(v);
+      return delimiter === ";" ? s.replace(".", ",") : s;
+    }
+    let s = v;
+    if (/^[=+\-@\t\r]/.test(s) && !/^-\d+([.,]\d+)?$/.test(s)) s = `'${s}`;
+    return needsQuotes.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return "﻿" + rows.map((r) => r.map(cell).join(delimiter)).join("\r\n") + "\r\n";
+}

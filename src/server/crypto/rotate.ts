@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { resealCustomer } from "@/server/customers";
 import { metaTokenPurpose } from "@/server/meta/types";
 import { decryptSecret, encryptSecret, SecretError } from "./secrets";
 
@@ -6,8 +7,9 @@ import { decryptSecret, encryptSecret, SecretError } from "./secrets";
  * Re-encrypts every stored integration credential with the current APP_ENCRYPTION_KEY.
  * Run after rotating the key (new key in APP_ENCRYPTION_KEY, old one in
  * APP_ENCRYPTION_KEY_PREVIOUS, version bumped). Plaintext only exists in memory here.
- * Covers MDM credentials and every saved Meta token. Credentials that can't be decrypted
- * are left untouched and reported by connection or token ID.
+ * Covers MDM credentials, every saved Meta token and the customer details kept on orders.
+ * Credentials that can't be decrypted are left untouched and reported by connection or token
+ * ID; customer details that can't be decrypted are counted in `customersFailed`.
  */
 export async function reencryptCredentials(currentVersion: number, only?: { workspaceId: string }) {
   const rows = await db.integrationConnection.findMany({ where: { encryptedCredential: { not: null }, ...(only ? { workspaceId: only.workspaceId } : {}) }, select: { id: true, workspaceId: true, provider: true, encryptedCredential: true, keyVersion: true } });
@@ -44,5 +46,32 @@ export async function reencryptCredentials(currentVersion: number, only?: { work
       result.failed.push(t.id);
     }
   }
-  return result;
+  // Customer details on orders, in batches so a large workspace never loads every order at once.
+  let customersFailed = 0;
+  let after: string | undefined;
+  for (;;) {
+    const batch = await db.order.findMany({
+      where: { customerEncrypted: { not: null }, ...(only ? { workspaceId: only.workspaceId } : {}), ...(after ? { id: { gt: after } } : {}) },
+      select: { id: true, workspaceId: true, customerEncrypted: true, customerKeyVersion: true },
+      orderBy: { id: "asc" },
+      take: 500,
+    });
+    if (!batch.length) break;
+    after = batch[batch.length - 1].id;
+    for (const o of batch) {
+      if (o.customerKeyVersion === currentVersion) {
+        result.alreadyCurrent++;
+        continue;
+      }
+      try {
+        const { envelope, keyVersion } = resealCustomer(o.customerEncrypted!, o.workspaceId);
+        await db.order.update({ where: { id: o.id }, data: { customerEncrypted: envelope, customerKeyVersion: keyVersion } });
+        result.reencrypted++;
+      } catch (e) {
+        if (!(e instanceof SecretError)) throw e;
+        customersFailed++;
+      }
+    }
+  }
+  return { ...result, customersFailed };
 }
