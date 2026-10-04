@@ -346,8 +346,15 @@ model SyncJob {
   ordersNote             String?
   error                  String?
   heartbeatAt            DateTime?
-  /// FULL re-reads everything; INCREMENTAL asks for parcels updated since the last success (minus an overlap).
+  /// FULL re-reads everything; INCREMENTAL asks for parcels updated since the last success (minus an overlap);
+  /// CUSTOM reads only the orders matching `filters` (and their parcels), and never moves the incremental starting point.
   mode                   String              @default("INCREMENTAL")
+  /// A custom sync's choices (src/domain/customSync.ts), with the day range resolved to instants. Null for other syncs.
+  filters                Json?
+  /// Orders a custom sync found matching its filters (new, updated or already up to date).
+  ordersMatchedCount     Int                 @default(0)
+  /// Orders a custom sync read from MDM but left alone because they didn't match its filters.
+  skippedCount           Int                 @default(0)
   /// "mock" (labelled demo fixtures) or "live".
   adapter                String              @default("mock")
   updatedSince           DateTime?

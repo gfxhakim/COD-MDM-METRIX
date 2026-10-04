@@ -1,7 +1,7 @@
 import { normalizeProviderStatus } from "@/domain/statusMapping";
 import { MoneyError, parseToMinor } from "@/lib/money";
 import { assertPublicHost, validateMdmBaseUrl } from "./url";
-import { MdmError, type MdmAdapter, type MdmOrder, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
+import { MdmError, type MdmAdapter, type MdmDateRange, type MdmOrder, type MdmOrderFilters, type MdmOrderQuery, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmParcelQuery, type MdmUtm } from "./types";
 
 /**
  * Live MDM Express adapter.
@@ -24,6 +24,11 @@ import { MdmError, type MdmAdapter, type MdmOrder, type MdmOrdersPage, type MdmP
  *   UTM tags; when it is empty, `GET /api/v2/orders/{trackingId}/status-history` is read once
  *   and the landing URL the store wrote into the first note is parsed for utm_content.
  *
+ * - Custom syncs narrow both searches with the user's choices: orders by `createdAt`,
+ *   `statusDate`, `isStopDesk`, `trackingId` or `externalId`; parcels by `orderId`. The
+ *   sync checks every record itself too, so a filter MDM refuses or ignores only makes
+ *   the read longer (see src/server/mdm/custom.ts).
+ *
  * Search endpoints use POST but only read. The client refuses any POST whose
  * path does not end in `/search`, so it cannot create or change anything at MDM.
  *
@@ -44,13 +49,13 @@ export type LiveSchema = {
   /** Optional read of the provider's status vocabulary, used to flag unmapped statuses after a test. */
   statusesRequest?(): MdmRequest;
   parseStatuses?(body: unknown): string[];
-  parcelsRequest(q: { cursor: string | null; updatedSince: Date | null; pageSize: number }): MdmRequest;
+  parcelsRequest(q: MdmParcelQuery): MdmRequest;
   parseParcelsPage(body: unknown): { items: LiveParcel[]; nextCursor: string | null; total?: number | null };
   /** Optional batched lookup of the merchant's order reference for a page of parcels. */
   ordersRequest?(mdmOrderIds: string[]): MdmRequest;
   parseOrderRefs?(body: unknown): Map<string, string>;
-  /** Optional: orders created or changed since a date, one page at a time. */
-  orderSearchRequest?(q: { cursor: string | null; updatedSince: Date | null; pageSize: number }): MdmRequest;
+  /** Optional: orders created or changed since a date (and matching the search filters), one page at a time. */
+  orderSearchRequest?(q: MdmOrderQuery): MdmRequest;
   parseOrdersPage?(body: unknown): MdmOrdersPage;
   /** Optional: one order's status history, where stores leave the landing URL. */
   orderHistoryRequest?(trackingId: string): MdmRequest;
@@ -199,6 +204,20 @@ export function utmFromText(text: string): MdmUtm | null {
 
 const SEARCH_PAGE_MAX = 100;
 
+const dateRange = (r: MdmDateRange) => ({ ...(r.start ? { start: r.start.toISOString() } : {}), ...(r.end ? { end: r.end.toISOString() } : {}) });
+
+/** GetOrdersRequestFilters: date ranges are DateRangeDto `{ start, end }`; lists match any of their values. */
+function orderFilters(f: MdmOrderFilters | undefined) {
+  if (!f) return {};
+  return {
+    ...(f.createdAt ? { createdAt: dateRange(f.createdAt) } : {}),
+    ...(f.statusDate ? { statusDate: dateRange(f.statusDate) } : {}),
+    ...(f.isStopDesk !== undefined ? { isStopDesk: f.isStopDesk } : {}),
+    ...(f.trackingIds?.length ? { trackingId: f.trackingIds } : {}),
+    ...(f.externalIds?.length ? { externalId: f.externalIds } : {}),
+  };
+}
+
 export const LIVE_SCHEMA: LiveSchema | null = {
   applyAuth(headers, credential) {
     headers.set("x-api-key", credential);
@@ -216,14 +235,14 @@ export const LIVE_SCHEMA: LiveSchema | null = {
     const b = obj(body, "metadata");
     return Array.isArray(b.statuses) ? b.statuses.filter((s): s is string => typeof s === "string") : [];
   },
-  parcelsRequest({ cursor, updatedSince, pageSize }) {
+  parcelsRequest({ cursor, updatedSince, pageSize, mdmOrderIds }) {
     const page = cursor ? Number(cursor) : 1;
     return {
       method: "POST",
       path: "/api/v2/shipping/parcels/search",
       body: {
-        filters: updatedSince ? { updatedAt: { start: updatedSince.toISOString() } } : {},
-        sortBy: { updatedAt: "ASC" },
+        filters: { ...(updatedSince ? { updatedAt: { start: updatedSince.toISOString() } } : {}), ...(mdmOrderIds?.length ? { orderId: mdmOrderIds } : {}) },
+        sortBy: mdmOrderIds?.length ? { createdAt: "ASC" } : { updatedAt: "ASC" },
         pagination: { page: Number.isInteger(page) && page > 0 ? page : 1, perPage: Math.min(pageSize, SEARCH_PAGE_MAX) },
       },
     };
@@ -255,14 +274,16 @@ export const LIVE_SCHEMA: LiveSchema | null = {
     }
     return out;
   },
-  orderSearchRequest({ cursor, updatedSince, pageSize }) {
+  orderSearchRequest({ cursor, updatedSince, pageSize, filters }) {
     const page = cursor ? Number(cursor) : 1;
+    const picked = orderFilters(filters);
     return {
       method: "POST",
       path: "/api/v2/orders/search",
       body: {
-        filters: updatedSince ? { updatedAt: { start: updatedSince.toISOString() } } : {},
-        sortBy: { updatedAt: "ASC" },
+        filters: { ...(updatedSince ? { updatedAt: { start: updatedSince.toISOString() } } : {}), ...picked },
+        // A filtered read pages by creation date, which never changes while it runs.
+        sortBy: !updatedSince && Object.keys(picked).length ? { createdAt: "ASC" } : { updatedAt: "ASC" },
         pagination: { page: Number.isInteger(page) && page > 0 ? page : 1, perPage: Math.min(pageSize, SEARCH_PAGE_MAX) },
       },
     };

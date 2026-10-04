@@ -80,13 +80,30 @@ export class MdmError extends Error {
   }
 }
 
+export type MdmDateRange = { start?: Date; end?: Date };
+
+/** Search filters MDM's order search accepts (GetOrdersRequestFilters). A custom sync uses them to read fewer orders. */
+export type MdmOrderFilters = {
+  createdAt?: MdmDateRange;
+  statusDate?: MdmDateRange;
+  isStopDesk?: boolean;
+  trackingIds?: string[];
+  externalIds?: string[];
+};
+
+export type MdmOrderQuery = { cursor: string | null; updatedSince: Date | null; pageSize: number; filters?: MdmOrderFilters };
+/** `mdmOrderIds`: only the parcels of these MDM orders (GetParcelsRequestFilters.orderId). */
+export type MdmParcelQuery = { cursor: string | null; updatedSince: Date | null; pageSize: number; mdmOrderIds?: string[] };
+
+export const hasOrderFilters = (f?: MdmOrderFilters) => !!f && Object.values(f).some((v) => v !== undefined && (!Array.isArray(v) || v.length > 0));
+
 export interface MdmAdapter {
   readonly kind: "mock" | "live";
   /** Read-only call proving the credential works. Must not create or change anything at MDM. */
   testConnection(signal?: AbortSignal): Promise<{ accountLabel: string | null; providerStatuses?: string[] }>;
-  listParcels(query: { cursor: string | null; updatedSince: Date | null; pageSize: number }, signal?: AbortSignal): Promise<MdmPage>;
-  /** Orders created or changed since `updatedSince`. Adapters without order access leave it out. */
-  listOrders?(query: { cursor: string | null; updatedSince: Date | null; pageSize: number }, signal?: AbortSignal): Promise<MdmOrdersPage>;
+  listParcels(query: MdmParcelQuery, signal?: AbortSignal): Promise<MdmPage>;
+  /** Orders created or changed since `updatedSince`, narrowed by `filters`. Adapters without order access leave it out. */
+  listOrders?(query: MdmOrderQuery, signal?: AbortSignal): Promise<MdmOrdersPage>;
   /** UTM tags found in an order's status history (the landing URL the store sent), or null. */
   orderUtm?(trackingId: string, signal?: AbortSignal): Promise<MdmUtm | null>;
 }

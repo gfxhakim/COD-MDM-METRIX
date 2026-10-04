@@ -9,6 +9,7 @@ import * as React from "react";
 import { useCurrencyView } from "@/components/app/currency";
 import { useCan } from "@/components/app/use-can";
 import { Button } from "@/components/ui/button";
+import { Check3, Chip, Section } from "@/components/ui/choice";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
@@ -23,6 +24,7 @@ import {
   type ExportFormat,
   type StatusGroupKey,
 } from "@/domain/orderExport";
+import { addDays, RANGES, rangeDays, shortDay, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import type { AppRouter } from "@/server/trpc/root";
@@ -41,18 +43,6 @@ export type PageFilters = {
   creativeName?: string;
   source?: OrderSource;
 };
-
-const RANGES = [
-  { key: "today", label: "Today" },
-  { key: "yesterday", label: "Yesterday" },
-  { key: "7d", label: "Last 7 days" },
-  { key: "30d", label: "Last 30 days" },
-  { key: "month", label: "This month" },
-  { key: "lastMonth", label: "Last month" },
-  { key: "all", label: "All dates" },
-  { key: "custom", label: "Custom" },
-] as const;
-type RangeKey = (typeof RANGES)[number]["key"];
 
 const FORMATS: { key: ExportFormat; label: string; hint: string; icon: React.ReactNode }[] = [
   { key: "xlsx", label: "Excel", hint: ".xlsx, ready to sort and filter", icon: <FileSpreadsheet /> },
@@ -116,35 +106,6 @@ function save(workspaceId: string, v: Saved) {
   }
 }
 
-/** Today in the workspace's time zone, as YYYY-MM-DD. */
-function todayIn(timeZone: string) {
-  try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  } catch {
-    return new Date().toISOString().slice(0, 10);
-  }
-}
-
-const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-
-function rangeDays(key: RangeKey, today: string, custom: { from: string; to: string }): { from?: string; to?: string } {
-  switch (key) {
-    case "today": return { from: today, to: today };
-    case "yesterday": return { from: addDays(today, -1), to: addDays(today, -1) };
-    case "7d": return { from: addDays(today, -6), to: today };
-    case "30d": return { from: addDays(today, -29), to: today };
-    case "month": return { from: `${today.slice(0, 8)}01`, to: today };
-    case "lastMonth": {
-      const end = addDays(`${today.slice(0, 8)}01`, -1);
-      return { from: `${end.slice(0, 8)}01`, to: end };
-    }
-    case "all": return {};
-    case "custom": return { from: custom.from || undefined, to: custom.to || undefined };
-  }
-}
-
-const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-
 /** Status groups the page's own status filters point at. */
 function groupsFromPage(f: PageFilters): StatusGroupKey[] | null {
   if (f.parcelStatus) return [statusGroupOf(f.parcelStatus)];
@@ -165,43 +126,6 @@ function download(filename: string, mime: string, base64: string) {
   a.remove();
   // Some browsers read the file after click() returns.
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
-
-function Chip({ active, children, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { active: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      className={cn(
-        "press h-8 whitespace-nowrap rounded-full border px-3.5 text-xs font-medium transition-colors",
-        active ? "border-transparent bg-brand glow" : "border-border-strong bg-surface text-muted hover:bg-surface-2 hover:text-fg",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-bold tracking-tight">{title}</h3>
-        {aside}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Check3({ state, label, disabled, onChange }: { state: "on" | "off" | "some"; label: string; disabled?: boolean; onChange: () => void }) {
-  const ref = React.useRef<HTMLInputElement>(null);
-  React.useEffect(() => {
-    if (ref.current) ref.current.indeterminate = state === "some";
-  }, [state]);
-  return <input ref={ref} type="checkbox" aria-label={label} className="size-4 shrink-0 accent-[#e1182c] disabled:opacity-40" checked={state === "on"} disabled={disabled} onChange={onChange} />;
 }
 
 export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }: { workspaceId: string; timezone: string; filters: PageFilters; onClose: () => void; onPrint: (data: PrintData, title: string) => void }) {
