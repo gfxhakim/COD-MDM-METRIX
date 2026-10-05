@@ -1,4 +1,4 @@
-import { MdmError, type MdmAdapter, type MdmOrder, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
+import { hasOrderFilters, MdmError, type MdmAdapter, type MdmDateRange, type MdmOrder, type MdmOrderFilters, type MdmOrderQuery, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmParcelQuery, type MdmUtm } from "./types";
 
 /**
  * Mocked MDM adapter serving clearly labelled DEMO fixtures. It never makes a
@@ -20,13 +20,33 @@ export type MockOptions = {
   /** Errors thrown by order reads: per order page, and per history lookup. */
   orderFailures?: Record<number, MdmError[]>;
   historyFailures?: Record<string, MdmError[]>;
+  /** How MDM treats search filters (tests only): applies them (default), ignores them, or rejects the request. */
+  filters?: { orders?: FilterSupport; parcels?: FilterSupport };
 };
 
-export function createMockAdapter(opts: MockOptions): MdmAdapter & { historyCalls: string[] } {
+type FilterSupport = "apply" | "ignore" | "reject";
+type MockAdapter = MdmAdapter & { historyCalls: string[]; orderQueries: MdmOrderQuery[]; parcelQueries: MdmParcelQuery[] };
+
+const within = (at: Date | null, r: MdmDateRange | undefined) => !r || (!!at && (!r.start || at >= r.start) && (!r.end || at <= r.end));
+
+function mockOrderFilter(o: MdmOrder, f: MdmOrderFilters) {
+  return (
+    within(o.placedAt, f.createdAt) &&
+    within(o.statusAt, f.statusDate) &&
+    (f.isStopDesk === undefined || (o.deliveryType === "STOP_DESK") === f.isStopDesk) &&
+    (!f.trackingIds?.length || f.trackingIds.includes(o.trackingId)) &&
+    (!f.externalIds?.length || (!!o.externalId && f.externalIds.includes(o.externalId)))
+  );
+}
+
+export function createMockAdapter(opts: MockOptions): MockAdapter {
   const failures = new Map(Object.entries(opts.failures ?? {}).map(([k, v]) => [Number(k), [...v]]));
   const orderFailures = new Map(Object.entries(opts.orderFailures ?? {}).map(([k, v]) => [Number(k), [...v]]));
   const historyFailures = new Map(Object.entries(opts.historyFailures ?? {}).map(([k, v]) => [k, [...v]]));
   const historyCalls: string[] = [];
+  const orderQueries: MdmOrderQuery[] = [];
+  const parcelQueries: MdmParcelQuery[] = [];
+  const support = { orders: opts.filters?.orders ?? "apply", parcels: opts.filters?.parcels ?? "apply" };
   const wait = (signal?: AbortSignal) => (opts.latencyMs ? new Promise<void>((r, j) => { const t = setTimeout(r, opts.latencyMs); signal?.addEventListener("abort", () => { clearTimeout(t); j(new MdmError("Aborted", "NETWORK")); }); }) : Promise.resolve());
   const checkAuth = () => {
     if (!opts.credential) throw new MdmError("No credential saved for this workspace", "CONFIG");
@@ -39,25 +59,34 @@ export function createMockAdapter(opts: MockOptions): MdmAdapter & { historyCall
       checkAuth();
       return { accountLabel: "Demo fixtures (not a real MDM account)" };
     },
-    async listParcels({ cursor, updatedSince, pageSize }, signal): Promise<MdmPage> {
+    async listParcels(q, signal): Promise<MdmPage> {
+      const { cursor, updatedSince, pageSize, mdmOrderIds } = q;
       await wait(signal);
       checkAuth();
+      parcelQueries.push(q);
       const page = cursor ? Number(cursor) : 0;
       const queued = failures.get(page);
       if (queued?.length) throw queued.shift()!;
-      const all = updatedSince ? opts.fixtures.filter((p) => !p.statusAt || p.statusAt >= updatedSince) : opts.fixtures;
+      const ids = mdmOrderIds?.length ? mdmOrderIds : null;
+      if (ids && support.parcels === "reject") throw new MdmError("MDM returned 400", "BAD_RESPONSE");
+      const all = opts.fixtures.filter((p) => (!updatedSince || !p.statusAt || p.statusAt >= updatedSince) && (!ids || support.parcels === "ignore" || (!!p.mdmOrderId && ids.includes(p.mdmOrderId))));
       const items = all.slice(page * pageSize, (page + 1) * pageSize);
       const more = (page + 1) * pageSize < all.length;
       return { items, nextCursor: more ? String(page + 1) : null, total: all.length };
     },
     ...(opts.orders
       ? {
-          async listOrders({ cursor, pageSize }: { cursor: string | null; pageSize: number }): Promise<MdmOrdersPage> {
+          async listOrders(q: MdmOrderQuery): Promise<MdmOrdersPage> {
+            const { cursor, pageSize, filters } = q;
             checkAuth();
+            orderQueries.push(q);
             const page = cursor ? Number(cursor) : 0;
             const queued = orderFailures.get(page);
             if (queued?.length) throw queued.shift()!;
-            const all = opts.orders!;
+            const filtered = hasOrderFilters(filters);
+            if (filtered && support.orders === "reject") throw new MdmError("MDM returned 400", "BAD_RESPONSE");
+            // Mock orders carry no update time, so `updatedSince` reads them all.
+            const all = filtered && support.orders === "apply" ? opts.orders!.filter((o) => mockOrderFilter(o, filters!)) : opts.orders!;
             const items = all.slice(page * pageSize, (page + 1) * pageSize);
             return { items, nextCursor: (page + 1) * pageSize < all.length ? String(page + 1) : null, total: all.length };
           },
@@ -71,5 +100,7 @@ export function createMockAdapter(opts: MockOptions): MdmAdapter & { historyCall
         }
       : {}),
     historyCalls,
-  } as MdmAdapter & { historyCalls: string[] };
+    orderQueries,
+    parcelQueries,
+  } as MockAdapter;
 }

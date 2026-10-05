@@ -16,6 +16,7 @@ import { parseExchangeRates } from "@/domain/settings";
 import { normalizeProviderStatus, providerStatusLabel, statusKey } from "@/domain/statusMapping";
 import { toDelimited } from "@/lib/csv";
 import { convertWithRates, currencyExponent } from "@/lib/money";
+import { dayRange, zoneOffsetMs } from "@/lib/zonedDays";
 import { audit } from "@/server/audit";
 import { canSeeCustomers, openCustomer, type Customer } from "@/server/customers";
 import { db } from "@/server/db";
@@ -52,30 +53,6 @@ export type ExportOptions = ExportFilters & {
   currency?: string;
   totals: boolean;
 };
-
-// ---------------------------------------------------------------- time zone
-
-function zoneOffsetMs(at: Date, timeZone: string): number {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(at);
-    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
-    return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - Math.floor(at.getTime() / 1000) * 1000;
-  } catch {
-    return 0;
-  }
-}
-
-/** The instant a local day starts in `timeZone`. */
-export function dayStart(day: string, timeZone: string): Date {
-  const guess = Date.parse(`${day}T00:00:00Z`);
-  return new Date(guess - zoneOffsetMs(new Date(guess), timeZone));
-}
-
-const nextDay = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-
-function dayRange(f: ExportFilters, timeZone: string) {
-  return { from: f.from ? dayStart(f.from, timeZone) : undefined, to: f.to ? new Date(dayStart(nextDay(f.to), timeZone).getTime() - 1) : undefined };
-}
 
 // ---------------------------------------------------------------- status
 
@@ -119,7 +96,7 @@ export function resolveStatus(o: StatusOrder, overrides: Record<string, Normaliz
 
 // ---------------------------------------------------------------- loading
 
-const statusSelect = {
+export const orderStatusSelect = {
   status: true,
   placedAt: true,
   confirmedAt: true,
@@ -152,7 +129,7 @@ export async function orderExportPreview(ctx: WorkspaceContext, f: ExportFilters
   const count = await db.order.count({ where });
   if (count > EXPORT_ORDER_LIMIT) return { total: count, lines: null, tooMany: true, groups: [] };
   const [orders, overrides] = await Promise.all([
-    db.order.findMany({ where, select: { ...statusSelect, _count: { select: { lines: true } } } }),
+    db.order.findMany({ where, select: { ...orderStatusSelect, _count: { select: { lines: true } } } }),
     workspaceStatusOverrides(ctx.workspaceId),
   ]);
   const byGroup = new Map<StatusGroupKey, Map<string, { label: string; count: number; lines: number }>>();
@@ -182,7 +159,7 @@ export async function orderExportPreview(ctx: WorkspaceContext, f: ExportFilters
 }
 
 const exportSelect = {
-  ...statusSelect,
+  ...orderStatusSelect,
   id: true,
   orderNumber: true,
   mdmOrderId: true,

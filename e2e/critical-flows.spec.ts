@@ -324,6 +324,24 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await sheet.getByRole("button", { name: "Close" }).click();
     await expect(sheet).toHaveCount(0);
   });
+
+  test("15. pick a custom sync by dates, statuses and more", async ({ page }) => {
+    await page.goto("/syncs");
+    await page.getByRole("button", { name: "Custom sync" }).click();
+    const dialog = page.getByRole("dialog", { name: "Custom sync" });
+    await dialog.getByRole("button", { name: "Last month" }).click();
+    await dialog.getByRole("button", { name: "Latest status change" }).click();
+    await dialog.getByRole("button", { name: "None" }).click();
+    await dialog.getByRole("checkbox", { name: "Delivered" }).check();
+    await dialog.getByRole("button", { name: "Stop desk" }).click();
+    await dialog.getByPlaceholder(/MDM order IDs/).fill("MO-1, #1002");
+    await expect(dialog.getByText(/^Status changed .* to .* · Delivered · Stop desk · 2 orders$/)).toBeVisible();
+    // The demo's simulated MDM has no orders to pick, so it says so instead of starting.
+    await expect(dialog.getByText("Not available in the demo workspace.")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Start custom sync" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  });
 });
 
 test("11. another business cannot reach either workspace's data", async ({ page }) => {

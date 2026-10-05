@@ -22,7 +22,8 @@ export async function scheduleDueSyncs(now = new Date()) {
   });
   const queued: string[] = [];
   for (const c of conns) {
-    const last = await db.syncJob.findFirst({ where: { workspaceId: c.workspaceId, provider: PROVIDER }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    // A custom sync read only part of MDM, so it doesn't count as the workspace's last sync.
+    const last = await db.syncJob.findFirst({ where: { workspaceId: c.workspaceId, provider: PROVIDER, mode: { not: "CUSTOM" } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     if (last && now.getTime() - last.createdAt.getTime() < c.syncIntervalMinutes * 60_000) continue;
     try {
       const res = await enqueueSync(c.workspaceId, { mode: "INCREMENTAL", trigger: "SCHEDULED", requestedById: null });

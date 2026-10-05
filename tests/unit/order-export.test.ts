@@ -2,8 +2,9 @@ import { inflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { COLUMN_PRESETS, EXPORT_COLUMNS, exportFileName, isCustomerColumn, statusGroupOf } from "@/domain/orderExport";
 import { toDelimited } from "@/lib/csv";
+import { dayStart } from "@/lib/zonedDays";
 import { maskCustomer, normalizeCustomer, openCustomer, sealCustomer } from "@/server/customers";
-import { dayStart, resolveStatus } from "@/server/exports/orders";
+import { resolveStatus } from "@/server/exports/orders";
 import { buildXlsx, columnLetter, crc32, excelSerial } from "@/server/exports/xlsx";
 
 const local0 = (buf: Buffer, central: number) => buf.readUInt32LE(central + 42);

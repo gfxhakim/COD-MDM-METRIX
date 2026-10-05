@@ -2,7 +2,7 @@
 
 import type { SyncJobStatus } from "@prisma/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, EyeOff, FlaskConical, History, Link2, Loader2, RefreshCw, RotateCcw, Settings, Undo2 } from "lucide-react";
+import { Ban, EyeOff, FlaskConical, History, Link2, Loader2, RefreshCw, RotateCcw, Settings, SlidersHorizontal, Undo2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import { Money } from "@/components/app/format";
@@ -18,12 +18,21 @@ import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
+import { describeCustomSync, readCustomFilters } from "@/domain/customSync";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, timeAgo } from "@/lib/utils";
+import { CustomSyncPanel } from "./custom-sync-panel";
 
 const JOB_TONE: Record<SyncJobStatus, "positive" | "warning" | "negative" | "neutral" | "info"> = { QUEUED: "info", RUNNING: "info", SUCCEEDED: "positive", PARTIAL: "warning", FAILED: "negative", CANCELED: "neutral" };
 const JOB_LABEL: Record<SyncJobStatus, string> = { QUEUED: "Queued", RUNNING: "Running", SUCCEEDED: "Succeeded", PARTIAL: "Partial", FAILED: "Failed", CANCELED: "Canceled" };
 const active = (s: SyncJobStatus) => s === "QUEUED" || s === "RUNNING";
+const MODE_LABEL: Record<string, string> = { FULL: "Full", INCREMENTAL: "Incremental", CUSTOM: "Custom" };
+
+/** A custom sync's choices in a few words, e.g. "Placed 1 Sep 2026 to 30 Sep 2026 · Delivered · Oran". */
+function choicesOf(job: { mode: string; filters: unknown }): string | null {
+  const f = job.mode === "CUSTOM" ? readCustomFilters(job.filters) : null;
+  return f ? describeCustomSync(f).join(" · ") : null;
+}
 
 function duration(a: Date | null, b: Date | null) {
   if (!a || !b) return "—";
@@ -40,6 +49,21 @@ function useInvalidateSync() {
   };
 }
 
+function CustomSummary({ job }: { job: { filters: unknown; ordersMatchedCount: number; skippedCount: number } }) {
+  const f = readCustomFilters(job.filters);
+  if (!f) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-brand/20 bg-brand-soft/40 p-3">
+      <p className="text-xs font-medium text-muted">Custom sync of</p>
+      <div className="flex flex-wrap gap-1.5">
+        {describeCustomSync(f).map((p) => <span key={p} className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium shadow-card">{p}</span>)}
+      </div>
+      <p className="num text-xs text-muted"><span className="font-semibold text-fg">{job.ordersMatchedCount}</span> MDM orders matched · <span className="font-semibold text-fg">{job.skippedCount}</span> read and left alone because they didn&apos;t match</p>
+      {f.fallbackOrders || f.fallbackParcels ? <p className="text-xs text-muted">MDM didn&apos;t narrow its search as asked, so the app read more {f.fallbackOrders ? "orders" : "parcels"} and kept only the matching ones. The result is the same; it just took longer.</p> : null}
+    </div>
+  );
+}
+
 function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const trpc = useTRPC();
   const toast = useToast();
@@ -50,7 +74,7 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const d = q.data;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Sync details" description={d ? `${formatDateTime(d.job.createdAt)} · ${d.job.mode === "FULL" ? "Full" : "Incremental"} · ${d.job.trigger.toLowerCase()}` : undefined} className="max-w-3xl">
+      <DialogContent title="Sync details" description={d ? `${formatDateTime(d.job.createdAt)} · ${MODE_LABEL[d.job.mode] ?? d.job.mode} · ${d.job.trigger.toLowerCase()}` : undefined} className="max-w-3xl">
         {q.error ? <ErrorState message={errorMessage(q.error)} /> : !d ? <Loading /> : (
           <div className="flex flex-col gap-4 text-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -61,6 +85,7 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
             </div>
             {d.job.error ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-negative">{d.job.error}</p> : null}
             {d.job.ordersNote ? <p className="rounded-lg border border-info/30 bg-info-soft p-3 text-info">{d.job.ordersNote}</p> : null}
+            {d.job.mode === "CUSTOM" ? <CustomSummary job={d.job} /> : null}
             <p className="text-xs font-medium text-muted">Orders</p>
             <div className="grid grid-cols-3 gap-2">
               {[["New", d.job.ordersAddedCount], ["Updated", d.job.ordersUpdatedCount], ["With a content ID", d.job.ordersWithContentCount]].map(([l, v]) => (
@@ -191,6 +216,8 @@ export function SyncView() {
   const invalidate = useInvalidateSync();
   const canRun = useCan("sync.run");
   const conn = useQuery(trpc.integrations.mdm.queryOptions());
+  const workspace = useQuery(trpc.workspace.getCurrent.queryOptions());
+  const [customOpen, setCustomOpen] = React.useState(false);
   const jobs = useQuery({ ...trpc.sync.list.queryOptions({ limit: 30 }), refetchInterval: (query) => (query.state.data?.some((j) => active(j.status)) ? 2000 : false) });
   const unknown = useQuery(trpc.sync.unknownStatuses.queryOptions());
   const [viewing, setViewing] = React.useState<string | null>(null);
@@ -212,9 +239,10 @@ export function SyncView() {
         title="MDM Express sync"
         description="Parcels and their status history come from MDM in the background. Every run is recorded, re-running never duplicates anything, and parcels that can't be matched wait for review."
         actions={canRun ? (
-          <div className="flex gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <Button variant="outline" disabled={!connected || !!running || !workspace.data} onClick={() => setCustomOpen(true)} title="Sync only the orders you pick, by date, status and more"><SlidersHorizontal /> Custom sync</Button>
             <Button variant="outline" disabled={!connected || !!running || start.isPending} onClick={() => start.mutate({ mode: "FULL" })} title="Re-read every parcel">Full resync</Button>
-            <Button variant="primary" disabled={!connected || !!running || start.isPending} onClick={() => start.mutate({ mode: "INCREMENTAL" })}><RefreshCw className={running ? "animate-spin" : ""} /> Sync now</Button>
+            <Button variant="primary" className="order-first col-span-2 sm:order-none" disabled={!connected || !!running || start.isPending} onClick={() => start.mutate({ mode: "INCREMENTAL" })}><RefreshCw className={running ? "animate-spin" : ""} /> Sync now</Button>
           </div>
         ) : null}
       />
@@ -249,9 +277,9 @@ export function SyncView() {
             <div className="flex items-center gap-3">
               <Loader2 className="size-5 animate-spin text-info" />
               <div>
-                <p className="font-medium">{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : `Syncing ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
-                {c?.ordersFullReadPending ? <p className="text-xs text-muted">Reading every MDM order once to fill in customer names, phones, addresses and order details, so this sync takes longer than usual.</p> : null}
-                <p className="text-xs text-muted">Orders: {running.ordersAddedCount} new · {running.ordersUpdatedCount} updated · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
+                <p className="font-medium">{running.mode === "CUSTOM" ? "Custom sync: " : ""}{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : `${running.mode === "CUSTOM" ? "reading" : "Syncing"} ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
+                {running.mode === "CUSTOM" ? <p className="text-xs text-muted">{choicesOf(running)}</p> : c?.ordersFullReadPending ? <p className="text-xs text-muted">Reading every MDM order once to fill in customer names, phones, addresses and order details, so this sync takes longer than usual.</p> : null}
+                <p className="text-xs text-muted">Orders: {running.mode === "CUSTOM" ? `${running.ordersMatchedCount} matched (${running.ordersAddedCount} new, ${running.ordersUpdatedCount} updated) · ${running.skippedCount} left alone` : `${running.ordersAddedCount} new · ${running.ordersUpdatedCount} updated`} · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
               </div>
             </div>
             {canRun ? <Button size="sm" variant="ghost" disabled={running.cancelRequested} onClick={() => cancel.mutate({ id: running.id })}><Ban /> {running.cancelRequested ? "Canceling…" : "Cancel"}</Button> : null}
@@ -285,7 +313,10 @@ export function SyncView() {
                   {jobs.data.map((j) => (
                     <Tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
                       <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(j.createdAt)}</Td>
-                      <Td className="text-xs">{j.mode === "FULL" ? "Full" : "Incremental"} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}</Td>
+                      <Td className="text-xs">
+                        {MODE_LABEL[j.mode] ?? j.mode} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}
+                        {j.mode === "CUSTOM" ? <span className="block max-w-64 truncate text-[11px] text-muted" title={choicesOf(j) ?? undefined}>{choicesOf(j)}</span> : null}
+                      </Td>
                       <Td><Badge tone={JOB_TONE[j.status]}>{JOB_LABEL[j.status]}</Badge></Td>
                       <Td className="num text-right">{j.ordersAddedCount}</Td>
                       <Td className="num text-right">{j.addedCount}</Td>
@@ -303,6 +334,7 @@ export function SyncView() {
         </Card>
       </div>
       {viewing ? <JobDialog id={viewing} onClose={() => setViewing(null)} /> : null}
+      {customOpen && workspace.data ? <CustomSyncPanel workspaceId={workspace.data.id} timezone={workspace.data.timezone} demo={c?.adapter === "mock"} onClose={() => setCustomOpen(false)} onStarted={invalidate} /> : null}
     </>
   );
 }

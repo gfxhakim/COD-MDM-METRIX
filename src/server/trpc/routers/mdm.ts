@@ -1,7 +1,9 @@
 import { db } from "@/server/db";
 import { z } from "zod";
 import { NormalizedStatus } from "@prisma/client";
+import { customSyncInput } from "@/domain/customSync";
 import * as conn from "@/server/mdm/connection";
+import { customSyncOptions } from "@/server/mdm/custom";
 import * as sync from "@/server/mdm/sync";
 import * as meta from "@/server/meta/connection";
 import { startMetaSync } from "@/server/meta/sync";
@@ -46,6 +48,15 @@ export const syncRouter = router({
       if (!res.alreadyRunning) kickSync(res.job.id);
       return { jobId: res.job.id, alreadyRunning: res.alreadyRunning };
     }),
+  /** A one-off sync of only the MDM orders matching these choices, and their parcels. */
+  startCustom: permitted("sync.run")
+    .input(customSyncInput)
+    .mutation(async ({ ctx, input }) => {
+      const res = await sync.startCustomSync(ctx.ws, input);
+      if (!res.alreadyRunning) kickSync(res.job.id);
+      return { jobId: res.job.id, alreadyRunning: res.alreadyRunning };
+    }),
+  customOptions: permitted("sync.run").query(({ ctx }) => customSyncOptions(ctx.ws)),
   cancel: permitted("sync.run").input(z.object({ id })).mutation(({ ctx, input }) => sync.cancelSync(ctx.ws, input.id)),
   retry: permitted("sync.run")
     .input(z.object({ id }))
