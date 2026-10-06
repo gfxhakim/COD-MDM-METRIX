@@ -7,6 +7,7 @@ import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenanc
 import { describeCustomSync, readCustomFilters, type CustomSyncChoices, type CustomSyncFilters } from "@/domain/customSync";
 import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/statusMapping";
 import { normalizeReference } from "@/lib/normalize";
+import { syncMdmAccount } from "./account";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { anyShipped, customOrderPlan, customParcelsSince, matchedOrderIds, PARCEL_BATCH, pickCustomOrders, readStep, resolveCustomSync, writeStep } from "./custom";
 import { redactPayload, sha256, stableStringify } from "./redact";
@@ -352,20 +353,39 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
       return finish(job, counters.failed ? "PARTIAL" : "SUCCEEDED", counters, null);
     }
 
-    for (;;) {
-      if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
-      const result = await withRetry(() => adapter.listParcels({ cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
-      for (const p of result.items) await saveParcel(p);
-      page++;
-      cursor = result.nextCursor;
-      await db.syncJob.update({
-        where: { id: job.id },
-        data: {
-          cursor, page, heartbeatAt: deps.now(), totalCount: result.total ?? undefined,
-          ...countersData(job, counters),
-        },
+    if (phase !== "ACCOUNT") {
+      for (;;) {
+        if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
+        const result = await withRetry(() => adapter.listParcels({ cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
+        for (const p of result.items) await saveParcel(p);
+        page++;
+        cursor = result.nextCursor;
+        await db.syncJob.update({
+          where: { id: job.id },
+          data: {
+            cursor, page, heartbeatAt: deps.now(), totalCount: result.total ?? undefined,
+            ...countersData(job, counters),
+          },
+        });
+        if (!cursor) break;
+      }
+    }
+
+    // Then the seller's wallet, fees, payouts, prices and stock. Each part is read on its own and
+    // a part MDM refuses is noted on the Money & stock page; it never fails the sync.
+    if (adapter.account) {
+      phase = "ACCOUNT";
+      await db.syncJob.update({ where: { id: job.id }, data: { phase, cursor: null, heartbeatAt: deps.now(), ...countersData(job, counters) } });
+      const res = await syncMdmAccount(ws, adapter.account, {
+        mode: job.mode,
+        startedAt: job.startedAt ?? deps.now(),
+        pageSize: deps.pageSize,
+        now: deps.now,
+        retry: (fn) => withRetry(fn, deps),
+        canceled,
+        heartbeat: async () => void (await db.syncJob.update({ where: { id: job.id }, data: { heartbeatAt: deps.now() } })),
       });
-      if (!cursor) break;
+      if (res.canceled) return finish(job, "CANCELED", counters, "Canceled by a user");
     }
   } catch (e) {
     const message = safeMdmMessage(e);

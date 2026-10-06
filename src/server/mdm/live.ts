@@ -1,5 +1,6 @@
 import { normalizeProviderStatus } from "@/domain/statusMapping";
-import { MoneyError, parseToMinor } from "@/lib/money";
+import { createLiveAccountReader } from "./live-account";
+import { isObj, money, obj, str, date } from "./parse";
 import { assertPublicHost, validateMdmBaseUrl } from "./url";
 import { MdmError, type MdmAdapter, type MdmDateRange, type MdmOrder, type MdmOrderFilters, type MdmOrderQuery, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmParcelQuery, type MdmUtm } from "./types";
 
@@ -28,6 +29,9 @@ import { MdmError, type MdmAdapter, type MdmDateRange, type MdmOrder, type MdmOr
  *   `statusDate`, `isStopDesk`, `trackingId` or `externalId`; parcels by `orderId`. The
  *   sync checks every record itself too, so a filter MDM refuses or ignores only makes
  *   the read longer (see src/server/mdm/custom.ts).
+ *
+ * - The seller's account (wallet, payouts, fees, price list, stock, stock arrivals): see
+ *   src/server/mdm/live-account.ts.
  *
  * Search endpoints use POST but only read. The client refuses any POST whose
  * path does not end in `/search`, so it cannot create or change anything at MDM.
@@ -66,29 +70,6 @@ export const LIVE_ADAPTER_UNAVAILABLE =
   "The live MDM Express adapter is not configured: its API schema (authentication, pagination, parcel search and response fields) has not been verified. No request was sent to MDM.";
 
 // ---------------------------------------------------------------- parsing helpers
-
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-function obj(v: unknown, what: string): Obj {
-  if (!isObj(v)) throw new Error(`${what} is not an object`);
-  return v;
-}
-const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
-function date(v: unknown): Date | null {
-  if (typeof v !== "string" || !v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-function money(v: unknown, currency: string): number | null {
-  if (v == null || v === "") return null;
-  if (typeof v !== "number" && typeof v !== "string") return null;
-  try {
-    return parseToMinor(v, currency);
-  } catch (e) {
-    if (e instanceof MoneyError) return null;
-    throw e;
-  }
-}
 
 /** First time the history reaches a normalized state (history is sorted by date first). */
 function firstAt(events: { status: string; at: Date }[], target: string): Date | null {
@@ -449,6 +430,15 @@ export function createLiveAdapter(opts: { baseUrl: string; credential: string | 
             const body = await mdmRequest(opts.baseUrl, credential, s, s.orderSearchRequest!(q), signal);
             return shape(() => s.parseOrdersPage!(body));
           },
+        }
+      : {}),
+    // The seller's wallet, payouts, fees, prices and stock (src/server/mdm/live-account.ts).
+    ...(schema
+      ? {
+          account: createLiveAccountReader((req, signal) => {
+            const { s, credential } = ready();
+            return mdmRequest(opts.baseUrl, credential, s, req, signal);
+          }),
         }
       : {}),
     ...(schema?.orderHistoryRequest && schema.parseOrderHistory

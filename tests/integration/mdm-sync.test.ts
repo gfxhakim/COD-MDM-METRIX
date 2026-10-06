@@ -201,6 +201,8 @@ describe("sync engine", () => {
 
   it("re-queues the job to resume from its cursor after repeated provider failures", async () => {
     const busy = () => Array.from({ length: 6 }, () => new MdmError("down", "SERVER"));
+    // Other test files share this database and may leave jobs queued; a worker pass would run those too.
+    await db.syncJob.updateMany({ where: { status: "QUEUED", workspaceId: { not: t.ws.id } }, data: { status: "CANCELED", activeLock: null } });
     const { job } = await startSync(t.ctx, { mode: "FULL" });
     const failing = async () => ({ adapter: createMockAdapter({ fixtures: fixtures(), credential: SECRET, failures: { 1: busy() } }), connection: null });
     const first = await runSyncJob(job.id, { adapterFactory: failing, sleep: noSleep, pageSize: 2 });

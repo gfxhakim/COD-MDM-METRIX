@@ -5,7 +5,7 @@ import { InputError } from "@/server/errors";
 import { rateLimit } from "@/server/rateLimit";
 import { assertCan, type WorkspaceContext } from "@/server/tenancy";
 import { decryptSecret, encryptSecret, maskSecret } from "@/server/crypto/secrets";
-import { demoFixtures } from "./demo-fixtures";
+import { demoAccount, demoFixtures } from "./demo-fixtures";
 import { createLiveAdapter, LIVE_SCHEMA } from "./live";
 import { normalizeProviderStatus, statusKey } from "@/domain/statusMapping";
 import { createMockAdapter } from "./mock";
@@ -103,7 +103,7 @@ export async function adapterForWorkspace(workspaceId: string): Promise<{ adapte
     db.integrationConnection.findUnique({ where: { workspaceId_provider: { workspaceId, provider: PROVIDER } } }),
   ]);
   const credential = conn?.encryptedCredential ? decryptSecret(conn.encryptedCredential, { workspaceId, purpose: PURPOSE }) : null;
-  if (adapterKind(ws) === "mock") return { adapter: createMockAdapter({ credential, fixtures: await demoFixtures(workspaceId) }), connection: conn };
+  if (adapterKind(ws) === "mock") return { adapter: createMockAdapter({ credential, fixtures: await demoFixtures(workspaceId), account: await demoAccount(workspaceId) }), connection: conn };
   return { adapter: createLiveAdapter({ baseUrl: conn?.baseUrl ?? DEFAULT_MDM_BASE_URL, credential }), connection: conn };
 }
 

@@ -1,4 +1,4 @@
-import { Calculator, ClipboardList, FileUp, LayoutDashboard, Megaphone, Package, RefreshCw, Receipt, Settings, Target } from "lucide-react";
+import { Calculator, ClipboardList, FileUp, LayoutDashboard, Megaphone, Package, RefreshCw, Receipt, Settings, Target, Wallet } from "lucide-react";
 
 /**
  * `tier` decides where a page sits in the top menu on a computer: 1 always shows as a pill,
@@ -10,6 +10,7 @@ export const NAV = [
   { href: "/campaigns", label: "Campaigns", short: "Campaigns", icon: Target, tier: 1 },
   { href: "/creatives", label: "Creatives", short: "Creatives", icon: Megaphone, tier: 1 },
   { href: "/orders", label: "Orders & parcels", short: "Orders", icon: ClipboardList, tier: 1 },
+  { href: "/money", label: "Money & stock", short: "Money", icon: Wallet, tier: 2 },
   { href: "/expenses", label: "Expenses", short: "Expenses", icon: Receipt, tier: 2 },
   { href: "/syncs", label: "MDM sync", short: "MDM sync", icon: RefreshCw, tier: 2 },
   { href: "/simulator", label: "Breakeven CPA", short: "Breakeven", icon: Calculator, tier: 3 },

@@ -8,7 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 8–10 use the seeded DEMO workspace, whose MDM connection runs on the
  * labelled mock adapter (no request ever reaches MDM).
  * Flow 11 signs in as a different business and probes both workspaces.
- * Flows 12–14 came later: Meta ads, campaigns, and exporting orders.
+ * Flows 12–16 came later: Meta ads, campaigns, exporting orders, custom syncs,
+ * and MDM money and stock.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -221,6 +222,20 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByText("MDM-DEMO-ORPHAN-1")).toBeVisible();
   });
 
+  test("16. see the MDM wallet, payouts, stock and price list read by the sync", async ({ page }) => {
+    await page.goto("/money");
+    await expect(page.getByRole("heading", { name: "Money & stock" })).toBeVisible();
+    await expect(page.getByText("Ready to collect")).toBeVisible();
+    // A payout opens to show what it is made of.
+    const payout = page.getByRole("button", { name: /Confirmed/ });
+    await payout.click();
+    await expect(payout).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("li li", { hasText: "COD" }).first()).toBeVisible();
+    await expect(page.locator("tr", { hasText: "DEMO-BLK" })).toContainText("142");
+    await expect(page.getByText("Expected 350")).toBeVisible();
+    await expect(page.locator("tr", { hasText: "Alger" })).toBeVisible();
+  });
+
   test("12. connect Meta ads without the token reaching the browser, and sync spend", async ({ page }) => {
     const token = "demo-meta-token-00000000000000007777";
     const second = "demo-meta-token-00000000000000008888";
@@ -348,7 +363,7 @@ test("11. another business cannot reach either workspace's data", async ({ page 
   expect(workspaceIds.e2e && workspaceIds.demo).toBeTruthy();
   await signIn(page, "other@codflow.local", "other-password-123");
   for (const ws of [workspaceIds.e2e!, workspaceIds.demo!]) {
-    for (const proc of ["orders.list", "integrations.mdm", "sync.list", "expenses.list"]) {
+    for (const proc of ["orders.list", "integrations.mdm", "sync.list", "expenses.list", "money.overview"]) {
       const res = await trpcQuery(page, proc, ws);
       expect(res.status, `${proc} on a foreign workspace`).toBe(403);
       expect(res.body).not.toContain("E2E analytics tool");
