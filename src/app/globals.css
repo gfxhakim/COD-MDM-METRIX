@@ -220,6 +220,18 @@ p {
   }
 }
 
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes slide-out-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -445,6 +457,82 @@ tbody > tr.row-in:nth-child(n + 9) {
   .shimmer {
     animation: none;
   }
+}
+
+/* Side menu emojis: each page's emoji moves its own way while the pointer or keyboard focus is on
+   it, and once when its page opens. Transform only, so it stays smooth on phones. */
+.nav-emoji {
+  display: inline-block;
+  line-height: 1;
+  transform-origin: 50% 70%;
+  filter: drop-shadow(0 3px 4px rgb(20 16 18 / 0.18));
+}
+.nav-link[aria-current="page"] .nav-emoji {
+  animation: var(--emoji-motion) 1000ms var(--ease-in-out);
+}
+.nav-link:hover .nav-emoji,
+.nav-link:focus-visible .nav-emoji {
+  animation: var(--emoji-motion) 1000ms var(--ease-in-out) infinite;
+}
+.nav-emoji[data-motion="bars"] { --emoji-motion: emoji-bars; }
+.nav-emoji[data-motion="wiggle"] { --emoji-motion: emoji-wiggle; }
+.nav-emoji[data-motion="hop"] { --emoji-motion: emoji-hop; }
+.nav-emoji[data-motion="roll"] { --emoji-motion: emoji-roll; }
+.nav-emoji[data-motion="snap"] { --emoji-motion: emoji-snap; }
+.nav-emoji[data-motion="pulse"] { --emoji-motion: emoji-pulse; }
+.nav-emoji[data-motion="fly"] { --emoji-motion: emoji-fly; }
+.nav-emoji[data-motion="spin"] { --emoji-motion: emoji-spin; transform-origin: 50% 50%; }
+.nav-emoji[data-motion="tilt"] { --emoji-motion: emoji-tilt; }
+.nav-emoji[data-motion="drop"] { --emoji-motion: emoji-drop; }
+@keyframes emoji-bars {
+  25% { transform: translateY(-3px) scale(1.08, 1.22); }
+  50% { transform: scale(0.96, 0.88); }
+  75% { transform: scale(1.04, 1.08); }
+}
+@keyframes emoji-wiggle {
+  20% { transform: rotate(-14deg); }
+  40% { transform: rotate(12deg); }
+  60% { transform: rotate(-8deg); }
+  80% { transform: rotate(4deg); }
+}
+@keyframes emoji-hop {
+  15% { transform: scale(1.12, 0.86); }
+  40% { transform: translateY(-8px) scale(0.94, 1.08); }
+  65% { transform: scale(1.08, 0.92); }
+  80% { transform: scale(0.98, 1.02); }
+}
+@keyframes emoji-roll {
+  30% { transform: translateX(5px) rotate(8deg); }
+  60% { transform: translateX(-3px) rotate(-6deg); }
+  80% { transform: translateX(1px) rotate(2deg); }
+}
+@keyframes emoji-snap {
+  15% { transform: rotate(-22deg); }
+  30% { transform: rotate(4deg) scale(1.16); }
+  50% { transform: scale(1); }
+}
+@keyframes emoji-pulse {
+  30% { transform: scale(1.28); }
+  50% { transform: scale(0.92); }
+  70% { transform: scale(1.1); }
+}
+@keyframes emoji-fly {
+  30% { transform: translate(4px, -7px) rotate(-10deg); }
+  60% { transform: translate(-2px, -3px) rotate(6deg); }
+}
+@keyframes emoji-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes emoji-tilt {
+  25% { transform: rotate(-16deg); }
+  50% { transform: rotate(12deg); }
+  75% { transform: rotate(-6deg); }
+}
+@keyframes emoji-drop {
+  0% { transform: translateY(-8px); opacity: 0.4; }
+  40% { transform: translateY(2px); opacity: 1; }
+  60% { transform: translateY(-2px); }
+  80% { transform: translateY(1px); }
 }
 
 /* Wide tables keep their first column in view while they scroll sideways on phones and tablets. */

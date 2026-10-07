@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { SIDEBAR_COOKIE } from "@/components/app/nav";
 import { AppShell } from "@/components/app/shell";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,14 +13,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
   const workspaces = await listWorkspacesForUser(user.id);
   if (workspaces.length === 0) redirect("/login");
-  const preferred = (await cookies()).get(WORKSPACE_COOKIE)?.value;
+  const jar = await cookies();
+  const preferred = jar.get(WORKSPACE_COOKIE)?.value;
   // Membership-checked: the cookie only selects among workspaces this user belongs to.
   const current = workspaces.find((w) => w.id === preferred) ?? workspaces[0];
   return (
     <Providers key={current.id} workspaceId={current.id}>
       <TooltipProvider>
         <ToastProvider>
-          <AppShell current={current} workspaces={workspaces} user={user}>
+          <AppShell current={current} workspaces={workspaces} user={user} menuFolded={jar.get(SIDEBAR_COOKIE)?.value === "folded"}>
             {children}
           </AppShell>
         </ToastProvider>

@@ -1,22 +1,23 @@
-import { Calculator, ClipboardList, FileUp, LayoutDashboard, Megaphone, Package, RefreshCw, Receipt, Settings, Target, Wallet } from "lucide-react";
-
 /**
- * `tier` decides where a page sits in the top menu on a computer: 1 always shows as a pill,
- * 2 shows as a pill on wide screens and under "More" otherwise, 3 is always under "More".
+ * The side menu, in the order the owner asked for. Each page has its own emoji and its own
+ * way of moving when the pointer is on it (`motion` names an emoji-* keyframe in globals.css).
  */
 export const NAV = [
-  { href: "/", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard, tier: 1 },
-  { href: "/products", label: "Products", short: "Products", icon: Package, tier: 1 },
-  { href: "/campaigns", label: "Campaigns", short: "Campaigns", icon: Target, tier: 1 },
-  { href: "/creatives", label: "Creatives", short: "Creatives", icon: Megaphone, tier: 1 },
-  { href: "/orders", label: "Orders & parcels", short: "Orders", icon: ClipboardList, tier: 1 },
-  { href: "/money", label: "Money & stock", short: "Money", icon: Wallet, tier: 2 },
-  { href: "/expenses", label: "Expenses", short: "Expenses", icon: Receipt, tier: 2 },
-  { href: "/syncs", label: "MDM sync", short: "MDM sync", icon: RefreshCw, tier: 2 },
-  { href: "/simulator", label: "Breakeven CPA", short: "Breakeven", icon: Calculator, tier: 3 },
-  { href: "/imports", label: "Imports", short: "Imports", icon: FileUp, tier: 3 },
-  { href: "/settings", label: "Settings", short: "Settings", icon: Settings, tier: 3 },
+  { href: "/", label: "Dashboard", emoji: "📊", motion: "bars" },
+  { href: "/expenses", label: "Expenses", emoji: "🧾", motion: "wiggle" },
+  { href: "/products", label: "Products", emoji: "📦", motion: "hop" },
+  { href: "/orders", label: "Orders & parcels", emoji: "🛒", motion: "roll" },
+  { href: "/creatives", label: "Creatives", emoji: "🎬", motion: "snap" },
+  { href: "/campaigns", label: "Campaigns", emoji: "🎯", motion: "pulse" },
+  { href: "/money", label: "Money & stock", emoji: "💸", motion: "fly" },
+  { href: "/syncs", label: "MDM sync", emoji: "🔄", motion: "spin" },
+  { href: "/simulator", label: "Breakeven CPA", emoji: "🧮", motion: "tilt" },
+  { href: "/imports", label: "Imports", emoji: "📥", motion: "drop" },
+  { href: "/settings", label: "Settings", emoji: "⚙️", motion: "spin" },
 ] as const;
+
+/** Cookie remembering whether the side menu is folded down to its emojis on a computer. */
+export const SIDEBAR_COOKIE = "cft_sidebar";
 
 export function isActive(href: string, pathname: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
