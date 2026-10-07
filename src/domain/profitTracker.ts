@@ -365,8 +365,9 @@ export function seedFor(p: ProductData, d: Defaults): Seed {
     throw new Error(`No value for ${String(key)}`);
   };
   // Rates are shown and typed to 0.1%, so the ones read from orders are rounded the same way: the
-  // products table and the calculator then give the same numbers.
-  const r = (v: number | null) => (v === null ? null : roundRate(v));
+  // products table and the calculator then give the same numbers. Orders shipped without a
+  // confirmation (or split into several parcels) can put the shipping rate over 100%: it stops there.
+  const r = (v: number | null) => (v === null ? null : roundRate(Math.min(1, Math.max(0, v))));
   const seen = p.observed.enough
     ? { ...p.observed, confirmationRate: r(p.observed.confirmationRate), shippingRate: r(p.observed.shippingRate), deliveryRate: r(p.observed.deliveryRate), lostRate: r(p.observed.lostRate) }
     : null;

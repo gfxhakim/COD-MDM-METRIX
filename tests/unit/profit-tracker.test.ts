@@ -129,6 +129,11 @@ describe("profit tracker: starting values", () => {
     expect(s.sources).toMatchObject({ deliveryRate: "you", returnRate: "you", salePrice: "you" });
   });
 
+  it("keeps rates read from orders between 0 and 100%", () => {
+    const s = seedFor({ ...product, observed: { ...product.observed, shippingRate: 1.25 } }, defaults);
+    expect(s.inputs.shippingRate).toBe(1);
+  });
+
   it("refuses unknown values in a saved plan", () => {
     expect(planOverridesSchema.safeParse({ deliveryRate: 1.5 }).success).toBe(false);
     expect(planOverridesSchema.safeParse({ mdmApiKey: "x" }).success).toBe(false);
