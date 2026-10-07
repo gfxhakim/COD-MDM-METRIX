@@ -42,6 +42,7 @@ export type PageFilters = {
   creativeId?: string;
   creativeName?: string;
   source?: OrderSource;
+  upsell?: boolean;
 };
 
 const FORMATS: { key: ExportFormat; label: string; hint: string; icon: React.ReactNode }[] = [
@@ -155,6 +156,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     productId: carry.productId || undefined,
     creativeId: carry.creativeId || undefined,
     source: carry.source || undefined,
+    upsell: carry.upsell,
   };
   const preview = useQuery({ ...trpc.orders.exportPreview.queryOptions(query), enabled: !badRange, placeholderData: keepPreviousData });
 
@@ -234,6 +236,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     carry.productId ? { key: "productId" as const, label: carry.productName ?? "One product" } : null,
     carry.creativeId ? { key: "creativeId" as const, label: `Ad ${carry.creativeName ?? ""}`.trim() } : null,
     carry.source ? { key: "source" as const, label: `Source: ${carry.source.toLowerCase()}` } : null,
+    carry.upsell !== undefined ? { key: "upsell" as const, label: carry.upsell ? "Upsold orders" : "Orders without upsell" } : null,
   ].filter((c) => c !== null);
 
   return (

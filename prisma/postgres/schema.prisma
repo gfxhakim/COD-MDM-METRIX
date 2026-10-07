@@ -234,6 +234,7 @@ model Workspace {
   mdmFees          MdmFee[]
   mdmStock         MdmStockItem[]
   mdmArrivals      MdmStockArrival[]
+  mdmProductLinks  MdmProductLink[]
   creatives        Creative[]
   adSpend          AdSpend[]
   adAccounts       AdAccount[]
@@ -462,10 +463,13 @@ model Product {
   sku         String
   currency    String   @default("DZD")
   active      Boolean  @default(true)
+  /// Created by the MDM sync for a product MDM sent with an order. Its costs are entered by hand.
+  fromMdm     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mdmLinks     MdmProductLink[]
   costVersions ProductCostVersion[]
   orderLines   OrderLine[]
   creatives    Creative[]
@@ -480,6 +484,25 @@ model Product {
 
 /// Immutable history of unit-economics assumptions. Never updated in place;
 /// a new version closes the previous one by setting its effectiveTo.
+/// Which product in the app each MDM product counts as. The sync adds one the first time MDM sends a
+/// product with an order (linking an existing product, or creating one); an owner can move it to another product.
+model MdmProductLink {
+  workspaceId  String
+  /// MDM's product ID (for a variant, the product it is a variant of).
+  mdmProductId String
+  productId    String
+  /// MDM's name for the product, as last seen on an order.
+  mdmName      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, mdmProductId])
+  @@index([productId])
+}
+
 model ProductCostVersion {
   id                   String    @id @default(uuid())
   workspaceId          String
@@ -552,6 +575,8 @@ model Order {
   storeName             String?
   /// When the sync last looked for a content ID in this order's MDM status history.
   mdmHistoryCheckedAt   DateTime?
+  /// MDM marks the order as upsold by its call center (read with MDM's upsell filter).
+  mdmUpsell             Boolean     @default(false)
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
@@ -573,21 +598,25 @@ model Order {
 }
 
 model OrderLine {
-  id          String  @id @default(uuid())
-  workspaceId String
-  orderId     String
-  productId   String?
-  sku         String?
-  productName String?
-  quantity    Int
-  unitPrice   Int
-  currency    String  @default("DZD")
+  id           String  @id @default(uuid())
+  workspaceId  String
+  orderId      String
+  productId    String?
+  sku          String?
+  productName  String?
+  quantity     Int
+  unitPrice    Int
+  currency     String  @default("DZD")
+  /// MDM's product ID for this line (for a variant, the product it is a variant of), and the variant's own ID.
+  mdmProductId String?
+  mdmVariantId String?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, productId])
+  @@index([workspaceId, mdmProductId])
   @@index([orderId])
 }
 

@@ -31,4 +31,8 @@ export const productsRouter = router({
     .input(z.object({ productId: id, effectiveFrom: z.coerce.date(), note: z.string().trim().max(200).optional(), cost: costInput }))
     .mutation(({ ctx, input }) => repo.createCostVersion(ctx.ws, input)),
   delete: permitted("catalog.write").input(z.object({ id })).mutation(({ ctx, input }) => repo.deleteProduct(ctx.ws, input.id)),
+  mdmProducts: workspaceProcedure.query(({ ctx }) => repo.listMdmProducts(ctx.ws)),
+  moveMdmProduct: permitted("catalog.write")
+    .input(z.object({ mdmProductId: z.string().trim().min(1).max(100), productId: id }))
+    .mutation(({ ctx, input }) => repo.moveMdmProduct(ctx.ws, input)),
 });

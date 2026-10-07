@@ -41,6 +41,7 @@ export const EXPORT_COLUMNS = [
   { key: "statusAt", label: "Status date", kind: "datetime" },
   { key: "placedAt", label: "Order date", kind: "datetime" },
   { key: "products", label: "Products", kind: "text" },
+  { key: "upsell", label: "Upsell", kind: "text" },
   { key: "sku", label: "SKU", kind: "text" },
   { key: "quantity", label: "Quantity", kind: "number" },
   { key: "unitPrice", label: "Unit price", kind: "money" },

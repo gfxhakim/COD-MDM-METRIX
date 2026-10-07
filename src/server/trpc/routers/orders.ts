@@ -17,6 +17,7 @@ const exportFilters = z.object({
   productId: id.optional(),
   creativeId: id.optional(),
   source: orderSourceEnum.optional(),
+  upsell: z.boolean().optional(),
 });
 
 export const ordersRouter = router({
@@ -30,6 +31,7 @@ export const ordersRouter = router({
         productId: id.optional(),
         creativeId: id.optional(),
         source: orderSourceEnum.optional(),
+        upsell: z.boolean().optional(),
         from: z.coerce.date().optional(),
         to: z.coerce.date().optional(),
         page: z.number().int().min(1).default(1),

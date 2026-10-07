@@ -94,7 +94,7 @@ describe("credentials", () => {
       const path = new URL(String(url)).pathname;
       const req = JSON.parse(String(init.body ?? "{}"));
       const body = path === "/api/v2/orders/search"
-        ? { pagination: { page: 1, hasMore: false, nextPage: null, total: 2 }, list: req.filters?.trackingId ? [{ trackingId: "MO-1", externalId: "ES-2001" }] : [mdmOrder, { trackingId: "MO-BROKEN" }] }
+        ? { pagination: { page: 1, hasMore: false, nextPage: null, total: 2 }, list: req.filters?.upsell ? [] : req.filters?.trackingId ? [{ trackingId: "MO-1", externalId: "ES-2001" }] : [mdmOrder, { trackingId: "MO-BROKEN" }] }
         : { pagination: { page: 1, hasMore: false, nextPage: null, total: 1 }, list: [{ trackingId: "LP-1", orderId: "MO-1", currency: "DZD", status: "outForDelivery", statusDate: "2026-09-20T10:00:00.000Z", pricing: { totalToPayFromClient: 3900 }, fees: { shipping: 600, return: 250 }, destinationAddress: { stateName: "Oran" }, client: { firstName: "Amina", phone: "0551111111" }, statusHistory: [{ date: "2026-09-20T10:00:00.000Z", status: "outForDelivery", responsible: { firstName: "Courier" } }] }] };
       return new Response(JSON.stringify(body), { status: 200 });
     }));
@@ -402,22 +402,81 @@ describe("MDM orders", () => {
     expect(await get("ORD-A2")).toMatchObject({ status: "CANCELED", utmContent: "120000000000010" });
   });
 
-  it("links every line to the workspace's only product, whatever MDM calls it", async () => {
+  it("links each MDM product to a product for good, creating the ones nobody set up yet", async () => {
     const d = await makeTenant("OrdersF");
     const product = await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
     await connect(d);
-    const orders = [mdmOrder("ORD-F1", { status: "delivered", utm: withContent("120000000000031"), products: [{ ref: "PRD-XYZ", variantOf: null, name: "Lampe LED pro", quantity: 2, unitPrice: null }] })];
-    await sync(d, { fixtures: [], credential: SECRET, orders });
-    const o = await db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId: "ORD-F1" }, include: { lines: true, attribution: { include: { creative: true } } } });
-    // The price falls back to the product's sale price when MDM sends none.
-    expect(o.lines).toMatchObject([{ productId: product.id, productName: "Lampe LED pro", quantity: 2, unitPrice: cost.salePrice }]);
-    expect(o.attribution?.creative?.productId).toBe(product.id);
+    const line = (ref: string, name: string, over: Partial<MdmOrder["products"][number]> = {}) => ({ ref, variantOf: null, name, quantity: 1, unitPrice: 390000, ...over });
+    const lines = async (id: string) => (await db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId: id }, include: { lines: true } })).lines;
 
-    // With a second active product, an unknown name is left unlinked rather than guessed.
-    await d.caller.products.create({ name: "Fan", sku: "FAN", cost });
-    await sync(d, { fixtures: [], credential: SECRET, orders: [mdmOrder("ORD-F2", { products: [{ ref: "PRD-XYZ", variantOf: null, name: "Lampe LED pro", quantity: 1, unitPrice: 390000 }] })] });
-    const o2 = await db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId: "ORD-F2" }, include: { lines: true } });
-    expect(o2.lines).toMatchObject([{ productId: null, productName: "Lampe LED pro" }]);
+    // The workspace sells one product, so the first MDM product counts as it, whatever MDM calls it.
+    await sync(d, { fixtures: [], credential: SECRET, orders: [mdmOrder("ORD-F1", { status: "delivered", utm: withContent("120000000000031"), products: [line("PRD-XYZ", "Lampe LED pro", { quantity: 2, unitPrice: null })] })] });
+    // The price falls back to the product's sale price when MDM sends none.
+    expect(await lines("ORD-F1")).toMatchObject([{ productId: product.id, productName: "Lampe LED pro", quantity: 2, unitPrice: cost.salePrice, mdmProductId: "PRD-XYZ", mdmVariantId: null }]);
+    const creative = await db.creative.findFirstOrThrow({ where: { workspaceId: d.ws.id, externalCreativeId: "120000000000031" } });
+    expect(creative.productId).toBe(product.id);
+
+    // A second product by hand doesn't move it; a product MDM sends for the first time gets its own product,
+    // its variants count as it, and a name matching a product links to that product.
+    const fan = await d.caller.products.create({ name: "Fan", sku: "FAN", cost });
+    await sync(d, {
+      fixtures: [], credential: SECRET,
+      orders: [
+        mdmOrder("ORD-F2", { products: [line("PRD-XYZ", "Lampe LED pro")] }),
+        mdmOrder("ORD-F3", { products: [line("PRD-NEW", "Ventilateur"), line("VAR-NEW-B", "Ventilateur noir", { variantOf: "PRD-NEW", unitPrice: 100000 })] }),
+        mdmOrder("ORD-F4", { products: [line("PRD-FAN", "fan")] }),
+      ],
+    });
+    expect(await lines("ORD-F2")).toMatchObject([{ productId: product.id }]);
+    const created = await db.product.findFirstOrThrow({ where: { workspaceId: d.ws.id, fromMdm: true }, include: { costVersions: true } });
+    expect(created).toMatchObject({ name: "Ventilateur", sku: "PRD-NEW", active: true, currency: "DZD", costVersions: [] });
+    const f3 = await lines("ORD-F3");
+    expect(f3.map((l) => [l.productId, l.mdmProductId, l.mdmVariantId]).sort()).toEqual([[created.id, "PRD-NEW", null], [created.id, "PRD-NEW", "VAR-NEW-B"]].sort());
+    expect(await lines("ORD-F4")).toMatchObject([{ productId: fan.id, mdmProductId: "PRD-FAN" }]);
+    expect(await db.mdmProductLink.findMany({ where: { workspaceId: d.ws.id }, orderBy: { mdmProductId: "asc" }, select: { mdmProductId: true, productId: true, mdmName: true } })).toEqual([
+      { mdmProductId: "PRD-FAN", productId: fan.id, mdmName: "fan" },
+      { mdmProductId: "PRD-NEW", productId: created.id, mdmName: "Ventilateur" },
+      { mdmProductId: "PRD-XYZ", productId: product.id, mdmName: "Lampe LED pro" },
+    ]);
+    expect(await db.product.count({ where: { workspaceId: d.ws.id } })).toBe(3);
+
+    // The Products page lists them; moving one takes its order lines along, and removes the product
+    // the sync created once nothing is left on it. Analysts can look but not move.
+    expect((await d.caller.products.mdmProducts()).map((m) => [m.id, m.units])).toEqual([["PRD-XYZ", 3], ["PRD-NEW", 2], ["PRD-FAN", 1]]);
+    const analyst = await addMember(d.ws.id, "ANALYST");
+    expect(await analyst.caller.products.mdmProducts()).toHaveLength(3);
+    await expect(analyst.caller.products.moveMdmProduct({ mdmProductId: "PRD-NEW", productId: fan.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await d.caller.products.moveMdmProduct({ mdmProductId: "PRD-NEW", productId: fan.id })).toEqual({ moved: 2, removed: "Ventilateur" });
+    expect((await lines("ORD-F3")).every((l) => l.productId === fan.id && l.sku === "FAN")).toBe(true);
+    expect(await db.product.findUnique({ where: { id: created.id } })).toBeNull();
+    // Later orders follow the move.
+    await sync(d, { fixtures: [], credential: SECRET, orders: [mdmOrder("ORD-F5", { products: [line("PRD-NEW", "Ventilateur")] })] }, "INCREMENTAL");
+    expect(await lines("ORD-F5")).toMatchObject([{ productId: fan.id }]);
+    await expect(d.caller.products.moveMdmProduct({ mdmProductId: "PRD-NONE", productId: fan.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("marks the orders MDM upsold, and leaves the marks alone when MDM ignores or refuses the filter", async () => {
+    const d = await makeTenant("OrdersU");
+    await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    await connect(d);
+    const orders = Array.from({ length: 24 }, (_, i) => mdmOrder(`ORD-U${i + 1}`));
+    const upsold = async () => (await db.order.findMany({ where: { workspaceId: d.ws.id, mdmUpsell: true }, select: { mdmOrderId: true }, orderBy: { mdmOrderId: "asc" } })).map((o) => o.mdmOrderId);
+
+    const first = await sync(d, { fixtures: [], credential: SECRET, orders, upsellOrderIds: ["ORD-U2", "ORD-U5"] });
+    expect(first.done).toMatchObject({ status: "SUCCEEDED", ordersAddedCount: 24 });
+    expect(first.adapter.orderQueries.filter((q) => q.filters?.upsell)).toHaveLength(1);
+    expect(await upsold()).toEqual(["ORD-U2", "ORD-U5"]);
+
+    // A full sync clears marks MDM no longer gives.
+    await sync(d, { fixtures: [], credential: SECRET, orders, upsellOrderIds: ["ORD-U5"] });
+    expect(await upsold()).toEqual(["ORD-U5"]);
+
+    // MDM answering with every order means it ignored the filter; refusing it still lets the sync finish.
+    await sync(d, { fixtures: [], credential: SECRET, orders, upsellOrderIds: [], filters: { orders: "ignore" } });
+    expect(await upsold()).toEqual(["ORD-U5"]);
+    const refused = await sync(d, { fixtures: [], credential: SECRET, orders, filters: { orders: "reject" } });
+    expect(refused.done.status).toBe("SUCCEEDED");
+    expect(await upsold()).toEqual(["ORD-U5"]);
   });
 
   it("links orders already imported from the store and keeps their own data", async () => {

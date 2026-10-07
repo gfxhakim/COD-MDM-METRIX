@@ -20,6 +20,8 @@ export type MockOptions = {
   /** Errors thrown by order reads: per order page, and per history lookup. */
   orderFailures?: Record<number, MdmError[]>;
   historyFailures?: Record<string, MdmError[]>;
+  /** Orders MDM's call center upsold. MDM only tells through its upsell search filter, so the orders don't carry it. */
+  upsellOrderIds?: string[];
   /** How MDM treats search filters (tests only): applies them (default), ignores them, or rejects the request. */
   filters?: { orders?: FilterSupport; parcels?: FilterSupport };
   /** The seller's money and stock. Left out, the adapter has no account reader. */
@@ -46,8 +48,9 @@ type MockAdapter = MdmAdapter & { historyCalls: string[]; orderQueries: MdmOrder
 
 const within = (at: Date | null, r: MdmDateRange | undefined) => !r || (!!at && (!r.start || at >= r.start) && (!r.end || at <= r.end));
 
-function mockOrderFilter(o: MdmOrder, f: MdmOrderFilters) {
+function mockOrderFilter(o: MdmOrder, f: MdmOrderFilters, upsells: string[]) {
   return (
+    (f.upsell === undefined || upsells.includes(o.trackingId) === f.upsell) &&
     within(o.placedAt, f.createdAt) &&
     within(o.statusAt, f.statusDate) &&
     (f.isStopDesk === undefined || (o.deliveryType === "STOP_DESK") === f.isStopDesk) &&
@@ -137,7 +140,7 @@ export function createMockAdapter(opts: MockOptions): MockAdapter {
             const filtered = hasOrderFilters(filters);
             if (filtered && support.orders === "reject") throw new MdmError("MDM returned 400", "BAD_RESPONSE");
             // Mock orders carry no update time, so `updatedSince` reads them all.
-            const all = filtered && support.orders === "apply" ? opts.orders!.filter((o) => mockOrderFilter(o, filters!)) : opts.orders!;
+            const all = filtered && support.orders === "apply" ? opts.orders!.filter((o) => mockOrderFilter(o, filters!, opts.upsellOrderIds ?? [])) : opts.orders!;
             const items = all.slice(page * pageSize, (page + 1) * pageSize);
             return { items, nextCursor: (page + 1) * pageSize < all.length ? String(page + 1) : null, total: all.length };
           },

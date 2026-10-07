@@ -59,6 +59,8 @@ export type MdmOrder = {
   city: string | null;
   utm: MdmUtm;
   products: MdmOrderProduct[];
+  /** MDM's upsell flag, when the order itself carries one (the documented order shape does not). */
+  upsell?: boolean | null;
 };
 
 /** `unreadable`: tracking IDs (or "?") of orders on the page that could not be read; the rest still sync. */
@@ -89,6 +91,8 @@ export type MdmOrderFilters = {
   isStopDesk?: boolean;
   trackingIds?: string[];
   externalIds?: string[];
+  /** Only orders MDM's call center upsold. */
+  upsell?: boolean;
 };
 
 export type MdmOrderQuery = { cursor: string | null; updatedSince: Date | null; pageSize: number; filters?: MdmOrderFilters };

@@ -11,7 +11,7 @@ import { syncMdmAccount } from "./account";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { anyShipped, customOrderPlan, customParcelsSince, matchedOrderIds, PARCEL_BATCH, pickCustomOrders, readStep, resolveCustomSync, writeStep } from "./custom";
 import { redactPayload, sha256, stableStringify } from "./redact";
-import { loadOrderSyncEnv, ordersNeedingHistory, upsertMdmOrder } from "./orders";
+import { loadOrderSyncEnv, ordersNeedingHistory, syncUpsells, upsertMdmOrder } from "./orders";
 import { applyStatusDefaults, parcelStatusSelect, reconcileOrderStatuses, setParcelStatus, workspaceStatusOverrides } from "./statuses";
 import { hasOrderFilters, MdmError, type MdmAdapter, type MdmOrderQuery, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
 
@@ -231,6 +231,7 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
         let history = !!adapter.orderUtm && !ordersNote;
         let plan = custom ? customOrderPlan(custom) : null;
         let at = readStep(custom ? cursor : null);
+        let plainTotal: number | null = null;
         for (;;) {
           if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
           const query: MdmOrderQuery = plan ? { cursor: at.page, updatedSince: plan.updatedSince, pageSize: deps.pageSize, filters: plan.passes[at.step] } : { cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize };
@@ -252,6 +253,7 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
             ordersNote = NO_ORDER_ACCESS;
             break;
           }
+          if (!plan) plainTotal = result.total ?? plainTotal;
           for (const id of result.unreadable ?? []) {
             counters.failed++;
             await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: id.slice(0, 200), result: "FAILED", error: "MDM sent this order in an unexpected shape, so it was skipped." } });
@@ -301,6 +303,14 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
           } else cursor = result.nextCursor;
           await db.syncJob.update({ where: { id: job.id }, data: { cursor, page, heartbeatAt: deps.now(), totalCount: result.total ?? undefined, ordersNote, ...countersData(job, counters) } });
           if (!cursor) break;
+        }
+        if (!custom && ordersNote !== NO_ORDER_ACCESS) {
+          try {
+            await syncUpsells(ws, (c) => withRetry(() => adapter.listOrders!({ cursor: c, updatedSince: job.updatedSince, pageSize: deps.pageSize, filters: { upsell: true } }), deps), { full: job.mode === "FULL", plainTotal });
+          } catch (e) {
+            // Upsell marks are extra: a refused or failing upsell search leaves them as they were.
+            console.warn("[mdm] upsell search skipped", e instanceof Error ? e.message : e);
+          }
         }
       }
       phase = "PARCELS";

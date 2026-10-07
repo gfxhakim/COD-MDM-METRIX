@@ -14,6 +14,8 @@ export type OrderListInput = {
   productId?: string;
   creativeId?: string;
   source?: OrderSource;
+  /** Only orders MDM's call center upsold (true), or only the others (false). */
+  upsell?: boolean;
   from?: Date;
   to?: Date;
   page: number;
@@ -42,6 +44,7 @@ export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "p
   if (input.productId) and.push({ lines: { some: { productId: input.productId } } });
   if (input.creativeId) and.push({ attribution: { creativeId: input.creativeId } });
   if (input.source) and.push({ source: input.source });
+  if (input.upsell !== undefined) and.push({ mdmUpsell: input.upsell });
   if (input.from) and.push({ placedAt: { gte: input.from } });
   if (input.to) and.push({ placedAt: { lte: input.to } });
   return { AND: and };
@@ -75,6 +78,9 @@ export async function listOrders(ctx: WorkspaceContext, input: OrderListInput) {
         source: o.source,
         product: o.lines[0]?.product?.name ?? o.lines[0]?.productName ?? null,
         extraLines: Math.max(0, o.lines.length - 1),
+        /** Every line as MDM or the store named it, with its quantity. */
+        lines: o.lines.map((l) => ({ name: l.productName ?? l.product?.name ?? null, product: l.product?.name ?? null, quantity: l.quantity })),
+        upsell: o.mdmUpsell,
         creative: o.attribution?.creative ?? null,
         placedAt: o.placedAt,
         wilaya: o.wilaya,

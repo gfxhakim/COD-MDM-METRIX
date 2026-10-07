@@ -153,6 +153,7 @@ export function mapMdmOrder(raw: unknown): MdmOrder {
     city: str(dest.cityName),
     utm: { source: utmValue(utm.source), medium: utmValue(utm.medium), campaign: utmValue(utm.campaign), content: utmValue(utm.content) },
     products,
+    upsell: typeof o.upsell === "boolean" ? o.upsell : null,
   };
 }
 
@@ -196,6 +197,7 @@ function orderFilters(f: MdmOrderFilters | undefined) {
     ...(f.isStopDesk !== undefined ? { isStopDesk: f.isStopDesk } : {}),
     ...(f.trackingIds?.length ? { trackingId: f.trackingIds } : {}),
     ...(f.externalIds?.length ? { externalId: f.externalIds } : {}),
+    ...(f.upsell !== undefined ? { upsell: f.upsell } : {}),
   };
 }
 

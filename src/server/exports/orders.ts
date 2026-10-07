@@ -40,6 +40,7 @@ export type ExportFilters = {
   productId?: string;
   creativeId?: string;
   source?: OrderSource;
+  upsell?: boolean;
 };
 
 export type ExportOptions = ExportFilters & {
@@ -107,7 +108,7 @@ export const orderStatusSelect = {
 } as const satisfies Prisma.OrderSelect;
 
 function exportWhere(ctx: WorkspaceContext, f: ExportFilters, range: { from?: Date; to?: Date }): Prisma.OrderWhereInput {
-  const and: Prisma.OrderWhereInput[] = [orderWhere(ctx, { search: f.search, wilaya: f.wilaya, productId: f.productId, creativeId: f.creativeId, source: f.source })];
+  const and: Prisma.OrderWhereInput[] = [orderWhere(ctx, { search: f.search, wilaya: f.wilaya, productId: f.productId, creativeId: f.creativeId, source: f.source, upsell: f.upsell })];
   if (f.scope === "mdm") and.push({ OR: [{ source: "MDM_EXPRESS" }, { mdmOrderId: { not: null } }, { parcels: { some: { provider: "MDM_EXPRESS" } } }] });
   if (range.from && f.dateField === "placed") and.push({ placedAt: { gte: range.from } });
   // A status never comes before its order, so this bound also holds when filtering on the status date.
@@ -174,6 +175,7 @@ const exportSelect = {
   utmSource: true,
   utmCampaign: true,
   utmContent: true,
+  mdmUpsell: true,
   lines: { select: { productName: true, sku: true, quantity: true, unitPrice: true, currency: true, product: { select: { name: true, sku: true } } }, orderBy: [{ productName: "asc" }, { id: "asc" }] },
   attribution: { select: { creative: { select: { externalCreativeId: true, name: true } } } },
   parcels: {
@@ -252,6 +254,7 @@ export async function exportOrders(ctx: WorkspaceContext, opts: ExportOptions) {
       statusGroup: statusGroupLabel(s.group),
       statusAt: s.at,
       placedAt: o.placedAt,
+      upsell: o.mdmUpsell ? "Yes" : "No",
       trackingId: o.parcels.map((p) => p.trackingId).join(", ") || null,
       store: o.storeName,
       source: SOURCE_LABEL[o.source],

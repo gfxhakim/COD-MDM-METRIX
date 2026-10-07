@@ -18,7 +18,7 @@ import { formatDateTime, humanize } from "@/lib/utils";
 import { providerStatusLabel } from "@/domain/statusMapping";
 import { useInvalidateOrders } from "./orders-view";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="mb-6">
       <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-subtle">{title}</h3>
@@ -108,7 +108,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
               ) : null}
             </Section>
 
-            <Section title="Lines">
+            <Section title={o.mdmUpsell ? <span className="flex items-center gap-2">Lines <Badge tone="brand">Upsell</Badge></span> : "Lines"}>
               <ul className="divide-y divide-border rounded-lg border border-border bg-surface-2 text-sm">
                 {o.lines.map((l) => (
                   <li key={l.id} className="flex items-center justify-between px-4 py-2">
