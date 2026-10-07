@@ -484,6 +484,7 @@ tbody > tr.row-in:nth-child(n + 9) {
 .nav-emoji[data-motion="spin"] { --emoji-motion: emoji-spin; transform-origin: 50% 50%; }
 .nav-emoji[data-motion="tilt"] { --emoji-motion: emoji-tilt; }
 .nav-emoji[data-motion="drop"] { --emoji-motion: emoji-drop; }
+.nav-emoji[data-motion="jingle"] { --emoji-motion: emoji-jingle; transform-origin: 50% 10%; }
 @keyframes emoji-bars {
   25% { transform: translateY(-3px) scale(1.08, 1.22); }
   50% { transform: scale(0.96, 0.88); }
@@ -527,6 +528,12 @@ tbody > tr.row-in:nth-child(n + 9) {
   25% { transform: rotate(-16deg); }
   50% { transform: rotate(12deg); }
   75% { transform: rotate(-6deg); }
+}
+@keyframes emoji-jingle {
+  15% { transform: translateY(-4px) rotate(-12deg); }
+  35% { transform: translateY(-4px) rotate(10deg); }
+  55% { transform: translateY(-2px) rotate(-6deg); }
+  75% { transform: rotate(3deg); }
 }
 @keyframes emoji-drop {
   0% { transform: translateY(-8px); opacity: 0.4; }

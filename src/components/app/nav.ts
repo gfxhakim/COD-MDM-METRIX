@@ -4,6 +4,7 @@
  */
 export const NAV = [
   { href: "/", label: "Dashboard", emoji: "📊", motion: "bars" },
+  { href: "/profit", label: "Profit tracker", emoji: "💰", motion: "jingle" },
   { href: "/expenses", label: "Expenses", emoji: "🧾", motion: "wiggle" },
   { href: "/products", label: "Products", emoji: "📦", motion: "hop" },
   { href: "/orders", label: "Orders & parcels", emoji: "🛒", motion: "roll" },

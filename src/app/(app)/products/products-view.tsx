@@ -67,7 +67,7 @@ function CostFields({ value, onChange, currency, rates }: { value: CostForm; onC
   );
 }
 
-type ProductRow = {
+export type ProductRow = {
   id: string;
   name: string;
   sku: string;
@@ -140,7 +140,8 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
   );
 }
 
-function CostVersionDialog({ product, open, onOpenChange, rates }: { product: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; rates: Rates }) {
+/** New cost version for a product. Also opened from the Profit tracker, which passes `onSaved` to refresh itself. */
+export function CostVersionDialog({ product, open, onOpenChange, rates, onSaved }: { product: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; rates: Rates; onSaved?: () => void }) {
   const money = useMoney();
   const trpc = useTRPC();
   const qc = useQueryClient();
@@ -165,6 +166,7 @@ function CostVersionDialog({ product, open, onOpenChange, rates }: { product: Pr
         qc.invalidateQueries({ queryKey: trpc.products.list.queryKey() });
         qc.invalidateQueries({ queryKey: trpc.products.get.queryKey({ id: product.id }) });
         toast("success", "New cost version saved");
+        onSaved?.();
         onOpenChange(false);
       },
       onError: (e) => setError(errorMessage(e)),

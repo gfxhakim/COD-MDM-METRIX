@@ -8,8 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 8–10 use the seeded DEMO workspace, whose MDM connection runs on the
  * labelled mock adapter (no request ever reaches MDM).
  * Flow 11 signs in as a different business and probes both workspaces.
- * Flows 12–16 came later: Meta ads, campaigns, exporting orders, custom syncs,
- * and MDM money and stock.
+ * Flows 12–17 came later: Meta ads, campaigns, exporting orders, custom syncs,
+ * MDM money and stock, and the Profit tracker.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -236,6 +236,42 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.locator("tr", { hasText: "Alger" })).toBeVisible();
   });
 
+  test("17. see what a product's stock earns before ads, with ads and fees, and save its numbers", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link").nth(1)).toHaveAccessibleName(/Profit tracker/);
+    await page.goto("/profit");
+    await expect(page.getByRole("heading", { name: "Profit tracker", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
+    const card = page.getByRole("region", { name: "Posture Corrector Pro" });
+    // The MDM stock read by the sync counts for the product with the same name: 142 + 71 units,
+    // at 3900 − 1050 DZD each.
+    await expect(card.getByLabel("Units", { exact: true })).toHaveValue("213");
+    await expect(card.getByText("213 units ×")).toBeVisible();
+    await expect(card.getByText("607,050").first()).toBeVisible();
+
+    await card.getByRole("tab", { name: /With ads, rates and fees/ }).click();
+    await expect(card.getByText("Real benefit").first()).toBeVisible();
+    await expect(card.getByRole("list", { name: "From the benefit before ads to the real benefit" })).toContainText("Ad spend");
+    await card.getByLabel("Delivered (of shipped)").fill("0");
+    await expect(card.getByRole("alert")).toContainText("never sells");
+    await card.getByLabel("Delivered (of shipped)").fill("70");
+
+    await card.getByLabel("Stock to count").selectOption("TYPED");
+    await card.getByLabel("Units", { exact: true }).fill("500");
+    await card.getByRole("button", { name: "Save for this product" }).click();
+    await expect(page.getByText("Saved for Posture Corrector Pro")).toBeVisible();
+    await page.reload();
+    await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
+    await expect(card.getByText("Your numbers saved")).toBeVisible();
+    await expect(card.getByLabel("Units", { exact: true })).toHaveValue("500");
+    await card.getByRole("button", { name: "Back to my data" }).click();
+    await expect(card.getByText("Your numbers saved")).toHaveCount(0);
+    await expect(card.getByLabel("Units", { exact: true })).toHaveValue("213");
+
+    await card.getByRole("tab", { name: /Real orders/ }).click();
+    await expect(card.getByText("Real profit").first()).toBeVisible();
+  });
+
   test("12. connect Meta ads without the token reaching the browser, and sync spend", async ({ page }) => {
     const token = "demo-meta-token-00000000000000007777";
     const second = "demo-meta-token-00000000000000008888";
@@ -363,7 +399,7 @@ test("11. another business cannot reach either workspace's data", async ({ page 
   expect(workspaceIds.e2e && workspaceIds.demo).toBeTruthy();
   await signIn(page, "other@codflow.local", "other-password-123");
   for (const ws of [workspaceIds.e2e!, workspaceIds.demo!]) {
-    for (const proc of ["orders.list", "integrations.mdm", "sync.list", "expenses.list", "money.overview"]) {
+    for (const proc of ["orders.list", "integrations.mdm", "sync.list", "expenses.list", "money.overview", "profit.tracker"]) {
       const res = await trpcQuery(page, proc, ws);
       expect(res.status, `${proc} on a foreign workspace`).toBe(403);
       expect(res.body).not.toContain("E2E analytics tool");

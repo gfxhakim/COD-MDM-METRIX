@@ -95,7 +95,13 @@ describe("cron endpoint", () => {
     expect(res.status).toBe(202);
     const body = await res.json();
     expect(body.scheduled).toBeGreaterThanOrEqual(1);
-    const [job] = await jobsOf(t.ws.id);
+    let [job] = await jobsOf(t.ws.id);
+    // Other test files' connected workspaces share this database, so their scheduled syncs queue in
+    // the same tick. Each request runs at most 10 jobs: ours may only run on the next tick.
+    for (let tick = 0; tick < 5 && job?.status === "QUEUED"; tick++) {
+      expect((await call("Bearer " + "c".repeat(40))).status).toBe(202);
+      [job] = await jobsOf(t.ws.id);
+    }
     expect(job).toMatchObject({ trigger: "SCHEDULED", status: "SUCCEEDED", adapter: "live" });
     expect(sent).toContain(SECRET);
     expect(JSON.stringify(body)).not.toContain(SECRET);

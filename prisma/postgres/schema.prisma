@@ -235,6 +235,7 @@ model Workspace {
   mdmStock         MdmStockItem[]
   mdmArrivals      MdmStockArrival[]
   mdmProductLinks  MdmProductLink[]
+  profitPlans      ProfitPlan[]
   creatives        Creative[]
   adSpend          AdSpend[]
   adAccounts       AdAccount[]
@@ -470,6 +471,7 @@ model Product {
 
   workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   mdmLinks     MdmProductLink[]
+  profitPlan   ProfitPlan?
   costVersions ProductCostVersion[]
   orderLines   OrderLine[]
   creatives    Creative[]
@@ -482,8 +484,6 @@ model Product {
   @@index([workspaceId, active])
 }
 
-/// Immutable history of unit-economics assumptions. Never updated in place;
-/// a new version closes the previous one by setting its effectiveTo.
 /// Which product in the app each MDM product counts as. The sync adds one the first time MDM sends a
 /// product with an order (linking an existing product, or creating one); an owner can move it to another product.
 model MdmProductLink {
@@ -503,6 +503,29 @@ model MdmProductLink {
   @@index([productId])
 }
 
+/// What the Profit tracker counts for one product, once an owner or admin saved it: where the stock
+/// count comes from, and the values typed over the ones read from the data.
+model ProfitPlan {
+  productId   String   @id
+  workspaceId String
+  /// MDM_AVAILABLE, MDM_WITH_INCOMING, MDM_RECEIVED or TYPED (src/domain/profitTracker.ts).
+  stockSource String   @default("MDM_AVAILABLE")
+  /// The units typed in, for TYPED.
+  stockUnits  Int?
+  /// { salePrice?, unitCost?, deliveryRate?, cpa?, … }: only the values someone typed.
+  overrides   Json?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/// Immutable history of unit-economics assumptions. Never updated in place;
+/// a new version closes the previous one by setting its effectiveTo.
 model ProductCostVersion {
   id                   String    @id @default(uuid())
   workspaceId          String
