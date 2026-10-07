@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { adFilterSchema } from "@/domain/adFilter";
 import { EXPORT_COLUMN_KEYS, EXPORT_FORMATS } from "@/domain/orderExport";
 import { exportOrders, orderExportPreview } from "@/server/exports/orders";
 import * as repo from "@/server/repositories/orders";
@@ -18,6 +19,7 @@ const exportFilters = z.object({
   creativeId: id.optional(),
   source: orderSourceEnum.optional(),
   upsell: z.boolean().optional(),
+  ads: adFilterSchema.optional(),
 });
 
 export const ordersRouter = router({
@@ -34,6 +36,7 @@ export const ordersRouter = router({
         upsell: z.boolean().optional(),
         from: z.coerce.date().optional(),
         to: z.coerce.date().optional(),
+        ads: adFilterSchema.optional(),
         page: z.number().int().min(1).default(1),
         pageSize: z.number().int().min(10).max(100).default(25),
       }),

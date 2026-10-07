@@ -85,6 +85,27 @@ export async function listAdLinks(ctx: WorkspaceContext) {
   return { accounts, campaigns: campaigns.map((c) => ({ ...c, running: c.status !== null && RUNNING_STATUSES.has(c.status) })) };
 }
 
+/**
+ * What the Meta ads filter offers: each saved token (one per Business Manager), each ad account with
+ * the token that reads it, and each campaign with its ad account. Ad accounts only known from imported
+ * spend are listed too.
+ */
+export async function adFilterOptions(ctx: WorkspaceContext) {
+  await ensureCampaigns(ctx.workspaceId);
+  const [tokens, accounts, campaigns] = await Promise.all([
+    db.metaToken.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: [{ label: "asc" }, { createdAt: "asc" }], select: { id: true, label: true } }),
+    db.adAccount.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: [{ name: "asc" }, { externalId: "asc" }], select: { externalId: true, name: true, tokenId: true, enabled: true } }),
+    db.campaign.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: [{ name: "asc" }, { externalId: "asc" }], select: { externalId: true, name: true, adAccountId: true, status: true } }),
+  ]);
+  const known = new Set(accounts.map((a) => a.externalId));
+  const fromSpend = [...new Set(campaigns.map((c) => c.adAccountId).filter((a): a is string => !!a && !known.has(a)))].map((externalId) => ({ externalId, name: null, tokenId: null, enabled: true }));
+  return {
+    tokens,
+    accounts: [...accounts, ...fromSpend],
+    campaigns: campaigns.map((c) => ({ ...c, running: c.status !== null && RUNNING_STATUSES.has(c.status) })),
+  };
+}
+
 async function assertProduct(ctx: WorkspaceContext, productId: string | null) {
   if (!productId) return;
   const p = await db.product.findFirst({ where: { id: productId, workspaceId: ctx.workspaceId }, select: { id: true } });

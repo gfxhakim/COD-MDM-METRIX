@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import type { AdFilter } from "@/domain/adFilter";
 import { selectCostVersion } from "@/domain/costVersions";
 import { allocateOverhead, computeMetrics, sumTotals } from "@/domain/economics";
 import { profitPlanSchema, type Defaults, type ProductData, type ProfitPlan } from "@/domain/profitTracker";
@@ -23,12 +24,12 @@ function readPlan(row: { stockSource: string; stockUnits: number | null; overrid
  * were placed), and what someone saved for it. The two stock calculations themselves run in the
  * browser (src/domain/profitTracker.ts), so typed values update them at once.
  */
-export async function profitTracker(ctx: WorkspaceContext, input: { from?: string; to?: string }) {
+export async function profitTracker(ctx: WorkspaceContext, input: { from?: string; to?: string; ads?: AdFilter }) {
   assertCan(ctx, "money.read");
   const workspaceId = ctx.workspaceId;
   const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { timezone: true, isDemo: true } });
   const [facts, products, stock, links] = await Promise.all([
-    loadFacts(ctx, dayRange(input, ws.timezone)),
+    loadFacts(ctx, dayRange(input, ws.timezone), input.ads),
     db.product.findMany({
       where: { workspaceId },
       select: { id: true, name: true, sku: true, active: true, fromMdm: true, costVersions: true, profitPlan: { select: { stockSource: true, stockUnits: true, overrides: true, updatedAt: true } } },
@@ -149,6 +150,8 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
   return {
     currency: facts.currency,
     demo: ws.isDemo,
+    /** Only the orders and spend of the picked Meta ads count. */
+    adScoped: facts.adScoped,
     defaults,
     minFinished,
     unlinkedSpend: soleProductId ? 0 : unlinkedSpend,

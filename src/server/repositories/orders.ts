@@ -1,10 +1,12 @@
 import type { NormalizedStatus, OrderSource, OrderStatus, Prisma } from "@prisma/client";
+import type { AdFilter } from "@/domain/adFilter";
 import { db } from "@/server/db";
 import { audit } from "@/server/audit";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone, maskPhone } from "@/lib/pii";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 import { customerFor } from "@/server/customers";
+import { resolveAdScope, scopeCampaignIds } from "@/server/reports/adScope";
 
 export type OrderListInput = {
   search?: string;
@@ -18,11 +20,19 @@ export type OrderListInput = {
   upsell?: boolean;
   from?: Date;
   to?: Date;
+  /** Only orders whose ad is in these Meta Business Managers, ad accounts or campaigns. */
+  ads?: AdFilter;
   page: number;
   pageSize: number;
 };
 
-export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "page" | "pageSize">): Prisma.OrderWhereInput {
+/** The campaigns (platform IDs) an order's ad must be in for an ad filter, or undefined for any order. */
+export async function adCampaignIdsFor(ctx: WorkspaceContext, ads: AdFilter | undefined) {
+  const scope = await resolveAdScope(ctx.workspaceId, ads);
+  return scope ? scopeCampaignIds(ctx.workspaceId, scope) : undefined;
+}
+
+export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "page" | "pageSize" | "ads"> & { adCampaignIds?: string[] }): Prisma.OrderWhereInput {
   const and: Prisma.OrderWhereInput[] = [{ workspaceId: ctx.workspaceId }];
   if (input.search) {
     const q = input.search.trim();
@@ -45,13 +55,14 @@ export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "p
   if (input.creativeId) and.push({ attribution: { creativeId: input.creativeId } });
   if (input.source) and.push({ source: input.source });
   if (input.upsell !== undefined) and.push({ mdmUpsell: input.upsell });
+  if (input.adCampaignIds) and.push({ attribution: { creative: { campaignId: { in: input.adCampaignIds } } } });
   if (input.from) and.push({ placedAt: { gte: input.from } });
   if (input.to) and.push({ placedAt: { lte: input.to } });
   return { AND: and };
 }
 
 export async function listOrders(ctx: WorkspaceContext, input: OrderListInput) {
-  const where = orderWhere(ctx, input);
+  const where = orderWhere(ctx, { ...input, adCampaignIds: await adCampaignIdsFor(ctx, input.ads) });
   const [total, rows] = await Promise.all([
     db.order.count({ where }),
     db.order.findMany({

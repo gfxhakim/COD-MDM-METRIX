@@ -8,8 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 8–10 use the seeded DEMO workspace, whose MDM connection runs on the
  * labelled mock adapter (no request ever reaches MDM).
  * Flow 11 signs in as a different business and probes both workspaces.
- * Flows 12–18 came later: Meta ads, campaigns, exporting orders, custom syncs,
- * MDM money and stock, the Profit tracker, and repeating expenses.
+ * Flows 12–19 came later: Meta ads, campaigns, exporting orders, custom syncs,
+ * MDM money and stock, the Profit tracker, repeating expenses, and the Meta ads filter.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -431,6 +431,34 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(dialog.getByRole("button", { name: "Start custom sync" })).toBeDisabled();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
+  });
+
+  test("19. filter by Meta campaigns from any ad account, on every page", async ({ page }) => {
+    await page.goto("/orders");
+    const count = page.getByText(/^[\d,]+ orders$/);
+    await expect(count).toBeVisible();
+    const all = Number((await count.textContent())!.replace(/\D/g, ""));
+
+    await page.getByRole("button", { name: "Meta ads: All ads" }).click();
+    const panel = page.getByRole("dialog", { name: "Filter by Meta ads" });
+    await panel.getByRole("checkbox", { name: /LN-03 \| Conversions/ }).check();
+    await panel.getByRole("checkbox", { name: /MB-02 \| Conversions/ }).check();
+    await expect(panel.getByText("Counts 2 campaigns.")).toBeVisible();
+    await panel.getByRole("button", { name: "Show results" }).click();
+    await expect(page.getByRole("button", { name: "Meta ads: 2 campaigns" })).toBeVisible();
+    await expect.poll(async () => Number((await count.textContent())!.replace(/\D/g, ""))).toBeLessThan(all);
+    await expect(page.locator("tbody tr", { hasText: "Posture Corrector Pro" })).toHaveCount(0);
+
+    // The pick follows to the other pages until it is cleared.
+    await page.goto("/creatives");
+    await expect(page.getByRole("button", { name: "Meta ads: 2 campaigns" })).toBeVisible();
+    await expect(page.locator("tr", { hasText: "cr_ln_story_02" })).toBeVisible();
+    await expect(page.locator("tr", { hasText: "cr_pc_ugc_01" })).toHaveCount(0);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Show all ads" }).click();
+    await expect(page.getByRole("button", { name: "Meta ads: All ads" })).toBeVisible();
+    await page.goto("/creatives");
+    await expect(page.locator("tr", { hasText: "cr_pc_ugc_01" })).toBeVisible();
   });
 });
 

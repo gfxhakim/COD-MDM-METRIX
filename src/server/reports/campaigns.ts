@@ -1,3 +1,4 @@
+import type { AdFilter } from "@/domain/adFilter";
 import { computeMetrics, creativeVerdict, sumTotals, type Metrics, type RevenueView, type Totals, type Verdict } from "@/domain/economics";
 import { db } from "@/server/db";
 import { ensureCampaigns, RUNNING_STATUSES } from "@/server/repositories/campaigns";
@@ -41,10 +42,10 @@ const emptyAcc = (): Acc => ({ totals: [], spend: 0, overhead: 0, otherProductOr
  * An order belongs to the campaign of its ad (the ad ID in utm_content); spend to the campaign
  * Meta reported it under. Overhead is what the campaign's ads were allocated in the creative matrix.
  */
-export async function campaignReport(ctx: WorkspaceContext, input: DateRange & { adAccountId?: string; revenueView?: RevenueView }) {
+export async function campaignReport(ctx: WorkspaceContext, input: DateRange & { adAccountId?: string; revenueView?: RevenueView; ads?: AdFilter }) {
   await ensureCampaigns(ctx.workspaceId);
   const [facts, adAccounts] = await Promise.all([
-    loadFacts(ctx, input),
+    loadFacts(ctx, input, input.ads),
     db.adAccount.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: [{ name: "asc" }, { externalId: "asc" }], select: { id: true, externalId: true, name: true, currency: true, enabled: true, defaultProductId: true } }),
   ]);
   const view = input.revenueView ?? facts.defaults.revenueView;
@@ -120,7 +121,7 @@ export async function campaignReport(ctx: WorkspaceContext, input: DateRange & {
   });
   rows.sort((x, y) => Number(y.running) - Number(x.running) || y.metrics.adSpend - x.metrics.adSpend || y.metrics.placed - x.metrics.placed || (x.name ?? "").localeCompare(y.name ?? ""));
   const loose = accs.get(NO_CAMPAIGN);
-  if (!filter && loose && (loose.totals.length || loose.spend)) {
+  if (!filter && !facts.adScoped && loose && (loose.totals.length || loose.spend)) {
     rows.push({
       key: NO_CAMPAIGN,
       kind: "NO_CAMPAIGN",

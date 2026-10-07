@@ -5,6 +5,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { AlertTriangle, Lock, PackageOpen, Pencil, RotateCcw, Save } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { useMoney } from "@/components/app/currency";
 import { FitMoney } from "@/components/app/fit-money";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
@@ -702,7 +703,8 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
   const timezone = workspace.data?.timezone ?? "Africa/Algiers";
   const days = rangeDays(range, todayIn(timezone), custom);
   const bad = !!days.from && !!days.to && days.from > days.to;
-  const tracker = useQuery({ ...trpc.profit.tracker.queryOptions(days), enabled: canRead && !bad, placeholderData: keepPreviousData });
+  const ads = useAdsFilter().filter;
+  const tracker = useQuery({ ...trpc.profit.tracker.queryOptions({ ...days, ads }), enabled: canRead && !bad, placeholderData: keepPreviousData });
   const products = useQuery({ ...trpc.products.list.queryOptions(), enabled: canEdit });
   const [picked, setPicked] = React.useState(initialProductId);
   const [editing, setEditing] = React.useState(false);
@@ -751,6 +753,10 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
           </div>
         ) : null}
         {bad ? <p className="text-sm text-negative">The start day must be before the end day.</p> : null}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <AdsFilter />
+          {ads ? <span className="text-xs text-muted">Only the orders and ad spend of these ads count. Stock and product details stay the same.</span> : null}
+        </div>
       </div>
 
       {tracker.isError ? (

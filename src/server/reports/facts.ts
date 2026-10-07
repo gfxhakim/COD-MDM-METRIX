@@ -1,10 +1,12 @@
 import type { AdPlatform } from "@prisma/client";
 import { db } from "@/server/db";
+import type { AdFilter } from "@/domain/adFilter";
 import { selectCostVersion } from "@/domain/costVersions";
 import { recurringByMonth } from "@/domain/recurring";
-import type { CostResolver, CostTerms, ExpenseFact, OrderFact } from "@/domain/economics";
+import { allocateOverhead, orderEconomics, type AllocationGroup, type CostResolver, type CostTerms, type ExpenseFact, type OrderFact } from "@/domain/economics";
 import { parseEconomicsDefaults, parseVerdictThresholds } from "@/domain/settings";
 import type { WorkspaceContext } from "@/server/tenancy";
+import { resolveAdScope, scopeMatcher } from "./adScope";
 
 export type DateRange = { from?: Date; to?: Date };
 
@@ -36,6 +38,8 @@ export type WorkspaceFacts = {
   defaults: ReturnType<typeof parseEconomicsDefaults>;
   thresholds: ReturnType<typeof parseVerdictThresholds>;
   currency: string;
+  /** True when only some Meta ads count (see `loadFacts`). */
+  adScoped: boolean;
 };
 
 const between = (r: DateRange) => (r.from || r.to ? { gte: r.from, lte: r.to } : undefined);
@@ -45,13 +49,18 @@ const between = (r: DateRange) => (r.from || r.to ? { gte: r.from, lte: r.to } :
  * Orders are a cohort by placed date; spend and expenses are filtered by their own dates.
  * Repeating expenses add their share of the range, one fact per month.
  *
+ * With an ad filter, only the orders whose ad is in the picked campaigns or ad accounts count
+ * (orders without an ad don't), only the spend of those campaigns or accounts, only those campaigns,
+ * and the share of the expenses those orders take under the overhead rule.
+ *
  * Which product ad spend counts for, most specific link first: the campaign's own product,
  * then its ad account's default product, then the ad's own product. Orders keep the product
  * of their own lines.
  */
-export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promise<WorkspaceFacts> {
+export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: AdFilter | null): Promise<WorkspaceFacts> {
   const w = ctx.workspaceId;
-  const [ws, orders, spend, expenses, recurring, creatives, products, versions, campaigns, accounts] = await Promise.all([
+  const [scope, ws, orders, spend, expenses, recurring, creatives, products, versions, campaigns, accounts] = await Promise.all([
+    resolveAdScope(w, ads),
     db.workspace.findUniqueOrThrow({ where: { id: w }, select: { currency: true, economicsDefaults: true, verdictThresholds: true } }),
     db.order.findMany({
       where: { workspaceId: w, placedAt: between(range) },
@@ -96,15 +105,8 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promis
     return terms;
   };
 
-  return {
-    currency: ws.currency,
-    defaults: parseEconomicsDefaults(ws.economicsDefaults),
-    thresholds: parseVerdictThresholds(ws.verdictThresholds),
-    resolveCost,
-    creatives: creativeInfo,
-    campaigns: campaignInfo,
-    products,
-    orders: orders.map((o) => ({
+  const defaults = parseEconomicsDefaults(ws.economicsDefaults);
+  const orderFacts = orders.map((o) => ({
       id: o.id,
       orderNumber: o.orderNumber,
       placedAt: o.placedAt,
@@ -118,17 +120,64 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promis
       // REMITTED events carry the gross COD settled for a parcel. Carrier fees are already charged
       // through outbound shipping / RTO costs, so CARRIER_FEE events are not subtracted again here.
       remittedCash: o.cashEvents.reduce((a, e) => a + (e.type === "REMITTED" || e.type === "ADJUSTMENT" ? e.amount : 0), 0),
-    })),
-    spend: spend.map((s) => ({
+    }));
+  const spendFacts: SpendFact[] = spend.map((s) => ({
       creativeId: s.creativeId,
       campaignId: s.campaignId,
       adAccountId: s.adAccountId,
       productId: (s.campaignId ? campaignProduct.get(s.campaignId) : undefined) ?? (s.adAccountId ? accountProduct.get(s.adAccountId) : undefined) ?? (s.creativeId ? creativeProduct.get(s.creativeId) ?? null : null),
       date: s.date,
       spend: s.spend,
-    })),
-    expenses: [...expenses, ...recurringFacts(recurring, range, new Date())],
+    }));
+  const expenseFacts = [...expenses, ...recurringFacts(recurring, range, new Date())];
+
+  const facts: WorkspaceFacts = {
+    currency: ws.currency,
+    defaults,
+    thresholds: parseVerdictThresholds(ws.verdictThresholds),
+    resolveCost,
+    creatives: creativeInfo,
+    campaigns: campaignInfo,
+    products,
+    orders: orderFacts,
+    spend: spendFacts,
+    expenses: expenseFacts,
+    adScoped: false,
   };
+  if (!scope) return facts;
+
+  const inScope = scopeMatcher(scope, new Map(campaigns.map((c) => [c.externalId, c.adAccountId])));
+  const adCampaign = new Map(creatives.map((c) => [c.id, c.campaignId]));
+  const orderIn = (o: { creativeId: string | null }) => !!o.creativeId && inScope(adCampaign.get(o.creativeId) ?? null);
+  return {
+    ...facts,
+    adScoped: true,
+    orders: orderFacts.filter(orderIn),
+    spend: spendFacts.filter((s) => inScope(s.campaignId ?? (s.creativeId ? (adCampaign.get(s.creativeId) ?? null) : null), s.adAccountId)),
+    campaigns: campaignInfo.filter((c) => inScope(c.externalId, c.adAccountId)),
+    expenses: expenseShare(orderFacts, orderIn, expenseFacts, facts, range.to ?? new Date()),
+  };
+}
+
+/**
+ * The expenses the orders in scope take: every order of the range is weighed by the overhead rule
+ * (delivered orders or revenue, per product), and the part allocated to the orders in scope is kept,
+ * on their products. Nothing is kept when the rule leaves expenses unallocated.
+ */
+function expenseShare(all: WorkspaceFacts["orders"], isIn: (o: WorkspaceFacts["orders"][number]) => boolean, expenses: WorkspaceFacts["expenses"], facts: WorkspaceFacts, date: Date): WorkspaceFacts["expenses"] {
+  const groups = new Map<string, AllocationGroup & { inScope: boolean }>();
+  for (const o of all) {
+    const inScope = isIn(o);
+    const key = `${inScope ? "in" : "out"}|${o.productId ?? ""}`;
+    const g = groups.get(key) ?? groups.set(key, { key, productId: o.productId, deliveredOrders: 0, deliveredRevenue: 0, inScope }).get(key)!;
+    const t = orderEconomics(o, facts.resolveCost, facts.defaults);
+    g.deliveredOrders += t.deliveredOrders;
+    g.deliveredRevenue += t.deliveredRevenue;
+  }
+  const { allocated } = allocateOverhead([...groups.values()], expenses, facts.defaults.overheadPolicy);
+  return [...groups.values()]
+    .filter((g) => g.inScope && (allocated.get(g.key) ?? 0) > 0)
+    .map((g) => ({ amount: allocated.get(g.key)!, allocation: g.productId ? ("PRODUCT" as const) : ("GLOBAL" as const), productId: g.productId, date }));
 }
 
 function recurringFacts(rows: (Parameters<typeof recurringByMonth>[0] & Omit<ExpenseFact, "amount">)[], range: DateRange, now: Date) {

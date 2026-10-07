@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { ChevronLeft, ChevronRight, ClipboardList, Download, Plus, Search } from "lucide-react";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
+import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { PageHeader } from "@/components/app/page-header";
 import { OrderStatusBadge, ParcelStatusBadge } from "@/components/app/status";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +48,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
     return () => clearTimeout(t);
   }, [search]);
   // Changing any filter returns to page 1.
-  const filterKey = JSON.stringify([debounced, status, parcelStatus, wilaya, productId, creativeId, upsell]);
+  const ads = useAdsFilter().filter;
+  const filterKey = JSON.stringify([debounced, status, parcelStatus, wilaya, productId, creativeId, upsell, ads]);
   const upsellFilter = upsell === "" ? undefined : upsell === "yes";
   const [pageState, setPageState] = React.useState({ key: filterKey, page: 1 });
   const page = pageState.key === filterKey ? pageState.page : 1;
@@ -64,6 +66,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
       productId: productId || undefined,
       creativeId: creativeId || undefined,
       upsell: upsellFilter,
+      ads,
       page,
       pageSize,
     }),
@@ -90,6 +93,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
             <label htmlFor="order-search" className="sr-only">Search orders</label>
             <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
+          <AdsFilter className="col-span-2" />
           <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full sm:w-36">
             <option value="">All orders</option>
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
@@ -194,6 +198,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
             creativeId: creativeId || undefined,
             creativeName: facets.data?.creatives.find((c) => c.id === creativeId)?.externalCreativeId,
             upsell: upsellFilter,
+            ads,
           }}
           onClose={() => setExporting(false)}
           onPrint={(data, title) => {

@@ -24,6 +24,7 @@ import {
   type ExportFormat,
   type StatusGroupKey,
 } from "@/domain/orderExport";
+import { adFilterLabel, type AdFilter } from "@/domain/adFilter";
 import { addDays, RANGES, rangeDays, shortDay, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { download } from "@/lib/download";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
@@ -44,6 +45,8 @@ export type PageFilters = {
   creativeName?: string;
   source?: OrderSource;
   upsell?: boolean;
+  /** Meta ads picked in the ads filter. */
+  ads?: AdFilter;
 };
 
 const FORMATS: { key: ExportFormat; label: string; hint: string; icon: React.ReactNode }[] = [
@@ -145,6 +148,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     creativeId: carry.creativeId || undefined,
     source: carry.source || undefined,
     upsell: carry.upsell,
+    ads: carry.ads,
   };
   const preview = useQuery({ ...trpc.orders.exportPreview.queryOptions(query), enabled: !badRange, placeholderData: keepPreviousData });
 
@@ -225,6 +229,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     carry.creativeId ? { key: "creativeId" as const, label: `Ad ${carry.creativeName ?? ""}`.trim() } : null,
     carry.source ? { key: "source" as const, label: `Source: ${carry.source.toLowerCase()}` } : null,
     carry.upsell !== undefined ? { key: "upsell" as const, label: carry.upsell ? "Upsold orders" : "Orders without upsell" } : null,
+    carry.ads ? { key: "ads" as const, label: `Meta ads: ${adFilterLabel(carry.ads)}` } : null,
   ].filter((c) => c !== null);
 
   return (

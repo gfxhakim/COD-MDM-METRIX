@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowUpRight, Boxes, FileWarning, Link2Off, PackageCheck, PhoneCall, SlidersHorizontal, TrendingUp, Unlink } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { useMoney } from "@/components/app/currency";
 import { FitMoney, FitText, moneyParts } from "@/components/app/fit-money";
 import { Money, Rate, Ratio } from "@/components/app/format";
@@ -365,6 +366,7 @@ export function DashboardView() {
   const [creativeId, setCreativeId] = React.useState("");
   const [view, setView] = React.useState<RevenueView | "">("");
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const ads = useAdsFilter().filter;
   const { boxRef: presetsRef, pill: presetPill } = useSlidingPill<HTMLDivElement>();
   const facets = useQuery(trpc.orders.facets.queryOptions());
   const ws = useQuery(trpc.workspace.getCurrent.queryOptions());
@@ -376,6 +378,7 @@ export function DashboardView() {
       productId: productId || undefined,
       creativeId: creativeId || undefined,
       revenueView: view || undefined,
+      ads,
     }),
     placeholderData: keepPreviousData,
   });
@@ -455,7 +458,9 @@ export function DashboardView() {
             </button>
           </div>
         </div>
-        <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:flex md:justify-end", filtersOpen ? "flex" : "hidden")}>
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+        <AdsFilter />
+        <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:flex", filtersOpen ? "flex" : "hidden")}>
           <div className="flex items-center gap-1.5">
             <Input aria-label="From date" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
             <span className="text-subtle" aria-hidden>→</span>
@@ -466,13 +471,14 @@ export function DashboardView() {
             {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
           <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className={cn(filterField, "w-40")}>
-            <option value="">All ads</option>
+            <option value="">All creatives</option>
             {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
           </Select>
           <Select aria-label="Revenue basis" value={view || r?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as RevenueView)} className={cn(filterField, "w-52")}>
             <option value="DELIVERED">Delivered revenue view</option>
             <option value="REMITTED">Cash remitted view</option>
           </Select>
+        </div>
         </div>
       </section>
 

@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { adFilterSchema } from "@/domain/adFilter";
 import * as repo from "@/server/repositories/campaigns";
 import { campaignReport, NO_ACCOUNT } from "@/server/reports/campaigns";
 import { permitted, router, workspaceProcedure } from "@/server/trpc/init";
 import { id } from "@/server/trpc/schemas";
 
-const range = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional() });
+const range = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), ads: adFilterSchema.optional() });
 const adAccountFilter = z.union([z.string().regex(/^act_\d{1,30}$/), z.literal(NO_ACCOUNT)]);
 
 export const campaignsRouter = router({
@@ -12,6 +13,8 @@ export const campaignsRouter = router({
     .input(range.extend({ adAccountId: adAccountFilter.optional(), revenueView: z.enum(["DELIVERED", "REMITTED"]).optional() }))
     .query(({ ctx, input }) => campaignReport(ctx.ws, input)),
   links: workspaceProcedure.query(({ ctx }) => repo.listAdLinks(ctx.ws)),
+  /** Business Managers, ad accounts and campaigns to pick from in the Meta ads filter. */
+  filterOptions: workspaceProcedure.query(({ ctx }) => repo.adFilterOptions(ctx.ws)),
   setProduct: permitted("catalog.write")
     .input(z.object({ id, productId: id.nullable() }))
     .mutation(({ ctx, input }) => repo.setCampaignProduct(ctx.ws, input)),
