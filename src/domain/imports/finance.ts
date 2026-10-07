@@ -13,6 +13,11 @@ const CATEGORY_WORDS: [RegExp, ExpenseCategory][] = [
   [/^(call ?cent(er|re)|centre d'appels?|confirmation|confirmatrices?)/i, "CALL_CENTER"],
   [/^(packaging|emballages?|cartons?)/i, "PACKAGING"],
   [/^(warehouse|entrep[oô]ts?|stock(age)?|storage)/i, "WAREHOUSE"],
+  [/^(salar(y|ies)|salaires?|wages?|payroll|staff|employ(ee|é)s?)/i, "SALARIES"],
+  [/^(other ads|tiktok|google ads|snapchat|influenc(er|eur)s?)/i, "OTHER_ADS"],
+  [/^(content|contenus?|ugc|shooting|montage|video editing)/i, "CONTENT"],
+  [/^(transport|fuel|carburant|essence|taxi)/i, "TRANSPORT"],
+  [/^(tax(es)?|imp[oô]ts?|tva|vat)/i, "TAXES"],
   [/^(other|autres?|misc|divers)/i, "OTHER"],
 ];
 

@@ -120,6 +120,18 @@ enum ExpenseCategory {
   PACKAGING
   WAREHOUSE
   OTHER
+  SALARIES
+  OTHER_ADS
+  CONTENT
+  TRANSPORT
+  TAXES
+}
+
+enum ExpenseFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
 }
 
 enum ExpenseAllocation {
@@ -213,40 +225,42 @@ model Workspace {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  members          WorkspaceMember[]
-  auditLogs        AuditLog[]
-  connections      IntegrationConnection[]
-  syncJobs         SyncJob[]
-  syncItems        SyncItem[]
-  rawRecords       RawExternalRecord[]
-  statusMappings   StatusMapping[]
-  unmatchedRecords UnmatchedRecord[]
-  products         Product[]
-  costVersions     ProductCostVersion[]
-  orders           Order[]
-  orderLines       OrderLine[]
-  attributions     Attribution[]
-  parcels          Parcel[]
-  parcelEvents     ParcelStatusEvent[]
-  cashEvents       CashEvent[]
-  mdmAccount       MdmAccount?
-  mdmPayouts       MdmPayout[]
-  mdmFees          MdmFee[]
-  mdmStock         MdmStockItem[]
-  mdmArrivals      MdmStockArrival[]
-  mdmProductLinks  MdmProductLink[]
-  profitPlans      ProfitPlan[]
-  creatives        Creative[]
-  adSpend          AdSpend[]
-  adAccounts       AdAccount[]
-  campaigns        Campaign[]
-  metaTokens       MetaToken[]
-  expenses         Expense[]
-  bankTransactions BankTransaction[]
-  importBatches    ImportBatch[]
-  importRowErrors  ImportRowError[]
-  metricSnapshots  MetricSnapshot[]
-  scenarios        SimulatorScenario[]
+  members           WorkspaceMember[]
+  auditLogs         AuditLog[]
+  connections       IntegrationConnection[]
+  syncJobs          SyncJob[]
+  syncItems         SyncItem[]
+  rawRecords        RawExternalRecord[]
+  statusMappings    StatusMapping[]
+  unmatchedRecords  UnmatchedRecord[]
+  products          Product[]
+  costVersions      ProductCostVersion[]
+  orders            Order[]
+  orderLines        OrderLine[]
+  attributions      Attribution[]
+  parcels           Parcel[]
+  parcelEvents      ParcelStatusEvent[]
+  cashEvents        CashEvent[]
+  mdmAccount        MdmAccount?
+  mdmPayouts        MdmPayout[]
+  mdmFees           MdmFee[]
+  mdmStock          MdmStockItem[]
+  mdmArrivals       MdmStockArrival[]
+  mdmProductLinks   MdmProductLink[]
+  profitPlans       ProfitPlan[]
+  expenseCategories CustomExpenseCategory[]
+  recurringExpenses RecurringExpense[]
+  creatives         Creative[]
+  adSpend           AdSpend[]
+  adAccounts        AdAccount[]
+  campaigns         Campaign[]
+  metaTokens        MetaToken[]
+  expenses          Expense[]
+  bankTransactions  BankTransaction[]
+  importBatches     ImportBatch[]
+  importRowErrors   ImportRowError[]
+  metricSnapshots   MetricSnapshot[]
+  scenarios         SimulatorScenario[]
 }
 
 model WorkspaceMember {
@@ -469,16 +483,17 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  mdmLinks     MdmProductLink[]
-  profitPlan   ProfitPlan?
-  costVersions ProductCostVersion[]
-  orderLines   OrderLine[]
-  creatives    Creative[]
-  expenses     Expense[]
-  scenarios    SimulatorScenario[]
-  campaigns    Campaign[]
-  adAccounts   AdAccount[]
+  workspace         Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mdmLinks          MdmProductLink[]
+  profitPlan        ProfitPlan?
+  recurringExpenses RecurringExpense[]
+  costVersions      ProductCostVersion[]
+  orderLines        OrderLine[]
+  creatives         Creative[]
+  expenses          Expense[]
+  scenarios         SimulatorScenario[]
+  campaigns         Campaign[]
+  adAccounts        AdAccount[]
 
   @@unique([workspaceId, sku])
   @@index([workspaceId, active])
@@ -982,6 +997,8 @@ model Expense {
   productId         String?
   costType          CostType          @default(FIXED)
   bankTransactionId String?           @unique
+  /// A category the business made; `category` stays OTHER then.
+  customCategoryId  String?
   importBatchId     String?
   /// Dedup key for imported expenses (null for manual entries).
   sourceRowHash     String?
@@ -989,15 +1006,63 @@ model Expense {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
-  bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id], onDelete: SetNull)
-  importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product         Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  bankTransaction BankTransaction?       @relation(fields: [bankTransactionId], references: [id], onDelete: SetNull)
+  importBatch     ImportBatch?           @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  customCategory  CustomExpenseCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, sourceRowHash])
   @@index([workspaceId, date])
   @@index([workspaceId, category])
   @@index([workspaceId, productId])
+}
+
+/// An expense category a business made for itself (next to the built-in ones).
+model CustomExpenseCategory {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  expenses  Expense[]
+  recurring RecurringExpense[]
+
+  @@unique([workspaceId, name])
+}
+
+/// An expense that repeats (rent, salaries, a subscription). No expense rows are written for it:
+/// reports spread it over the days it covers (src/domain/recurring.ts), so every period gets its share.
+model RecurringExpense {
+  id               String            @id @default(uuid())
+  workspaceId      String
+  name             String
+  category         ExpenseCategory
+  customCategoryId String?
+  /// For one period of `frequency`, in the workspace currency.
+  amount           Int
+  currency         String            @default("DZD")
+  originalAmount   Int?
+  originalCurrency String?
+  fxRate           Float?
+  frequency        ExpenseFrequency
+  /// The first day it counts, at noon UTC like expense dates.
+  startDate        DateTime
+  /// The last day it counts. Null while it goes on.
+  endDate          DateTime?
+  allocation       ExpenseAllocation @default(GLOBAL)
+  productId        String?
+  costType         CostType          @default(FIXED)
+  createdById      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product        Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  customCategory CustomExpenseCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
 }
 
 /// Bank rows land here first and do not affect profit until categorized or excluded.

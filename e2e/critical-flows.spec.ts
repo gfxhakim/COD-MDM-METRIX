@@ -8,8 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 8–10 use the seeded DEMO workspace, whose MDM connection runs on the
  * labelled mock adapter (no request ever reaches MDM).
  * Flow 11 signs in as a different business and probes both workspaces.
- * Flows 12–17 came later: Meta ads, campaigns, exporting orders, custom syncs,
- * MDM money and stock, and the Profit tracker.
+ * Flows 12–18 came later: Meta ads, campaigns, exporting orders, custom syncs,
+ * MDM money and stock, the Profit tracker, and repeating expenses.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -189,6 +189,45 @@ test.describe("new workspace", () => {
     await page.fill("#D", "70");
     // (3 900 − 1 000 − 600) × 0.70 − 250 × 0.30 − 120 = 1 415 DZD
     await expect(page.getByText(/1[\s,.  ]?415/).first()).toBeVisible();
+  });
+
+  test("18. add a repeating expense in a category of your own, filter by days and export", async ({ page }) => {
+    await page.goto("/expenses");
+    await page.getByRole("button", { name: "New expense" }).first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("#erep").selectOption("MONTHLY");
+    await dialog.locator("#ename").fill("E2E office rent");
+    await dialog.locator("#ed").fill("2026-09-01");
+    await dialog.locator("#eend").fill("2026-09-30");
+    await dialog.locator("#ea").fill("30000");
+    await expect(dialog.getByText(/About DZD.30,000 a month/)).toBeVisible();
+    await dialog.locator("#ec").selectOption("__new");
+    await dialog.locator("#ecat-new").fill("E2E Office");
+    await dialog.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dialog.locator("#ec")).toHaveValue(/^custom:/);
+    await dialog.getByRole("button", { name: "Add repeating expense" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const rent = page.getByRole("listitem").filter({ hasText: "E2E office rent" });
+    await expect(rent).toContainText("Stopped");
+    await expect(rent).toContainText("30,000");
+    await page.getByLabel("Category").selectOption({ label: "E2E Office" });
+    await expect(page.getByText("Nothing matches")).toBeVisible();
+    await expect(rent).toBeVisible();
+
+    // Half of September: half the rent.
+    await page.getByRole("button", { name: "Custom", exact: true }).click();
+    await page.getByLabel("From", { exact: true }).fill("2026-09-16");
+    await page.getByLabel("To", { exact: true }).fill("2026-09-30");
+    await expect(rent).toContainText("15,000");
+
+    await page.getByRole("button", { name: "Export", exact: true }).click();
+    const exp = page.getByRole("dialog", { name: "Export expenses" });
+    await exp.getByRole("button", { name: "CSV for French Excel" }).click();
+    const [csv] = await Promise.all([page.waitForEvent("download"), exp.getByRole("button", { name: "Download" }).click()]);
+    expect(csv.suggestedFilename()).toBe("expenses_2026-09-16_to_2026-09-30.csv");
+    const text = fs.readFileSync((await csv.path())!, "utf8");
+    expect(text).toContain("E2E office rent;E2E Office;Every month;30000;30000;15000;2026-09-01;2026-09-30;All products;Fixed");
   });
 });
 

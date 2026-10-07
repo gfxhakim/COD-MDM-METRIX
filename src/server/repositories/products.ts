@@ -69,7 +69,7 @@ export async function listMdmProducts(ctx: WorkspaceContext) {
 
 /**
  * Makes an MDM product count as another product, with every order line it already has. A product the
- * sync created that is left with nothing (no MDM product, orders, costs, ads or expenses) is removed.
+ * sync created that is left with nothing (no MDM product, orders, costs, ads or expenses, one-off or repeating) is removed.
  */
 export async function moveMdmProduct(ctx: WorkspaceContext, input: { mdmProductId: string; productId: string }) {
   assertCan(ctx, "catalog.write");
@@ -86,7 +86,7 @@ export async function moveMdmProduct(ctx: WorkspaceContext, input: { mdmProductI
     const moved = await tx.orderLine.updateMany({ where: { workspaceId: ws, mdmProductId: input.mdmProductId }, data: { productId: target.id, sku: target.sku } });
     const old = await tx.product.findUnique({
       where: { id: link.productId },
-      select: { id: true, name: true, fromMdm: true, _count: { select: { mdmLinks: true, orderLines: true, costVersions: true, campaigns: true, adAccounts: true, creatives: true, expenses: true } } },
+      select: { id: true, name: true, fromMdm: true, _count: { select: { mdmLinks: true, orderLines: true, costVersions: true, campaigns: true, adAccounts: true, creatives: true, expenses: true, recurringExpenses: true } } },
     });
     const empty = old?.fromMdm && Object.values(old._count).every((n) => n === 0);
     if (empty) await tx.product.delete({ where: { id: old.id } });

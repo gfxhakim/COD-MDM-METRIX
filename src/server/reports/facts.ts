@@ -1,6 +1,7 @@
 import type { AdPlatform } from "@prisma/client";
 import { db } from "@/server/db";
 import { selectCostVersion } from "@/domain/costVersions";
+import { recurringByMonth } from "@/domain/recurring";
 import type { CostResolver, CostTerms, ExpenseFact, OrderFact } from "@/domain/economics";
 import { parseEconomicsDefaults, parseVerdictThresholds } from "@/domain/settings";
 import type { WorkspaceContext } from "@/server/tenancy";
@@ -42,6 +43,7 @@ const between = (r: DateRange) => (r.from || r.to ? { gte: r.from, lte: r.to } :
 /**
  * Loads every stored fact needed for economics in one workspace for a date range.
  * Orders are a cohort by placed date; spend and expenses are filtered by their own dates.
+ * Repeating expenses add their share of the range, one fact per month.
  *
  * Which product ad spend counts for, most specific link first: the campaign's own product,
  * then its ad account's default product, then the ad's own product. Orders keep the product
@@ -49,7 +51,7 @@ const between = (r: DateRange) => (r.from || r.to ? { gte: r.from, lte: r.to } :
  */
 export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promise<WorkspaceFacts> {
   const w = ctx.workspaceId;
-  const [ws, orders, spend, expenses, creatives, products, versions, campaigns, accounts] = await Promise.all([
+  const [ws, orders, spend, expenses, recurring, creatives, products, versions, campaigns, accounts] = await Promise.all([
     db.workspace.findUniqueOrThrow({ where: { id: w }, select: { currency: true, economicsDefaults: true, verdictThresholds: true } }),
     db.order.findMany({
       where: { workspaceId: w, placedAt: between(range) },
@@ -63,6 +65,7 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promis
     }),
     db.adSpend.findMany({ where: { workspaceId: w, date: between(range), supersededAt: null }, select: { creativeId: true, campaignId: true, adAccountId: true, date: true, spend: true } }),
     db.expense.findMany({ where: { workspaceId: w, date: between(range) }, select: { amount: true, allocation: true, productId: true, date: true } }),
+    db.recurringExpense.findMany({ where: { workspaceId: w }, select: { amount: true, frequency: true, startDate: true, endDate: true, allocation: true, productId: true } }),
     db.creative.findMany({ where: { workspaceId: w }, select: { id: true, externalCreativeId: true, name: true, campaignId: true, campaignName: true, platform: true, productId: true } }),
     db.product.findMany({ where: { workspaceId: w }, select: { id: true, name: true, sku: true } }),
     db.productCostVersion.findMany({ where: { workspaceId: w } }),
@@ -124,6 +127,16 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange): Promis
       date: s.date,
       spend: s.spend,
     })),
-    expenses,
+    expenses: [...expenses, ...recurringFacts(recurring, range, new Date())],
   };
+}
+
+function recurringFacts(rows: (Parameters<typeof recurringByMonth>[0] & Omit<ExpenseFact, "amount">)[], range: DateRange, now: Date) {
+  const out: (ExpenseFact & { date: Date })[] = [];
+  for (const r of rows) {
+    for (const [month, amount] of recurringByMonth(r, range, now)) {
+      if (amount > 0) out.push({ amount, allocation: r.allocation, productId: r.productId, date: new Date(`${month}-15T12:00:00Z`) });
+    }
+  }
+  return out;
 }
