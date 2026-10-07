@@ -26,7 +26,7 @@ import { FREQUENCIES, FREQUENCY_LABEL, FREQUENCY_UNIT, monthlyEquivalent, type F
 import { RANGES, rangeDays, shortDay, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { download } from "@/lib/download";
 import { categoryLabel, EXPENSE_CATEGORIES, type ExpenseCategoryKey } from "@/lib/labels";
-import { parseToMinor } from "@/lib/money";
+import { currencyExponent, parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { cn, formatDate, toDateInput } from "@/lib/utils";
 import type { AppRouter } from "@/server/trpc/root";
@@ -42,6 +42,8 @@ const monthLabel = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1] ?? ""} ${
 /** A category picker value: a built-in key, or "custom:<id>" for one the business made. */
 const categoryValue = (r: { category: string; customCategoryId: string | null }) => (r.customCategoryId ? `custom:${r.customCategoryId}` : r.category);
 const categoryName = (r: { category: string; customCategory: { name: string } | null }) => r.customCategory?.name ?? categoryLabel(r.category);
+/** Whole units for the big numbers: cents only clutter a total. */
+const whole = (minor: number, currency: string) => Math.round(minor / 10 ** currencyExponent(currency)) * 10 ** currencyExponent(currency);
 
 function CategoryOptions({ categories }: { categories: Category[] }) {
   return (
@@ -446,41 +448,41 @@ export function ExpensesView() {
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        <div className="relative col-span-2 sm:w-64">
+        <div className="relative col-span-2 sm:w-56">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
-          <Input aria-label="Search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search a description or name" className="pl-9" />
+          <Input aria-label="Search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search expenses" className="pl-9" />
         </div>
         <Select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className="col-span-2 w-full sm:w-48">
           <option value="">All categories</option>
           <CategoryOptions categories={categories.data ?? []} />
         </Select>
-        <Select aria-label="Counts for" value={scope} onChange={(e) => setScope(e.target.value)} className="w-full sm:w-48">
+        <Select aria-label="Counts for" value={scope} onChange={(e) => setScope(e.target.value)} className="col-span-2 w-full sm:w-56">
           <option value="">Business and products</option>
           <option value="GLOBAL">The whole business</option>
           <option value="PRODUCT">Any product</option>
           {products.data?.length ? <optgroup label="One product">{products.data.map((p) => <option key={p.id} value={`p:${p.id}`}>{p.name}</option>)}</optgroup> : null}
         </Select>
-        <Select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)} className="w-full sm:w-36">
+        <Select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)} className={cn("w-full sm:w-44", !filtered && "col-span-2")}>
           <option value="">Fixed and variable</option><option value="FIXED">Fixed</option><option value="VARIABLE">Variable</option>
         </Select>
-        {filtered ? <Button variant="ghost" size="sm" onClick={clear} className="col-span-2 sm:col-span-1">Clear filters</Button> : null}
+        {filtered ? <Button variant="ghost" onClick={clear}>Clear filters</Button> : null}
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <section className="relative col-span-2 flex min-w-0 flex-col gap-3 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)] xl:col-span-1">
           <span className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
           <span className="relative text-[15px] font-semibold">Expenses · {periodLabel.toLowerCase()}</span>
-          <div className="relative min-w-0">{s ? <FitMoney value={s.total} currency={currency} max={34} codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" /> : <Skeleton className="h-9 w-40 bg-white/25" />}</div>
+          <div className="relative min-w-0">{s ? <FitMoney value={whole(s.total, currency)} currency={currency} max={34} codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" /> : <Skeleton className="h-9 w-40 bg-white/25" />}</div>
           <span className="relative text-xs text-white/85">{s ? <>{money.fmt(s.total - s.repeating, currency, { decimals: false })} once · {money.fmt(s.repeating, currency, { decimals: false })} repeating</> : " "}</span>
         </section>
         <Card className="flex min-w-0 flex-col gap-1.5 p-4">
           <p className="text-xs text-muted"><Term label="Repeating, each month" definition="What the repeating expenses still running cost in an average month: a daily one × 365 ÷ 12, a weekly one × 52 ÷ 12, a yearly one ÷ 12." /></p>
-          {s ? <FitMoney value={s.repeatingPerMonth} currency={currency} max={26} /> : <Skeleton className="h-7 w-28" />}
+          {s ? <FitMoney value={whole(s.repeatingPerMonth, currency)} currency={currency} max={26} /> : <Skeleton className="h-7 w-28" />}
           <p className="text-[11px] text-subtle">{running === 1 ? "1 running" : `${running} running`}</p>
         </Card>
         <Card className="flex min-w-0 flex-col gap-1.5 p-4">
           <p className="text-xs text-muted"><Term label="For the whole business" definition="Expenses not tied to one product. Profit shares them across products by the rule in Settings → Economics (by default, across delivered orders)." /></p>
-          {s ? <FitMoney value={s.unallocated} currency={currency} max={26} className="text-warning" /> : <Skeleton className="h-7 w-28" />}
+          {s ? <FitMoney value={whole(s.unallocated, currency)} currency={currency} max={26} className="text-warning" /> : <Skeleton className="h-7 w-28" />}
           <p className="text-[11px] text-subtle">{s ? <>{money.fmt(s.total - s.unallocated, currency, { decimals: false })} for products</> : " "}</p>
         </Card>
         <Card className="col-span-2 flex min-w-0 flex-col gap-1.5 p-4 sm:col-span-1">
@@ -503,29 +505,53 @@ export function ExpensesView() {
                 <EmptyState icon={<Receipt />} title="No expenses" description="Add software, call-center, packaging and other costs so profit reflects the whole business." />
               )
             ) : (
-              <Table>
-                <THead><tr><Th>Date</Th><Th>Category</Th><Th>Description</Th><Th>For</Th><Th>Type</Th><Th className="text-right">Amount</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
-                <tbody>
+              <>
+                <div className="hidden md:block">
+                  <Table>
+                    <THead><tr><Th>Date</Th><Th>Category</Th><Th>Description</Th><Th>For</Th><Th className="text-right">Amount</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
+                    <tbody>
+                      {list.data.map((e) => (
+                        <Tr key={e.id}>
+                          <Td className="whitespace-nowrap text-xs text-muted">{formatDate(e.date)}</Td>
+                          <Td className="whitespace-nowrap">{categoryName(e)}<span className="block text-[11px] text-subtle">{e.costType === "FIXED" ? "Fixed" : "Variable"}</span></Td>
+                          <Td className="max-w-56 truncate text-muted">{e.description ?? "—"}</Td>
+                          <Td>{e.allocation === "GLOBAL" ? <Badge tone="warning">Whole business</Badge> : <Badge tone="info">{e.product?.name ?? "Product"}</Badge>}</Td>
+                          <Td className="num whitespace-nowrap text-right">{money.fmt(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
+                          <Td>
+                            {canWrite ? (
+                              <div className="flex justify-end gap-0.5">
+                                <Button size="icon" variant="ghost" aria-label="Edit expense" onClick={() => setDialog({ kind: "expense", row: e })}><Pencil /></Button>
+                                <Button size="icon" variant="ghost" aria-label="Delete expense" onClick={() => confirm("Delete this expense?") && del.mutate({ id: e.id })}><Trash2 /></Button>
+                              </div>
+                            ) : null}
+                          </Td>
+                        </Tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+                <ul className="flex flex-col divide-y divide-border border-t border-border md:hidden">
                   {list.data.map((e) => (
-                    <Tr key={e.id}>
-                      <Td className="whitespace-nowrap text-xs text-muted">{formatDate(e.date)}</Td>
-                      <Td className="whitespace-nowrap">{categoryName(e)}</Td>
-                      <Td className="max-w-64 truncate text-muted">{e.description ?? "—"}</Td>
-                      <Td>{e.allocation === "GLOBAL" ? <Badge tone="warning">Whole business</Badge> : <Badge tone="info">{e.product?.name ?? "Product"}</Badge>}</Td>
-                      <Td className="text-xs text-muted">{e.costType === "FIXED" ? "Fixed" : "Variable"}</Td>
-                      <Td className="num whitespace-nowrap text-right">{money.fmt(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
-                      <Td>
-                        {canWrite ? (
-                          <div className="flex justify-end gap-1">
-                            <Button size="icon" variant="ghost" aria-label="Edit expense" onClick={() => setDialog({ kind: "expense", row: e })}><Pencil /></Button>
-                            <Button size="icon" variant="ghost" aria-label="Delete expense" onClick={() => confirm("Delete this expense?") && del.mutate({ id: e.id })}><Trash2 /></Button>
-                          </div>
-                        ) : null}
-                      </Td>
-                    </Tr>
+                    <li key={e.id} className="flex flex-col gap-1.5 px-5 py-3.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="min-w-0 truncate font-bold">{e.description || categoryName(e)}</span>
+                        <span className="num shrink-0 font-extrabold">{money.fmt(e.amount, e.currency)}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                        <span>{formatDate(e.date)}</span>·<span>{categoryName(e)}</span>·<span>{e.costType === "FIXED" ? "Fixed" : "Variable"}</span>
+                        {e.allocation === "GLOBAL" ? <Badge tone="warning">Whole business</Badge> : <Badge tone="info">{e.product?.name ?? "Product"}</Badge>}
+                      </div>
+                      <OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} />
+                      {canWrite ? (
+                        <div className="-ml-2 flex gap-0.5">
+                          <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "expense", row: e })}><Pencil /> Edit</Button>
+                          <Button size="sm" variant="ghost" onClick={() => confirm("Delete this expense?") && del.mutate({ id: e.id })}><Trash2 /> Delete</Button>
+                        </div>
+                      ) : null}
+                    </li>
                   ))}
-                </tbody>
-              </Table>
+                </ul>
+              </>
             )}
           </Card>
         </div>
