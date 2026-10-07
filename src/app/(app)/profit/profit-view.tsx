@@ -7,7 +7,7 @@ import Link from "next/link";
 import * as React from "react";
 import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { useMoney } from "@/components/app/currency";
-import { FitMoney } from "@/components/app/fit-money";
+import { FitText, FitMoney } from "@/components/app/fit-money";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
@@ -202,7 +202,10 @@ function Stat({ label, def, children, sub, tone }: { label: string; def?: string
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-2xl bg-surface-2 p-3.5">
       <span className="text-xs text-muted">{def ? <Term label={label} definition={def} /> : label}</span>
-      <span className={cn("num truncate text-lg font-extrabold leading-tight", tone === "good" && "text-positive", tone === "bad" && "text-negative")}>{children}</span>
+      <span className={cn("num min-w-0 text-lg font-extrabold leading-tight", tone === "good" && "text-positive", tone === "bad" && "text-negative")}>
+        {/* Amounts shrink to fit a narrow phone tile instead of being cut. */}
+        {typeof children === "string" ? <FitText max={18} min={12}>{children}</FitText> : children}
+      </span>
       {sub ? <span className="text-[11px] text-subtle">{sub}</span> : null}
     </div>
   );

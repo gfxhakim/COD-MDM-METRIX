@@ -468,8 +468,8 @@ export function ExpensesView() {
         {filtered ? <Button variant="ghost" onClick={clear}>Clear filters</Button> : null}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <section className="relative col-span-2 flex min-w-0 flex-col gap-3 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)] xl:col-span-1">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4">
+        <section className="relative col-span-2 flex min-w-0 flex-col gap-3 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)] sm:col-span-3 xl:col-span-1">
           <span className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
           <span className="relative text-[15px] font-semibold">Expenses · {periodLabel.toLowerCase()}</span>
           <div className="relative min-w-0">{s ? <FitMoney value={whole(s.total, currency)} currency={currency} max={34} codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" /> : <Skeleton className="h-9 w-40 bg-white/25" />}</div>

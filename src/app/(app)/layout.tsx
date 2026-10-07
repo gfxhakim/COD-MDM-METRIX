@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { SIDEBAR_COOKIE } from "@/components/app/nav";
 import { AppShell } from "@/components/app/shell";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <Providers key={current.id} workspaceId={current.id}>
       <TooltipProvider>
         <ToastProvider>
-          <AppShell current={current} workspaces={workspaces} user={user} menuFolded={jar.get(SIDEBAR_COOKIE)?.value === "folded"}>
+          <AppShell current={current} workspaces={workspaces} user={user}>
             {children}
           </AppShell>
         </ToastProvider>

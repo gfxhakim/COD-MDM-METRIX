@@ -89,7 +89,7 @@ function MiniStats({ title, sub, items }: { title: React.ReactNode; sub?: React.
       <dl className="grid grid-cols-3 gap-x-2 gap-y-2">
         {items.map((i) => (
           <div key={i.label} className="min-w-0">
-            <dt className="truncate text-[11px] text-muted">{i.label}</dt>
+            <dt className="text-[11px] leading-tight text-muted">{i.label}</dt>
             <dd className={cn("num truncate text-sm", i.strong && "font-bold")}>{i.value}</dd>
           </div>
         ))}

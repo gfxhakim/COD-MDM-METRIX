@@ -16,7 +16,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div aria-live="polite" className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
+      <div aria-live="polite" className="pointer-events-none fixed bottom-24 right-4 z-[60] lg:bottom-4 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
         {toasts.map((t) => (
           <div key={t.id} className="pointer-events-auto flex animate-[toast-in_360ms_var(--ease-out)_backwards] items-start gap-2 rounded-2xl border border-border bg-surface px-4 py-3 text-sm shadow-xl">
             {t.tone === "success" ? <CheckCircle2 className="mt-0.5 size-4 text-positive" /> : <XCircle className="mt-0.5 size-4 text-negative" />}

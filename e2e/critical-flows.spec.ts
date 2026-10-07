@@ -8,8 +8,9 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 8–10 use the seeded DEMO workspace, whose MDM connection runs on the
  * labelled mock adapter (no request ever reaches MDM).
  * Flow 11 signs in as a different business and probes both workspaces.
- * Flows 12–19 came later: Meta ads, campaigns, exporting orders, custom syncs,
- * MDM money and stock, the Profit tracker, repeating expenses, and the Meta ads filter.
+ * Flows 12–20 came later: Meta ads, campaigns, exporting orders, custom syncs,
+ * MDM money and stock, the Profit tracker, repeating expenses, the Meta ads filter,
+ * and the red dock with every page fitting a phone.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -479,4 +480,36 @@ test("11. another business cannot reach either workspace's data", async ({ page 
   expect(own.body).not.toContain("E2E-1");
   await page.goto("/orders");
   await expect(page.getByText("#E2E-1")).toHaveCount(0);
+});
+
+test("20. open pages from the red dock, and every page fits a phone screen", async ({ page }) => {
+  // The demo business's view-only member: the same full pages, without an 11th owner sign-in
+  // inside the 15-minute login limit.
+  await signIn(page, "analyst@codflow.local", "demo-password-123");
+  await page.goto("/");
+  const dock = page.getByRole("toolbar", { name: "Pages" });
+  const products = dock.getByRole("link", { name: "Products" });
+  const rest = (await products.boundingBox())!;
+  await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2, { steps: 5 });
+  await expect(page.getByRole("tooltip", { name: "Products" })).toBeVisible();
+  await expect.poll(async () => (await products.boundingBox())!.width).toBeGreaterThan(rest.width + 10);
+  await products.click();
+  await expect(page).toHaveURL(/\/products$/);
+  await expect(products).toHaveAttribute("aria-current", "page");
+
+  await page.setViewportSize({ width: 360, height: 780 });
+  await expect(dock).toBeHidden();
+  const bar = page.getByRole("navigation", { name: "Shortcuts" });
+  await bar.getByRole("link", { name: "Profit tracker" }).click();
+  await expect(page.getByRole("heading", { name: "Profit tracker", level: 1 })).toBeVisible();
+  await bar.getByRole("button", { name: "All pages" }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: "Expenses" }).click();
+  await expect(page.getByRole("heading", { name: "Expenses", level: 1 })).toBeVisible();
+  const tabs = ["workspace", "members", "economics", "mdm", "meta", "mappings", "audit"].map((t) => `/settings?tab=${t}`);
+  for (const path of ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports", ...tabs]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    const wider = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(wider, `${path} is wider than a 360px phone`).toBe(0);
+  }
 });

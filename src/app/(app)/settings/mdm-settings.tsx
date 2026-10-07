@@ -177,7 +177,7 @@ export function StatusMappingsTab() {
   );
   return (
     <div className="grid gap-6 xl:grid-cols-2">
-      <div className="flex flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-6">
         <Card>
           <CardHeader title="Unknown MDM statuses" description="Parcels with these statuses count as UNKNOWN: never delivered or returned. Map each one once and existing parcels update immediately." />
           {!unknown.data ? <Loading /> : !unknown.data.length ? <p className="p-4 text-sm text-muted">No unknown statuses.</p> : (

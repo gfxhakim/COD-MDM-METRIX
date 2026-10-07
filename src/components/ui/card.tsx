@@ -2,7 +2,8 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("rounded-[22px] border border-border/70 bg-surface shadow-card", className)} {...props} />;
+  // min-w-0: a wide table inside scrolls sideways instead of stretching the card past a phone screen.
+  return <div className={cn("min-w-0 rounded-[22px] border border-border/70 bg-surface shadow-card", className)} {...props} />;
 }
 
 export function CardHeader({ title, description, actions, className }: { title: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode; className?: string }) {

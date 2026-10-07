@@ -16,6 +16,7 @@ import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
+import { PHONE, useMedia } from "@/lib/use-media";
 import { formatDate, timeAgo } from "@/lib/utils";
 import { ExportPanel, PrintSheet, type PrintData } from "./export-panel";
 import { OrderDrawer } from "./order-drawer";
@@ -73,6 +74,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
     placeholderData: keepPreviousData,
   });
   const totalPages = orders.data ? Math.max(1, Math.ceil(orders.data.total / pageSize)) : 1;
+  // Phones get one card per order instead of a fourteen-column table.
+  const phone = useMedia(PHONE);
 
   return (
     <>
@@ -87,41 +90,66 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
         }
       />
       <Card>
-        <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
-          <div className="relative col-span-2 min-w-52 flex-1">
+        <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]">
+          <div className="relative col-span-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
             <label htmlFor="order-search" className="sr-only">Search orders</label>
             <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <AdsFilter className="col-span-2" />
-          <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full sm:w-36">
+          <AdsFilter className="col-span-2 sm:col-span-1" />
+          <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full">
             <option value="">All orders</option>
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
           </Select>
-          <Select aria-label="Parcel status" value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full sm:w-40">
-            <option value="">All parcel statuses</option>
+          <Select aria-label="Parcel status" value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full">
+            <option value="">All parcels</option>
             {PARCEL_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
           </Select>
-          <Select aria-label="Wilaya" value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full sm:w-40">
+          <Select aria-label="Wilaya" value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full">
             <option value="">All wilayas</option>
             {facets.data?.wilayas.map((w) => <option key={w} value={w}>{w}</option>)}
           </Select>
-          <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full sm:w-44">
+          <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full">
             <option value="">All products</option>
             {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
-          <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full sm:w-44">
+          <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full">
             <option value="">All creatives</option>
             {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
           </Select>
-          <Select aria-label="Upsell" value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full sm:w-40">
-            <option value="">With or without upsell</option>
+          <Select aria-label="Upsell" value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full">
+            <option value="">Upsell or not</option>
             <option value="yes">Upsold</option>
             <option value="no">No upsell</option>
           </Select>
         </div>
         {orders.error ? <ErrorState message={errorMessage(orders.error)} /> : orders.isLoading ? <Loading /> : !orders.data?.items.length ? (
           <EmptyState icon={<ClipboardList />} title="No orders match" description="Import an orders CSV from Imports, or add a manual order." />
+        ) : phone ? (
+          <ul aria-label="Orders" className="flex flex-col divide-y divide-border">
+            {orders.data.items.map((o) => (
+              <li key={o.id}>
+                <button type="button" onClick={() => setOpenId(o.id)} className="flex w-full flex-col gap-1.5 px-4 py-3 text-left transition-colors active:bg-surface-2">
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-xs font-semibold text-fg">{o.orderNumber}</span>
+                    <span className="num text-sm font-bold">{money.fmt(o.codAmount, o.currency)}</span>
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
+                    <span className="truncate">{o.lines.length ? o.lines.map((l) => `${l.name ?? l.product ?? "—"} ×${l.quantity}`).join(", ") : "No products"}</span>
+                    {o.upsell ? <Badge tone="brand" className="shrink-0">Upsell</Badge> : null}
+                  </span>
+                  {o.customer?.name || o.customer?.phone ? (
+                    <span className="truncate text-xs text-muted">{[o.customer.name, o.customer.phone].filter(Boolean).join(" · ")}</span>
+                  ) : null}
+                  <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                    <OrderStatusBadge status={o.status} />
+                    <ParcelStatusBadge status={o.normalizedStatus} />
+                    <span>{o.wilaya ?? "No wilaya"} · {formatDate(o.placedAt)}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         ) : (
           <Table className="sticky-first">
             <THead>

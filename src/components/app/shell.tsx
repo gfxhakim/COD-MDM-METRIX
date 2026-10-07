@@ -1,17 +1,17 @@
 "use client";
 
 import type { Role } from "@prisma/client";
-import { Check, ChevronDown, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Settings, X } from "lucide-react";
+import { Check, ChevronDown, LogOut, Menu, Plus, RefreshCw, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import { logoutAction, switchWorkspaceAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/app/logo";
-import { isActive, NAV, SIDEBAR_COOKIE } from "@/components/app/nav";
+import { isActive, NAV, navItem, type NavItem } from "@/components/app/nav";
 import { CurrencyPicker, CurrencyProvider } from "@/components/app/currency";
 import { DataFreshness } from "@/components/app/data-freshness";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip } from "@/components/ui/tooltip";
+import { Dock, DockIcon, DockItem, DockLabel } from "@/components/ui/dock";
 import { cn } from "@/lib/utils";
 
 export type ShellWorkspace = { id: string; name: string; isDemo: boolean; role: Role };
@@ -51,41 +51,65 @@ function usePopover() {
 
 const menuPop = "animate-pop absolute right-0 top-full z-50 mt-2 rounded-2xl border border-border bg-surface shadow-xl";
 
-/** One page in the side menu: its emoji, which moves while the pointer is on it, and its name. */
-function NavLink({ item, active, folded, onClick }: { item: (typeof NAV)[number]; active: boolean; folded?: boolean; onClick?: () => void }) {
-  const link = (
+/** A page's icon on its red tile: white on red for the page that is open. */
+function NavIcon({ item, active, className }: { item: NavItem; active: boolean; className?: string }) {
+  const Icon = item.icon;
+  return <Icon className={cn("nav-icon", active ? "text-white" : "text-brand", className)} data-motion={item.motion} strokeWidth={2.2} aria-hidden="true" />;
+}
+
+/** One page in the phone menu: its red icon, which moves while it is touched or pointed at, and its name. */
+function NavLink({ item, active, onClick }: { item: NavItem; active: boolean; onClick?: () => void }) {
+  return (
     <Link
       href={item.href}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={cn("nav-link press group flex h-12 shrink-0 items-center gap-3 rounded-2xl text-sm font-medium", folded ? "justify-center" : "px-1.5", active ? "bg-brand glow" : "text-fg hover:bg-surface-2")}
+      className={cn("nav-link press group flex h-12 shrink-0 items-center gap-3 rounded-2xl px-1.5 text-sm font-medium", active ? "bg-brand glow" : "text-fg hover:bg-brand-soft/60")}
     >
-      <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl text-xl transition-colors", active ? "bg-white/20" : "bg-surface-2 group-hover:bg-surface")}>
-        <span className="nav-emoji" data-motion={item.motion} aria-hidden="true">{item.emoji}</span>
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full transition-colors", active ? "bg-white/20" : "bg-brand-soft group-hover:bg-surface")}>
+        <NavIcon item={item} active={active} className="size-[18px]" />
       </span>
-      <span className={cn("min-w-0 truncate", folded && "sr-only")}>{item.label}</span>
+      <span className="min-w-0 truncate">{item.label}</span>
     </Link>
   );
-  return folded ? <Tooltip side="right" content={item.label}>{link}</Tooltip> : link;
 }
 
-/** Computer menu: every page down the left side. It folds down to the emojis and remembers that. */
-function SideNav({ folded, onToggle }: { folded: boolean; onToggle: () => void }) {
+function subscribeResize(onChange: () => void) {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+}
+
+/**
+ * Icon size that fits all twelve pages in the window's height, with room for the icons that grow
+ * under the pointer (about two icons' worth). The logo, paddings and gaps take about 234px.
+ */
+function useDockSize() {
+  const height = React.useSyncExternalStore(subscribeResize, () => window.innerHeight, () => 900);
+  const size = Math.max(28, Math.min(44, Math.floor((height - 234) / 14.2)));
+  return { size, magnification: Math.round(size * 1.75), distance: Math.round(size * 3.4) };
+}
+
+/** Computer menu: a dock down the left side. Icons grow as the pointer passes and their page's name pops out. */
+function DockNav() {
   const pathname = usePathname();
-  const Toggle = folded ? PanelLeftOpen : PanelLeftClose;
-  const toggle = (
-    <button type="button" onClick={onToggle} aria-expanded={!folded} aria-controls="side-menu" className={cn("press flex h-11 shrink-0 items-center gap-3 rounded-full bg-surface text-sm font-medium text-muted shadow-card hover:text-fg", folded ? "justify-center" : "px-4")}>
-      <Toggle className="size-4" aria-hidden="true" />
-      <span className={cn(folded && "sr-only")}>{folded ? "Open menu" : "Close menu"}</span>
-    </button>
-  );
+  const { size, magnification, distance } = useDockSize();
   return (
-    <aside className={cn("sticky top-0 z-30 hidden h-dvh shrink-0 flex-col gap-3 py-4 pl-4 transition-[width] duration-300 ease-[var(--ease-out)] lg:flex", folded ? "w-[92px]" : "w-[264px]")}>
-      <Link href="/" aria-label="COD Flow dashboard" className={cn("press flex h-11 shrink-0 items-center rounded-full", folded ? "justify-center" : "px-1.5")}><Logo compact={folded} /></Link>
-      <nav id="side-menu" aria-label="Main" className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto rounded-[28px] bg-surface p-2 shadow-card">
-        {NAV.map((item) => <NavLink key={item.href} item={item} active={isActive(item.href, pathname)} folded={folded} />)}
+    <aside className="sticky top-0 z-40 hidden h-dvh w-24 shrink-0 flex-col items-start gap-4 py-4 pl-4 lg:flex">
+      <Link href="/" aria-label="COD Flow dashboard" className="press grid h-11 shrink-0 place-items-center rounded-full" style={{ width: size + 24 }}><Logo compact /></Link>
+      <nav aria-label="Main" className="flex min-h-0 flex-1 items-center">
+        <Dock orientation="vertical" aria-label="Pages" size={size} magnification={magnification} distance={distance} panelHeight={size + 24} className="gap-2.5 rounded-[28px] bg-surface px-3 shadow-card">
+          {NAV.map((item) => {
+            const active = isActive(item.href, pathname);
+            return (
+              <DockItem key={item.href} href={item.href} active={active} aria-label={item.label} className={cn("nav-link aspect-square rounded-full transition-[background-color,box-shadow] duration-300", active ? "bg-brand glow" : "bg-brand-soft hover:bg-[#ffd6da]")}>
+                <DockLabel className="rounded-full border-0 bg-ink px-3 py-1 text-xs font-semibold text-white shadow-[0_8px_20px_rgb(20_16_18/0.25)]">{item.label}</DockLabel>
+                <DockIcon><NavIcon item={item} active={active} className="h-full w-full" /></DockIcon>
+                {active ? <span className="bg-brand glow-soft absolute -left-2.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full" aria-hidden="true" /> : null}
+              </DockItem>
+            );
+          })}
+        </Dock>
       </nav>
-      {folded ? <Tooltip side="right" content="Open menu">{toggle}</Tooltip> : toggle}
     </aside>
   );
 }
@@ -208,40 +232,38 @@ function Drawer({ current, workspaces, user, onClose: close }: { current: ShellW
   );
 }
 
-/** Phone shortcut bar at the bottom of the screen. */
+/** Phone and tablet shortcut bar at the bottom of the screen: red icons, the open page on a red tile. */
 function BottomBar({ onMenu }: { onMenu: () => void }) {
   const pathname = usePathname();
-  const item = (href: string, label: string, Icon: typeof LayoutDashboard) => {
+  const item = (href: NavItem["href"]) => {
+    const page = navItem(href);
     const active = isActive(href, pathname);
     return (
-      <Link href={href} aria-label={label} aria-current={active ? "page" : undefined} className={cn("press relative grid size-11 place-items-center rounded-full", active ? "text-brand-strong" : "text-muted")}>
-        <Icon className={cn("size-5 transition-transform duration-300", active && "-translate-y-1")} aria-hidden="true" />
-        {active ? <span className="bg-brand glow-soft animate-pop absolute bottom-1 size-1.5 rounded-full" aria-hidden="true" /> : null}
+      <Link href={href} aria-label={page.label} aria-current={active ? "page" : undefined} className="nav-link press grid size-12 place-items-center rounded-full">
+        <span className={cn("grid size-10 place-items-center rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[var(--ease-out)]", active ? "bg-brand glow -translate-y-1 scale-110" : "bg-brand-soft")}>
+          <NavIcon item={page} active={active} className="size-5" />
+        </span>
       </Link>
     );
   };
   return (
-    <nav aria-label="Shortcuts" style={{ viewTransitionName: "bottom-bar" }} className="fixed inset-x-3 bottom-3 z-40 flex h-16 items-center justify-around rounded-full bg-surface/95 px-2 shadow-[0_12px_30px_rgb(20_16_18/0.16)] backdrop-blur md:hidden">
-      {item("/", "Dashboard", LayoutDashboard)}
-      {item("/orders", "Orders & parcels", ClipboardList)}
+    <nav aria-label="Shortcuts" style={{ viewTransitionName: "bottom-bar" }} className="fixed inset-x-3 bottom-3 z-40 mx-auto flex h-16 max-w-md items-center justify-around rounded-full bg-surface/95 px-2 shadow-[0_12px_30px_rgb(20_16_18/0.16)] backdrop-blur lg:hidden">
+      {item("/")}
+      {item("/profit")}
       <Link href="/syncs" aria-label="MDM sync" className="bg-brand-hero neon press grid size-14 -translate-y-1 place-items-center rounded-full">
         <RefreshCw className="size-5" aria-hidden="true" />
       </Link>
-      {item("/creatives", "Creatives", Megaphone)}
-      <button type="button" onClick={onMenu} aria-label="All pages" className="press grid size-11 place-items-center rounded-full text-muted"><Menu className="size-5" aria-hidden="true" /></button>
+      {item("/orders")}
+      <button type="button" onClick={onMenu} aria-label="All pages" className="press grid size-12 place-items-center rounded-full">
+        <span className="grid size-10 place-items-center rounded-full bg-brand-soft text-brand"><Menu className="size-5" strokeWidth={2.2} aria-hidden="true" /></span>
+      </button>
     </nav>
   );
 }
 
-export function AppShell({ current, workspaces, user, menuFolded, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; menuFolded: boolean; children: React.ReactNode }) {
+export function AppShell({ current, workspaces, user, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [folded, setFolded] = React.useState(menuFolded);
   const closeMobile = React.useCallback(() => setMobileOpen(false), []);
-  const toggleMenu = React.useCallback(() => {
-    const next = !folded;
-    document.cookie = `${SIDEBAR_COOKIE}=${next ? "folded" : "open"}; path=/; max-age=31536000; samesite=lax`;
-    setFolded(next);
-  }, [folded]);
   const shell = React.useMemo(() => ({ user, workspace: current }), [user, current]);
   return (
     <CurrencyProvider workspaceId={current.id}>
@@ -249,7 +271,7 @@ export function AppShell({ current, workspaces, user, menuFolded, children }: { 
     <div className="flex min-h-screen flex-col">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">Skip to content</a>
       <div className="flex flex-1">
-        <SideNav folded={folded} onToggle={toggleMenu} />
+        <DockNav />
         <div className="flex min-w-0 flex-1 flex-col">
           {current.isDemo ? (
             <div className="border-b border-warning/20 bg-warning-soft px-4 py-1.5 text-center text-xs font-medium text-warning" role="note">
@@ -258,7 +280,7 @@ export function AppShell({ current, workspaces, user, menuFolded, children }: { 
           ) : null}
           <header style={{ viewTransitionName: "site-header" }} className="z-30 bg-bg/80 backdrop-blur-md md:sticky md:top-0">
             <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-              <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-surface text-fg shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="size-5" /></button>
+              <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-surface text-brand shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="size-5" strokeWidth={2.2} /></button>
               <Link href="/" aria-label="COD Flow dashboard" className="press mr-1 shrink-0 rounded-full lg:hidden"><Logo /></Link>
               {/* One copy for every screen size: its own row on phones, beside the account button from md up. */}
               <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ml-auto md:w-auto md:overflow-visible"><CurrencyPicker /><DataFreshness /></div>
@@ -268,7 +290,7 @@ export function AppShell({ current, workspaces, user, menuFolded, children }: { 
             </div>
           </header>
           {mobileOpen ? <Drawer current={current} workspaces={workspaces} user={user} onClose={closeMobile} /> : null}
-          <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-28 pt-5 md:pb-10 lg:px-8">{children}</main>
+          <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-10">{children}</main>
         </div>
       </div>
       <BottomBar onMenu={() => setMobileOpen(true)} />

@@ -29,6 +29,8 @@ type Form = {
 };
 
 const pct = (v: number | null | undefined, fallback: number) => String(Math.round(((v ?? fallback) * 100) * 10) / 10);
+/** A rate read from orders, kept within 0–100%: more parcels shipped than orders placed in the period reads as 100%. */
+const observedPct = (v: number | null | undefined, fallback: number) => pct(v == null ? v : Math.min(1, Math.max(0, v)), fallback);
 
 function toInput(f: Form, currency: string): SimulatorInput {
   const m = (s: string) => parseToMinor(s || "0", currency);
@@ -95,8 +97,8 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
       model: "DEFAULT",
       salePrice: mi(o.costs.salePrice ?? product?.currentCost?.salePrice ?? 0), sourcingCost: mi(o.costs.sourcingCost ?? product?.currentCost?.sourcingCost ?? 0),
       outboundShipping: mi(o.costs.outboundShipping), rtoFee: mi(o.costs.rtoFee), callCenterCost: mi(o.costs.callCenterCost), packagingCost: mi(o.costs.packagingCost),
-      deliveryProbability: pct(d, 0.6), returnIsComplement: true, returnProbability: pct(o.rates.returnRate, 1 - d), lostProbability: pct(o.rates.lostRate, 0),
-      confirmationRate: pct(o.rates.confirmationRate, 0.75), shippingRate: pct(o.rates.shippingRate, 0.95), callCenterBasis: o.callCenterBasis === "PLACED_LEAD" ? "PLACED_LEAD" : "CONFIRMED_ORDER",
+      deliveryProbability: observedPct(d, 0.6), returnIsComplement: true, returnProbability: observedPct(o.rates.returnRate, 1 - d), lostProbability: observedPct(o.rates.lostRate, 0),
+      confirmationRate: observedPct(o.rates.confirmationRate, 0.75), shippingRate: observedPct(o.rates.shippingRate, 0.95), callCenterBasis: o.callCenterBasis === "PLACED_LEAD" ? "PLACED_LEAD" : "CONFIRMED_ORDER",
       targetProfitPerOrder: "0", currentCpa: o.currentCpa.confirmed === null ? "" : mi(o.currentCpa.confirmed),
     };
   }, [observed.data, products.data, productId]);
@@ -245,7 +247,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
               <CardBody className="flex flex-col gap-3">
                 {canSave && result ? (
                   <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); save.mutate({ name, productId: productId || null, inputs: toInput(f, currency) }); }}>
-                    <Input aria-label="Scenario name" placeholder="e.g. Winter price, 55% delivery" value={name} onChange={(e) => setName(e.target.value)} required />
+                    <Input aria-label="Scenario name" placeholder="e.g. Winter price" value={name} onChange={(e) => setName(e.target.value)} required />
                     <Button type="submit" disabled={save.isPending}><Save /> Save scenario</Button>
                   </form>
                 ) : null}
