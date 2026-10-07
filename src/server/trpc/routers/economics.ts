@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { adFilterSchema } from "@/domain/adFilter";
 import { MATRIX_COLUMNS, MATRIX_COLUMN_KEYS } from "@/domain/matrixColumns";
 import { simulate, simulatorInputSchema } from "@/domain/simulator";
 import { toCsv } from "@/lib/csv";
@@ -12,7 +13,7 @@ import { NotFoundError } from "@/server/tenancy";
 import { permitted, router, workspaceProcedure } from "@/server/trpc/init";
 import { id } from "@/server/trpc/schemas";
 
-const range = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional() });
+const range = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), ads: adFilterSchema.optional() });
 const revenueView = z.enum(["DELIVERED", "REMITTED"]).optional();
 
 export const reportsRouter = router({

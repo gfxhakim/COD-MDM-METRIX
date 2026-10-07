@@ -7,6 +7,11 @@ export const EXPENSE_CATEGORIES = [
   ["CALL_CENTER", "Call Center"],
   ["PACKAGING", "Packaging"],
   ["WAREHOUSE", "Warehouse"],
+  ["SALARIES", "Salaries"],
+  ["OTHER_ADS", "Other ads (TikTok, Google…)"],
+  ["CONTENT", "Content & creatives"],
+  ["TRANSPORT", "Transport"],
+  ["TAXES", "Taxes"],
   ["OTHER", "Other"],
 ] as const;
 

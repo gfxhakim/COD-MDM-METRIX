@@ -44,7 +44,7 @@ function useInvalidateSync() {
   const trpc = useTRPC();
   const qc = useQueryClient();
   return () => {
-    for (const k of [trpc.sync, trpc.integrations, trpc.orders, trpc.reports, trpc.creatives]) qc.invalidateQueries({ queryKey: k.pathKey() });
+    for (const k of [trpc.sync, trpc.integrations, trpc.orders, trpc.reports, trpc.creatives, trpc.money]) qc.invalidateQueries({ queryKey: k.pathKey() });
     qc.invalidateQueries({ queryKey: trpc.workspace.dataHealth.queryKey() });
   };
 }
@@ -277,7 +277,7 @@ export function SyncView() {
             <div className="flex items-center gap-3">
               <Loader2 className="size-5 animate-spin text-info" />
               <div>
-                <p className="font-medium">{running.mode === "CUSTOM" ? "Custom sync: " : ""}{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : `${running.mode === "CUSTOM" ? "reading" : "Syncing"} ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
+                <p className="font-medium">{running.mode === "CUSTOM" ? "Custom sync: " : ""}{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : running.phase === "ACCOUNT" ? "Syncing money and stock" : `${running.mode === "CUSTOM" ? "reading" : "Syncing"} ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
                 {running.mode === "CUSTOM" ? <p className="text-xs text-muted">{choicesOf(running)}</p> : c?.ordersFullReadPending ? <p className="text-xs text-muted">Reading every MDM order once to fill in customer names, phones, addresses and order details, so this sync takes longer than usual.</p> : null}
                 <p className="text-xs text-muted">Orders: {running.mode === "CUSTOM" ? `${running.ordersMatchedCount} matched (${running.ordersAddedCount} new, ${running.ordersUpdatedCount} updated) · ${running.skippedCount} left alone` : `${running.ordersAddedCount} new · ${running.ordersUpdatedCount} updated`} · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
               </div>

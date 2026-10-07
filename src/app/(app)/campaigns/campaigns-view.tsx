@@ -6,6 +6,7 @@ import Link from "next/link";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
 import { Money, Rate, Ratio } from "@/components/app/format";
+import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { VerdictBadge, type VerdictValue } from "@/components/app/verdict";
@@ -75,10 +76,12 @@ export function CampaignsView() {
   const [to, setTo] = React.useState("");
   const [view, setView] = React.useState<RevenueView | "">("");
   const [open, setOpen] = React.useState<Set<string>>(new Set());
+  const ads = useAdsFilter().filter;
 
   const report = useQuery({
     ...trpc.campaigns.report.queryOptions({
       adAccountId: account || undefined,
+      ads,
       from: from ? new Date(`${from}T00:00:00Z`) : undefined,
       to: to ? new Date(`${to}T23:59:59Z`) : undefined,
       revenueView: view || undefined,
@@ -116,6 +119,7 @@ export function CampaignsView() {
       />
       <Card>
         <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+          <AdsFilter className="col-span-2" />
           <Select aria-label="Ad account" value={account} onChange={(e) => { setAccount(e.target.value); setOpen(new Set()); }} className="col-span-2 w-full sm:w-72">
             <option value="">All ad accounts</option>
             {r?.accounts.map((a) => <option key={a.externalId} value={a.externalId}>{a.name ? `${a.name} (${a.externalId.replace("act_", "")})` : a.externalId}</option>)}

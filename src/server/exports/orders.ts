@@ -12,6 +12,7 @@ import {
   type ExportFormat,
   type StatusGroupKey,
 } from "@/domain/orderExport";
+import type { AdFilter } from "@/domain/adFilter";
 import { parseExchangeRates } from "@/domain/settings";
 import { normalizeProviderStatus, providerStatusLabel, statusKey } from "@/domain/statusMapping";
 import { toDelimited } from "@/lib/csv";
@@ -23,7 +24,7 @@ import { db } from "@/server/db";
 import { InputError } from "@/server/errors";
 import { workspaceStatusOverrides } from "@/server/mdm/statuses";
 import { rateLimit } from "@/server/rateLimit";
-import { orderWhere } from "@/server/repositories/orders";
+import { adCampaignIdsFor, orderWhere } from "@/server/repositories/orders";
 import type { WorkspaceContext } from "@/server/tenancy";
 import { buildXlsx, type XCell, type XColumn } from "./xlsx";
 
@@ -40,6 +41,9 @@ export type ExportFilters = {
   productId?: string;
   creativeId?: string;
   source?: OrderSource;
+  upsell?: boolean;
+  /** Meta ads picked on the page (see `AdFilter`). */
+  ads?: AdFilter;
 };
 
 export type ExportOptions = ExportFilters & {
@@ -106,8 +110,9 @@ export const orderStatusSelect = {
   parcels: { select: { providerStatus: true, normalizedStatus: true, lastProviderUpdateAt: true, updatedAt: true } },
 } as const satisfies Prisma.OrderSelect;
 
-function exportWhere(ctx: WorkspaceContext, f: ExportFilters, range: { from?: Date; to?: Date }): Prisma.OrderWhereInput {
-  const and: Prisma.OrderWhereInput[] = [orderWhere(ctx, { search: f.search, wilaya: f.wilaya, productId: f.productId, creativeId: f.creativeId, source: f.source })];
+async function exportWhere(ctx: WorkspaceContext, f: ExportFilters, range: { from?: Date; to?: Date }): Promise<Prisma.OrderWhereInput> {
+  const adCampaignIds = await adCampaignIdsFor(ctx, f.ads);
+  const and: Prisma.OrderWhereInput[] = [orderWhere(ctx, { search: f.search, wilaya: f.wilaya, productId: f.productId, creativeId: f.creativeId, source: f.source, upsell: f.upsell, adCampaignIds })];
   if (f.scope === "mdm") and.push({ OR: [{ source: "MDM_EXPRESS" }, { mdmOrderId: { not: null } }, { parcels: { some: { provider: "MDM_EXPRESS" } } }] });
   if (range.from && f.dateField === "placed") and.push({ placedAt: { gte: range.from } });
   // A status never comes before its order, so this bound also holds when filtering on the status date.
@@ -125,7 +130,7 @@ async function workspaceFor(ctx: WorkspaceContext) {
 export async function orderExportPreview(ctx: WorkspaceContext, f: ExportFilters) {
   const ws = await workspaceFor(ctx);
   const range = dayRange(f, ws.timezone);
-  const where = exportWhere(ctx, f, range);
+  const where = await exportWhere(ctx, f, range);
   const count = await db.order.count({ where });
   if (count > EXPORT_ORDER_LIMIT) return { total: count, lines: null, tooMany: true, groups: [] };
   const [orders, overrides] = await Promise.all([
@@ -174,6 +179,7 @@ const exportSelect = {
   utmSource: true,
   utmCampaign: true,
   utmContent: true,
+  mdmUpsell: true,
   lines: { select: { productName: true, sku: true, quantity: true, unitPrice: true, currency: true, product: { select: { name: true, sku: true } } }, orderBy: [{ productName: "asc" }, { id: "asc" }] },
   attribution: { select: { creative: { select: { externalCreativeId: true, name: true } } } },
   parcels: {
@@ -199,7 +205,7 @@ export async function exportOrders(ctx: WorkspaceContext, opts: ExportOptions) {
   const to = opts.currency ?? ws.reportCurrency ?? book;
   const rates = parseExchangeRates(ws.exchangeRates) as Partial<Record<string, number>>;
   const range = dayRange(opts, ws.timezone);
-  const where = exportWhere(ctx, opts, range);
+  const where = await exportWhere(ctx, opts, range);
   const matched = await db.order.count({ where });
   if (matched > EXPORT_ORDER_LIMIT) throw new InputError(`These filters match ${matched.toLocaleString("en-US")} orders; one export takes up to ${EXPORT_ORDER_LIMIT.toLocaleString("en-US")}. Pick a shorter date range.`);
   const [orders, overrides] = await Promise.all([db.order.findMany({ where, select: exportSelect, orderBy: [{ placedAt: "desc" }, { id: "desc" }] }), workspaceStatusOverrides(ctx.workspaceId)]);
@@ -252,6 +258,7 @@ export async function exportOrders(ctx: WorkspaceContext, opts: ExportOptions) {
       statusGroup: statusGroupLabel(s.group),
       statusAt: s.at,
       placedAt: o.placedAt,
+      upsell: o.mdmUpsell ? "Yes" : "No",
       trackingId: o.parcels.map((p) => p.trackingId).join(", ") || null,
       store: o.storeName,
       source: SOURCE_LABEL[o.source],

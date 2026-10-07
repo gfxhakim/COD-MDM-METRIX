@@ -1,0 +1,142 @@
+-- CreateTable
+CREATE TABLE "MdmAccount" (
+    "workspaceId" TEXT NOT NULL PRIMARY KEY,
+    "sellerId" TEXT,
+    "wallet" JSONB,
+    "walletAt" DATETIME,
+    "prices" JSONB,
+    "pricesAt" DATETIME,
+    "capital" JSONB,
+    "capitalAt" DATETIME,
+    "feesSyncedAt" DATETIME,
+    "payoutsSyncedAt" DATETIME,
+    "parts" JSONB,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "MdmAccount_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "MdmPayout" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "workspaceId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'DZD',
+    "status" TEXT NOT NULL,
+    "confirmed" BOOLEAN NOT NULL DEFAULT false,
+    "storeNames" TEXT,
+    "breakdown" JSONB,
+    "breakdownAt" DATETIME,
+    "mdmCreatedAt" DATETIME NOT NULL,
+    "mdmUpdatedAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "MdmPayout_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "MdmFee" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "workspaceId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "entityId" TEXT,
+    "type" TEXT NOT NULL,
+    "subType" TEXT,
+    "amount" INTEGER NOT NULL,
+    "grossAmount" INTEGER,
+    "taxes" INTEGER,
+    "currency" TEXT NOT NULL DEFAULT 'DZD',
+    "status" TEXT NOT NULL,
+    "payoutId" TEXT,
+    "parcelId" TEXT,
+    "orderId" TEXT,
+    "mdmCreatedAt" DATETIME NOT NULL,
+    "mdmUpdatedAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "MdmFee_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "MdmFee_parcelId_fkey" FOREIGN KEY ("parcelId") REFERENCES "Parcel" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "MdmFee_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "MdmStockItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "workspaceId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "mdmProductId" TEXT NOT NULL,
+    "productName" TEXT NOT NULL,
+    "variantName" TEXT,
+    "sku" TEXT,
+    "sellingPrice" INTEGER,
+    "purchasePrice" INTEGER,
+    "currency" TEXT NOT NULL DEFAULT 'DZD',
+    "archived" BOOLEAN NOT NULL DEFAULT false,
+    "totalInbound" INTEGER NOT NULL DEFAULT 0,
+    "incoming" INTEGER NOT NULL DEFAULT 0,
+    "available" INTEGER NOT NULL DEFAULT 0,
+    "processing" INTEGER NOT NULL DEFAULT 0,
+    "inDelivery" INTEGER NOT NULL DEFAULT 0,
+    "delivered" INTEGER NOT NULL DEFAULT 0,
+    "returning" INTEGER NOT NULL DEFAULT 0,
+    "returned" INTEGER NOT NULL DEFAULT 0,
+    "damaged" INTEGER NOT NULL DEFAULT 0,
+    "discharged" INTEGER NOT NULL DEFAULT 0,
+    "lost" INTEGER NOT NULL DEFAULT 0,
+    "stockAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "MdmStockItem_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "MdmStockArrival" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "workspaceId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "operation" TEXT,
+    "products" JSONB NOT NULL,
+    "expectedUnits" INTEGER NOT NULL DEFAULT 0,
+    "receivedUnits" INTEGER NOT NULL DEFAULT 0,
+    "damagedUnits" INTEGER NOT NULL DEFAULT 0,
+    "mdmCreatedAt" DATETIME NOT NULL,
+    "mdmUpdatedAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "MdmStockArrival_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX "MdmPayout_workspaceId_mdmCreatedAt_idx" ON "MdmPayout"("workspaceId", "mdmCreatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MdmPayout_workspaceId_providerId_key" ON "MdmPayout"("workspaceId", "providerId");
+
+-- CreateIndex
+CREATE INDEX "MdmFee_workspaceId_mdmCreatedAt_idx" ON "MdmFee"("workspaceId", "mdmCreatedAt");
+
+-- CreateIndex
+CREATE INDEX "MdmFee_workspaceId_type_idx" ON "MdmFee"("workspaceId", "type");
+
+-- CreateIndex
+CREATE INDEX "MdmFee_workspaceId_payoutId_idx" ON "MdmFee"("workspaceId", "payoutId");
+
+-- CreateIndex
+CREATE INDEX "MdmFee_parcelId_idx" ON "MdmFee"("parcelId");
+
+-- CreateIndex
+CREATE INDEX "MdmFee_orderId_idx" ON "MdmFee"("orderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MdmFee_workspaceId_providerId_key" ON "MdmFee"("workspaceId", "providerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MdmStockItem_workspaceId_providerId_key" ON "MdmStockItem"("workspaceId", "providerId");
+
+-- CreateIndex
+CREATE INDEX "MdmStockArrival_workspaceId_mdmCreatedAt_idx" ON "MdmStockArrival"("workspaceId", "mdmCreatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MdmStockArrival_workspaceId_providerId_key" ON "MdmStockArrival"("workspaceId", "providerId");
+

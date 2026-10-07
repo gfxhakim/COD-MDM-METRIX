@@ -186,7 +186,8 @@ describe("custom MDM sync", () => {
     const { job } = await startSync(d.ctx, { mode: "FULL" });
     const done = await runSyncJob(job.id, { adapterFactory: async () => ({ adapter, connection: null }), sleep: noSleep, pageSize: 2 });
     expect(done).toMatchObject({ status: "SUCCEEDED", mode: "FULL", ordersAddedCount: 5, addedCount: 4, ordersMatchedCount: 0, skippedCount: 0, filters: null });
-    expect(adapter.orderQueries.every((q) => q.filters === undefined)).toBe(true);
+    // Only the search for upsold orders carries a filter.
+    expect(adapter.orderQueries.filter((q) => q.filters !== undefined).map((q) => q.filters)).toEqual([{ upsell: true }]);
     expect(adapter.parcelQueries.every((q) => q.mdmOrderIds === undefined)).toBe(true);
   });
 });

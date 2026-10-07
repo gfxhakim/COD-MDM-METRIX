@@ -5,8 +5,10 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { ChevronLeft, ChevronRight, ClipboardList, Download, Plus, Search } from "lucide-react";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
+import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { PageHeader } from "@/components/app/page-header";
 import { OrderStatusBadge, ParcelStatusBadge } from "@/components/app/status";
+import { Badge } from "@/components/ui/badge";
 import { useCan } from "@/components/app/use-can";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,6 +35,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
   const [wilaya, setWilaya] = React.useState("");
   const [productId, setProductId] = React.useState("");
   const [creativeId, setCreativeId] = React.useState("");
+  const [upsell, setUpsell] = React.useState<"" | "yes" | "no">("");
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
@@ -45,7 +48,9 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
     return () => clearTimeout(t);
   }, [search]);
   // Changing any filter returns to page 1.
-  const filterKey = JSON.stringify([debounced, status, parcelStatus, wilaya, productId, creativeId]);
+  const ads = useAdsFilter().filter;
+  const filterKey = JSON.stringify([debounced, status, parcelStatus, wilaya, productId, creativeId, upsell, ads]);
+  const upsellFilter = upsell === "" ? undefined : upsell === "yes";
   const [pageState, setPageState] = React.useState({ key: filterKey, page: 1 });
   const page = pageState.key === filterKey ? pageState.page : 1;
   const setPage = (fn: (p: number) => number) => setPageState({ key: filterKey, page: fn(page) });
@@ -60,6 +65,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
       wilaya: wilaya || undefined,
       productId: productId || undefined,
       creativeId: creativeId || undefined,
+      upsell: upsellFilter,
+      ads,
       page,
       pageSize,
     }),
@@ -86,6 +93,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
             <label htmlFor="order-search" className="sr-only">Search orders</label>
             <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
+          <AdsFilter className="col-span-2" />
           <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full sm:w-36">
             <option value="">All orders</option>
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
@@ -105,6 +113,11 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full sm:w-44">
             <option value="">All creatives</option>
             {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
+          </Select>
+          <Select aria-label="Upsell" value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full sm:w-40">
+            <option value="">With or without upsell</option>
+            <option value="yes">Upsold</option>
+            <option value="no">No upsell</option>
           </Select>
         </div>
         {orders.error ? <ErrorState message={errorMessage(orders.error)} /> : orders.isLoading ? <Loading /> : !orders.data?.items.length ? (
@@ -132,7 +145,19 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                     ) : <span className="text-subtle">—</span>}
                   </Td>
                   <Td className="text-xs text-muted">{o.source.toLowerCase()}</Td>
-                  <Td className="max-w-40 truncate">{o.product ?? "—"}{o.extraLines ? <span className="text-subtle"> +{o.extraLines}</span> : null}</Td>
+                  <Td className="max-w-56">
+                    {o.lines.length ? (
+                      <span className="flex min-w-0 flex-col gap-0.5 leading-tight">
+                        {o.lines.slice(0, 2).map((l, i) => (
+                          <span key={i} className="truncate text-[13px]" title={l.product && l.product !== l.name ? `Counts for ${l.product}` : undefined}>
+                            {l.name ?? l.product ?? "—"} <span className="num text-muted">×{l.quantity}</span>
+                          </span>
+                        ))}
+                        {o.lines.length > 2 ? <span className="text-[11px] text-subtle">+{o.lines.length - 2} more</span> : null}
+                      </span>
+                    ) : <span className="text-subtle">—</span>}
+                    {o.upsell ? <Badge tone="brand" className="mt-1">Upsell</Badge> : null}
+                  </Td>
                   <Td className="font-mono text-xs text-muted">{o.creative?.externalCreativeId ?? <span className="text-subtle">unattributed</span>}</Td>
                   <Td className="text-xs text-muted">{formatDate(o.placedAt)}</Td>
                   <Td className="text-xs">{o.wilaya ?? "—"}</Td>
@@ -172,6 +197,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
             productName: facets.data?.products.find((p) => p.id === productId)?.name,
             creativeId: creativeId || undefined,
             creativeName: facets.data?.creatives.find((c) => c.id === creativeId)?.externalCreativeId,
+            upsell: upsellFilter,
+            ads,
           }}
           onClose={() => setExporting(false)}
           onPrint={(data, title) => {

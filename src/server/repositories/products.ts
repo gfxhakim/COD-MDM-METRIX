@@ -34,7 +34,7 @@ async function costColumns(ctx: WorkspaceContext, cost: CostInput, tx: Prisma.Tr
 export async function listProducts(ctx: WorkspaceContext, input: { includeInactive?: boolean } = {}) {
   const products = await db.product.findMany({
     where: { workspaceId: ctx.workspaceId, ...(input.includeInactive ? {} : { active: true }) },
-    include: { costVersions: { orderBy: { effectiveFrom: "desc" } }, _count: { select: { campaigns: true, adAccounts: true } } },
+    include: { costVersions: { orderBy: { effectiveFrom: "desc" } }, mdmLinks: { select: { mdmProductId: true, mdmName: true }, orderBy: { createdAt: "asc" } }, _count: { select: { campaigns: true, adAccounts: true } } },
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });
   const now = new Date();
@@ -50,7 +50,49 @@ export async function listProducts(ctx: WorkspaceContext, input: { includeInacti
     /** Campaigns linked to it, and ad accounts whose campaigns count for it by default. */
     linkedCampaigns: p._count.campaigns,
     linkedAdAccounts: p._count.adAccounts,
+    /** Created by the MDM sync; its costs still need entering while it has no cost version. */
+    fromMdm: p.fromMdm,
+    /** The MDM products that count as this product. */
+    mdmProducts: p.mdmLinks.map((l) => ({ id: l.mdmProductId, name: l.mdmName })),
   }));
+}
+
+/** Every product MDM has sent with an order, the product it counts as, and how much it sold. */
+export async function listMdmProducts(ctx: WorkspaceContext) {
+  const [links, lines] = await Promise.all([
+    db.mdmProductLink.findMany({ where: { workspaceId: ctx.workspaceId }, select: { mdmProductId: true, mdmName: true, productId: true, createdAt: true }, orderBy: { createdAt: "asc" } }),
+    db.orderLine.groupBy({ by: ["mdmProductId"], where: { workspaceId: ctx.workspaceId, mdmProductId: { not: null } }, _count: { _all: true }, _sum: { quantity: true } }),
+  ]);
+  const sold = new Map(lines.map((l) => [l.mdmProductId, { lines: l._count._all, units: l._sum.quantity ?? 0 }]));
+  return links.map((l) => ({ id: l.mdmProductId, name: l.mdmName, productId: l.productId, since: l.createdAt, lines: sold.get(l.mdmProductId)?.lines ?? 0, units: sold.get(l.mdmProductId)?.units ?? 0 }));
+}
+
+/**
+ * Makes an MDM product count as another product, with every order line it already has. A product the
+ * sync created that is left with nothing (no MDM product, orders, costs, ads or expenses, one-off or repeating) is removed.
+ */
+export async function moveMdmProduct(ctx: WorkspaceContext, input: { mdmProductId: string; productId: string }) {
+  assertCan(ctx, "catalog.write");
+  const ws = ctx.workspaceId;
+  const [link, target] = await Promise.all([
+    db.mdmProductLink.findUnique({ where: { workspaceId_mdmProductId: { workspaceId: ws, mdmProductId: input.mdmProductId } }, select: { productId: true } }),
+    db.product.findFirst({ where: { id: input.productId, workspaceId: ws }, select: { id: true, sku: true } }),
+  ]);
+  if (!link) throw new NotFoundError("MDM product not found");
+  if (!target) throw new NotFoundError("Product not found");
+  if (link.productId === target.id) return { moved: 0, removed: null };
+  return db.$transaction(async (tx) => {
+    await tx.mdmProductLink.update({ where: { workspaceId_mdmProductId: { workspaceId: ws, mdmProductId: input.mdmProductId } }, data: { productId: target.id } });
+    const moved = await tx.orderLine.updateMany({ where: { workspaceId: ws, mdmProductId: input.mdmProductId }, data: { productId: target.id, sku: target.sku } });
+    const old = await tx.product.findUnique({
+      where: { id: link.productId },
+      select: { id: true, name: true, fromMdm: true, _count: { select: { mdmLinks: true, orderLines: true, costVersions: true, campaigns: true, adAccounts: true, creatives: true, expenses: true, recurringExpenses: true } } },
+    });
+    const empty = old?.fromMdm && Object.values(old._count).every((n) => n === 0);
+    if (empty) await tx.product.delete({ where: { id: old.id } });
+    await audit(ctx, "product.mdm_product_moved", { type: "Product", id: target.id }, { mdmProductId: input.mdmProductId, from: link.productId, lines: moved.count, removedFrom: !!empty }, tx);
+    return { moved: moved.count, removed: empty ? old.name : null };
+  });
 }
 
 export async function getProduct(ctx: WorkspaceContext, id: string) {

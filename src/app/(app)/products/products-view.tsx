@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
@@ -67,7 +67,7 @@ function CostFields({ value, onChange, currency, rates }: { value: CostForm; onC
   );
 }
 
-type ProductRow = {
+export type ProductRow = {
   id: string;
   name: string;
   sku: string;
@@ -76,6 +76,8 @@ type ProductRow = {
   versionCount: number;
   linkedCampaigns: number;
   linkedAdAccounts: number;
+  fromMdm: boolean;
+  mdmProducts: { id: string; name: string | null }[];
   currentCost: (CostValues & SourcingOriginal & { effectiveFrom: Date }) | null;
 };
 
@@ -138,7 +140,8 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
   );
 }
 
-function CostVersionDialog({ product, open, onOpenChange, rates }: { product: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; rates: Rates }) {
+/** New cost version for a product. Also opened from the Profit tracker, which passes `onSaved` to refresh itself. */
+export function CostVersionDialog({ product, open, onOpenChange, rates, onSaved }: { product: ProductRow; open: boolean; onOpenChange: (o: boolean) => void; rates: Rates; onSaved?: () => void }) {
   const money = useMoney();
   const trpc = useTRPC();
   const qc = useQueryClient();
@@ -163,6 +166,7 @@ function CostVersionDialog({ product, open, onOpenChange, rates }: { product: Pr
         qc.invalidateQueries({ queryKey: trpc.products.list.queryKey() });
         qc.invalidateQueries({ queryKey: trpc.products.get.queryKey({ id: product.id }) });
         toast("success", "New cost version saved");
+        onSaved?.();
         onOpenChange(false);
       },
       onError: (e) => setError(errorMessage(e)),
@@ -216,6 +220,63 @@ function CostVersionDialog({ product, open, onOpenChange, rates }: { product: Pr
   );
 }
 
+/** The products MDM sends with orders, and the product each one counts as. */
+function MdmProducts({ products, canWrite }: { products: ProductRow[]; canWrite: boolean }) {
+  const trpc = useTRPC();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const list = useQuery(trpc.products.mdmProducts.queryOptions());
+  const move = useMutation(
+    trpc.products.moveMdmProduct.mutationOptions({
+      onSuccess: (r, v) => {
+        qc.invalidateQueries({ queryKey: trpc.products.mdmProducts.queryKey() });
+        qc.invalidateQueries({ queryKey: trpc.products.list.queryKey() });
+        const to = products.find((p) => p.id === v.productId)?.name ?? "the product";
+        toast("success", `Now counts as ${to}${r.moved ? `, with ${r.moved} order line${r.moved === 1 ? "" : "s"}` : ""}.${r.removed ? ` ${r.removed} had nothing left, so it was removed.` : ""}`);
+      },
+      onError: (e) => toast("error", errorMessage(e)),
+    }),
+  );
+  if (!list.data?.length) return null;
+  return (
+    <Card className="mt-6">
+      <div className="flex flex-col gap-1 border-b border-border p-4">
+        <h2 className="text-base font-semibold">Products from MDM</h2>
+        <p className="text-sm text-muted">Each product MDM sends with your orders counts as one of your products. A new one gets its own product, marked From MDM. If two MDM products are really the same product, point both at it here; their orders move with them.</p>
+      </div>
+      <Table>
+        <THead>
+          <tr>
+            <Th>In MDM</Th>
+            <Th className="text-right">Units ordered</Th>
+            <Th>Counts as</Th>
+          </tr>
+        </THead>
+        <tbody>
+          {list.data.map((m) => (
+            <Tr key={m.id}>
+              <Td>
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="font-medium">{m.name ?? "No name"}</span>
+                  <span className="font-mono text-[11px] text-subtle">{m.id}</span>
+                </span>
+              </Td>
+              <Td className="num text-right">{m.units.toLocaleString("en-US")}</Td>
+              <Td>
+                {canWrite ? (
+                  <Select aria-label={`Product for ${m.name ?? m.id}`} value={m.productId} disabled={move.isPending} onChange={(e) => move.mutate({ mdmProductId: m.id, productId: e.target.value })} className="w-full sm:w-56">
+                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.active ? "" : " (inactive)"}</option>)}
+                  </Select>
+                ) : (products.find((p) => p.id === m.productId)?.name ?? "—")}
+              </Td>
+            </Tr>
+          ))}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
+
 export function ProductsView() {
   const money = useMoney();
   const trpc = useTRPC();
@@ -245,7 +306,7 @@ export function ProductsView() {
       />
       <Card>
         {products.error ? <ErrorState message={errorMessage(products.error)} /> : products.isLoading ? <Loading /> : !products.data?.length ? (
-          <EmptyState icon={<Package />} title="No products yet" description="Add your products with sale price, sourcing cost and fees to unlock profit metrics." action={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> New product</Button> : null} />
+          <EmptyState icon={<Package />} title="No products yet" description="Products MDM sends with your orders appear here after a sync. You can also add one by hand. Then enter each product's costs to unlock profit." action={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> New product</Button> : null} />
         ) : (
           <Table>
             <THead>
@@ -267,7 +328,24 @@ export function ProductsView() {
             <tbody>
               {products.data.map((p) => (
                 <Tr key={p.id}>
-                  <Td className="font-medium">{p.name}</Td>
+                  <Td>
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="flex flex-wrap items-center gap-1.5 font-medium">
+                        {p.name}
+                        {p.fromMdm ? <Badge tone="brand">From MDM</Badge> : null}
+                        {!p.currentCost ? (
+                          canWrite ? (
+                            <button type="button" onClick={() => setVersioning(p)} className="rounded-full focus-visible:outline-2"><Badge tone="warning">Needs details · add costs</Badge></button>
+                          ) : <Badge tone="warning">Needs details</Badge>
+                        ) : null}
+                      </span>
+                      {p.mdmProducts.length ? (
+                        <span className="max-w-64 truncate text-[11px] text-subtle" title={p.mdmProducts.map((m) => `${m.name ?? m.id} (${m.id})`).join(", ")}>
+                          In MDM: {p.mdmProducts.map((m) => m.name ?? m.id).join(", ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  </Td>
                   <Td className="font-mono text-xs text-muted">{p.sku}</Td>
                   {(["salePrice", "sourcingCost", "forwardShippingFee", "rtoFee", "callCenterFee", "packagingFee"] as const).map((k) => (
                     <Td key={k} className="num text-right">
@@ -302,6 +380,7 @@ export function ProductsView() {
           </Table>
         )}
       </Card>
+      <MdmProducts products={products.data ?? []} canWrite={canWrite} />
       {creating ? <ProductDialog open onOpenChange={setCreating} currency={currency} rates={rates} products={products.data ?? []} /> : null}
       {editing ? <ProductDialog product={editing} open onOpenChange={(o) => !o && setEditing(null)} currency={currency} rates={rates} products={products.data ?? []} /> : null}
       {versioning ? <CostVersionDialog product={versioning} open onOpenChange={(o) => !o && setVersioning(null)} rates={rates} /> : null}

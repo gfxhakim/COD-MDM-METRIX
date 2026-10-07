@@ -236,6 +236,7 @@ describe("MDM orders", () => {
     const o = mapMdmOrder(order(1));
     expect(o).toEqual({
       trackingId: "ORD-TEST1",
+      upsell: null,
       externalId: "#101",
       status: "packaged",
       statusAt: new Date("2026-09-02T09:00:00.000Z"),

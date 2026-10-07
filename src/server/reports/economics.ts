@@ -10,6 +10,7 @@ import {
   type Totals,
   type Verdict,
 } from "@/domain/economics";
+import type { AdFilter } from "@/domain/adFilter";
 import { getDataHealth } from "@/server/repositories/overview";
 import type { WorkspaceContext } from "@/server/tenancy";
 import { loadFacts, type DateRange, type WorkspaceFacts } from "./facts";
@@ -91,18 +92,18 @@ function creativeRows(facts: WorkspaceFacts, evaluated: Evaluated[], view: Reven
   return { rows, unallocatedOverhead: unallocated };
 }
 
-export async function creativeMatrix(ctx: WorkspaceContext, input: DateRange & { revenueView?: RevenueView }) {
-  const facts = await loadFacts(ctx, input);
+export async function creativeMatrix(ctx: WorkspaceContext, input: DateRange & { revenueView?: RevenueView; ads?: AdFilter }) {
+  const facts = await loadFacts(ctx, input, input.ads);
   const view = input.revenueView ?? facts.defaults.revenueView;
   const { rows, unallocatedOverhead } = creativeRows(facts, evaluate(facts), view);
   rows.sort((a, b) => (a.kind === "CREATIVE" ? 0 : 1) - (b.kind === "CREATIVE" ? 0 : 1) || b.metrics.trueNetProfit - a.metrics.trueNetProfit);
   return { currency: facts.currency, revenueView: view, thresholds: facts.thresholds, overheadPolicy: facts.defaults.overheadPolicy, unallocatedOverhead, rows };
 }
 
-export type DashboardInput = DateRange & { productId?: string; creativeId?: string; revenueView?: RevenueView };
+export type DashboardInput = DateRange & { productId?: string; creativeId?: string; revenueView?: RevenueView; ads?: AdFilter };
 
 export async function dashboardReport(ctx: WorkspaceContext, input: DashboardInput) {
-  const facts = await loadFacts(ctx, input);
+  const facts = await loadFacts(ctx, input, input.ads);
   const view = input.revenueView ?? facts.defaults.revenueView;
   const evaluated = evaluate(facts);
   const creative = creativeRows(facts, evaluated, view);
@@ -123,7 +124,8 @@ export async function dashboardReport(ctx: WorkspaceContext, input: DashboardInp
     overhead = allocateOverhead(groups, facts.expenses, facts.defaults.overheadPolicy).allocated.get(input.productId) ?? 0;
   } else {
     adSpend = sumSpend(facts, () => true);
-    // Business level: every categorized expense in the period reduces profit, whatever the allocation policy.
+    // Business level: every categorized expense in the period reduces profit, whatever the allocation policy
+    // (with an ad filter, the share the orders of those ads take).
     overhead = facts.expenses.reduce((a, e) => a + e.amount, 0);
   }
   const metrics = computeMetrics(sumTotals(scoped.map((o) => o.totals)), adSpend, overhead, view);

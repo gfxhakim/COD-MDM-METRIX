@@ -1,17 +1,17 @@
 "use client";
 
 import type { Role } from "@prisma/client";
-import { Check, ChevronDown, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, Plus, RefreshCw, Settings, X } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, LayoutDashboard, LogOut, Megaphone, Menu, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import { logoutAction, switchWorkspaceAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/app/logo";
-import { isActive, NAV } from "@/components/app/nav";
+import { isActive, NAV, SIDEBAR_COOKIE } from "@/components/app/nav";
 import { CurrencyPicker, CurrencyProvider } from "@/components/app/currency";
 import { DataFreshness } from "@/components/app/data-freshness";
 import { Badge } from "@/components/ui/badge";
-import { useSlidingPill } from "@/components/ui/sliding-pill";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type ShellWorkspace = { id: string; name: string; isDemo: boolean; role: Role };
@@ -49,85 +49,44 @@ function usePopover() {
   return { open, setOpen, ref };
 }
 
-const pill = "slide-item press flex h-9 items-center whitespace-nowrap rounded-full px-4 text-sm font-medium";
-const pillActive = "bg-brand glow";
-const pillIdle = "text-muted hover:bg-surface-3 hover:text-fg";
 const menuPop = "animate-pop absolute right-0 top-full z-50 mt-2 rounded-2xl border border-border bg-surface shadow-xl";
 
-/** Computer menu: a row of pills with the less used pages under "More". */
-function TopNav() {
-  const pathname = usePathname();
-  const { open: moreOpen, setOpen: setMoreOpen, ref: moreRef } = usePopover();
-  const { boxRef, pill: slider } = useSlidingPill<HTMLElement>();
-  const inMore = NAV.filter((n) => n.tier > 1);
-  // A page under "More" lights up the More button. Pages with their own pill from 2xl up only do so below 2xl.
-  const moreTier = inMore.find((n) => isActive(n.href, pathname))?.tier;
-  return (
-    <nav ref={boxRef} data-slide="" aria-label="Main" className="relative hidden items-center gap-0.5 rounded-full bg-surface p-1 shadow-card lg:flex">
-      {slider}
-      {NAV.filter((n) => n.tier < 3).map(({ href, short, tier }) => {
-        const active = isActive(href, pathname);
-        return (
-          <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn(pill, active ? pillActive : pillIdle, tier === 2 && "hidden 2xl:flex")}>
-            {short}
-          </Link>
-        );
-      })}
-      <div ref={moreRef} className="relative">
-        <button
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={moreOpen}
-          data-active={moreTier ? "true" : undefined}
-          onClick={() => setMoreOpen((o) => !o)}
-          className={cn(pill, "gap-1", moreTier === 3 ? pillActive : moreTier === 2 ? cn(pillIdle, "max-2xl:bg-brand max-2xl:glow max-2xl:text-white") : pillIdle)}
-        >
-          More <ChevronDown className={cn("size-3.5 transition-transform duration-300", moreOpen && "rotate-180")} />
-        </button>
-        {moreOpen ? (
-          <div role="menu" className={cn(menuPop, "w-56 p-1.5")}>
-            {inMore.map(({ href, label, icon: Icon, tier }) => {
-              const active = isActive(href, pathname);
-              return (
-                <Link key={href} role="menuitem" href={href} onClick={() => setMoreOpen(false)} aria-current={active ? "page" : undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors", active ? "bg-brand-soft font-semibold text-brand-strong" : "text-fg hover:bg-surface-2", tier === 2 && "2xl:hidden")}>
-                  <Icon className="size-4" aria-hidden="true" />
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
-    </nav>
+/** One page in the side menu: its emoji, which moves while the pointer is on it, and its name. */
+function NavLink({ item, active, folded, onClick }: { item: (typeof NAV)[number]; active: boolean; folded?: boolean; onClick?: () => void }) {
+  const link = (
+    <Link
+      href={item.href}
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={cn("nav-link press group flex h-12 shrink-0 items-center gap-3 rounded-2xl text-sm font-medium", folded ? "justify-center" : "px-1.5", active ? "bg-brand glow" : "text-fg hover:bg-surface-2")}
+    >
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl text-xl transition-colors", active ? "bg-white/20" : "bg-surface-2 group-hover:bg-surface")}>
+        <span className="nav-emoji" data-motion={item.motion} aria-hidden="true">{item.emoji}</span>
+      </span>
+      <span className={cn("min-w-0 truncate", folded && "sr-only")}>{item.label}</span>
+    </Link>
   );
+  return folded ? <Tooltip side="right" content={item.label}>{link}</Tooltip> : link;
 }
 
-/** Phone and tablet menu: every page as a pill in one row that scrolls sideways. */
-function PillRow() {
+/** Computer menu: every page down the left side. It folds down to the emojis and remembers that. */
+function SideNav({ folded, onToggle }: { folded: boolean; onToggle: () => void }) {
   const pathname = usePathname();
-  const rowRef = React.useRef<HTMLDivElement>(null);
-  const { boxRef, pill: slider } = useSlidingPill<HTMLDivElement>();
-  React.useEffect(() => {
-    const row = rowRef.current;
-    const el = row?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (row && el) row.scrollTo({ left: el.offsetLeft - 16, behavior: "smooth" });
-  }, [pathname]);
+  const Toggle = folded ? PanelLeftOpen : PanelLeftClose;
+  const toggle = (
+    <button type="button" onClick={onToggle} aria-expanded={!folded} aria-controls="side-menu" className={cn("press flex h-11 shrink-0 items-center gap-3 rounded-full bg-surface text-sm font-medium text-muted shadow-card hover:text-fg", folded ? "justify-center" : "px-4")}>
+      <Toggle className="size-4" aria-hidden="true" />
+      <span className={cn(folded && "sr-only")}>{folded ? "Open menu" : "Close menu"}</span>
+    </button>
+  );
   return (
-    <nav aria-label="Pages" className="-mx-4 lg:hidden">
-      <div ref={rowRef} className="no-scrollbar flex gap-1 overflow-x-auto px-4">
-        <div ref={boxRef} data-slide="" className="relative flex gap-0.5 rounded-full bg-surface p-1 shadow-card">
-          {slider}
-          {NAV.map(({ href, short }) => {
-            const active = isActive(href, pathname);
-            return (
-              <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn(pill, "h-8 px-3.5", active ? pillActive : pillIdle)}>
-                {short}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-    </nav>
+    <aside className={cn("sticky top-0 z-30 hidden h-dvh shrink-0 flex-col gap-3 py-4 pl-4 transition-[width] duration-300 ease-[var(--ease-out)] lg:flex", folded ? "w-[92px]" : "w-[264px]")}>
+      <Link href="/" aria-label="COD Flow dashboard" className={cn("press flex h-11 shrink-0 items-center rounded-full", folded ? "justify-center" : "px-1.5")}><Logo compact={folded} /></Link>
+      <nav id="side-menu" aria-label="Main" className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto rounded-[28px] bg-surface p-2 shadow-card">
+        {NAV.map((item) => <NavLink key={item.href} item={item} active={isActive(item.href, pathname)} folded={folded} />)}
+      </nav>
+      {folded ? <Tooltip side="right" content="Open menu">{toggle}</Tooltip> : toggle}
+    </aside>
   );
 }
 
@@ -205,7 +164,7 @@ function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; w
   );
 }
 
-/** Phone drawer: every page, the workspaces and sign out. */
+/** Phone and tablet menu: slides in from the left with every page, the workspaces and sign out. */
 function Drawer({ current, workspaces, user, onClose: close }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; onClose: () => void }) {
   const pathname = usePathname();
   // Closing slides the panel out first, then removes it.
@@ -220,23 +179,15 @@ function Drawer({ current, workspaces, user, onClose: close }: { current: ShellW
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
       <div className={cn("absolute inset-0 bg-ink/40 backdrop-blur-[2px]", closing ? "animate-[fade-out_200ms_ease-in_both]" : "animate-fade")} onClick={onClose} />
-      <aside className={cn("absolute inset-y-0 right-0 flex w-[min(20rem,88vw)] flex-col gap-4 overflow-y-auto rounded-l-[28px] bg-surface p-4 shadow-2xl", closing ? "animate-[slide-out-right_200ms_ease-in_both]" : "animate-[slide-in-right_420ms_var(--ease-out)_backwards]")}>
+      <aside className={cn("absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col gap-4 overflow-y-auto rounded-r-[28px] bg-surface p-4 shadow-2xl", closing ? "animate-[slide-out-left_200ms_ease-in_both]" : "animate-[slide-in-left_420ms_var(--ease-out)_backwards]")}>
         <div className="flex items-center justify-between">
           <Logo />
-          <button type="button" className="press grid size-10 place-items-center rounded-full bg-surface-3 text-fg hover:rotate-90" onClick={onClose} aria-label="Close navigation"><X className="size-5" /></button>
+          <button type="button" className="press grid size-10 place-items-center rounded-full bg-surface-3 text-fg hover:rotate-90" onClick={onClose} aria-label="Close menu"><X className="size-5" /></button>
         </div>
-        <nav aria-label="Main" className="stagger flex flex-col gap-0.5">
-          {NAV.map(({ href, label, icon: Icon }) => {
-            const active = isActive(href, pathname);
-            return (
-              <Link key={href} href={href} onClick={onClose} aria-current={active ? "page" : undefined} className={cn("press flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium", active ? "bg-brand glow" : "text-fg hover:bg-surface-2")}>
-                <Icon className="size-4" aria-hidden="true" />
-                {label}
-              </Link>
-            );
-          })}
+        <nav aria-label="Main" className="stagger flex flex-col gap-1">
+          {NAV.map((item) => <NavLink key={item.href} item={item} active={isActive(item.href, pathname)} onClick={onClose} />)}
         </nav>
         <div className="border-t border-border pt-3">
           <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-subtle">Workspaces</p>
@@ -282,37 +233,44 @@ function BottomBar({ onMenu }: { onMenu: () => void }) {
   );
 }
 
-export function AppShell({ current, workspaces, user, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; children: React.ReactNode }) {
+export function AppShell({ current, workspaces, user, menuFolded, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; menuFolded: boolean; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [folded, setFolded] = React.useState(menuFolded);
   const closeMobile = React.useCallback(() => setMobileOpen(false), []);
+  const toggleMenu = React.useCallback(() => {
+    const next = !folded;
+    document.cookie = `${SIDEBAR_COOKIE}=${next ? "folded" : "open"}; path=/; max-age=31536000; samesite=lax`;
+    setFolded(next);
+  }, [folded]);
   const shell = React.useMemo(() => ({ user, workspace: current }), [user, current]);
   return (
     <CurrencyProvider workspaceId={current.id}>
     <ShellCtx.Provider value={shell}>
     <div className="flex min-h-screen flex-col">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">Skip to content</a>
-      {current.isDemo ? (
-        <div className="border-b border-warning/20 bg-warning-soft px-4 py-1.5 text-center text-xs font-medium text-warning" role="note">
-          DEMO DATA · Synthetic workspace. Nothing here is a real business or real MDM data.
+      <div className="flex flex-1">
+        <SideNav folded={folded} onToggle={toggleMenu} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {current.isDemo ? (
+            <div className="border-b border-warning/20 bg-warning-soft px-4 py-1.5 text-center text-xs font-medium text-warning" role="note">
+              DEMO DATA · Synthetic workspace. Nothing here is a real business or real MDM data.
+            </div>
+          ) : null}
+          <header style={{ viewTransitionName: "site-header" }} className="z-30 bg-bg/80 backdrop-blur-md md:sticky md:top-0">
+            <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
+              <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-surface text-fg shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="size-5" /></button>
+              <Link href="/" aria-label="COD Flow dashboard" className="press mr-1 shrink-0 rounded-full lg:hidden"><Logo /></Link>
+              {/* One copy for every screen size: its own row on phones, beside the account button from md up. */}
+              <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ml-auto md:w-auto md:overflow-visible"><CurrencyPicker /><DataFreshness /></div>
+              <div className="ml-auto flex items-center gap-2 md:ml-0">
+                <AccountMenu current={current} workspaces={workspaces} user={user} />
+              </div>
+            </div>
+          </header>
+          {mobileOpen ? <Drawer current={current} workspaces={workspaces} user={user} onClose={closeMobile} /> : null}
+          <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-28 pt-5 md:pb-10 lg:px-8">{children}</main>
         </div>
-      ) : null}
-      <header style={{ viewTransitionName: "site-header" }} className="z-30 bg-bg/80 backdrop-blur-md md:sticky md:top-0">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-          <Link href="/" aria-label="COD Flow dashboard" className="press mr-1 shrink-0 rounded-full"><Logo /></Link>
-          <TopNav />
-          {/* One copy for every screen size: its own row on phones, beside the account button from md up. */}
-          <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ml-auto md:w-auto md:overflow-visible"><CurrencyPicker /><DataFreshness /></div>
-          <div className="ml-auto flex items-center gap-2 md:ml-0">
-            <AccountMenu current={current} workspaces={workspaces} user={user} />
-            <button type="button" className="press grid size-11 place-items-center rounded-full bg-surface text-fg shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu className="size-5" /></button>
-          </div>
-        </div>
-      </header>
-      <div className="mx-auto w-full max-w-[1600px] px-4 pt-1 lg:hidden">
-        <PillRow />
       </div>
-      {mobileOpen ? <Drawer current={current} workspaces={workspaces} user={user} onClose={closeMobile} /> : null}
-      <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-28 pt-5 md:pb-10 lg:px-8">{children}</main>
       <BottomBar onMenu={() => setMobileOpen(true)} />
     </div>
     </ShellCtx.Provider>

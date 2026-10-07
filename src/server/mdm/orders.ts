@@ -5,28 +5,39 @@ import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone } from "@/lib/pii";
 import { customerKey, normalizeCustomer, openCustomer, sealCustomer } from "@/server/customers";
 import { reconcileOrderStatuses } from "./statuses";
-import type { MdmOrder, MdmUtm } from "./types";
+import type { MdmOrder, MdmOrdersPage, MdmUtm } from "./types";
 
-type ProductRef = { id: string; sku: string; name: string; salePrice: number | null; active: boolean };
+type ProductRef = { id: string; sku: string; name: string; salePrice: number | null; active: boolean; fromMdm: boolean };
 
-/** Loaded once per sync; `creatives` grows as the sync creates creatives for new content IDs. */
+/**
+ * Loaded once per sync. `creatives` grows as the sync creates creatives for new content IDs,
+ * and `products` and `mdmLinks` as it links or creates products for MDM products.
+ */
 export type OrderSyncEnv = {
   workspaceId: string;
   overrides: Record<string, NormalizedStatus>;
   products: ProductRef[];
   creatives: Map<string, string>;
+  /** MDM product ID → the product it counts as in the app. */
+  mdmLinks: Map<string, string>;
+  /** Product names from MDM's stock list, by MDM product ID: an order line may only carry a variant's name. */
+  stockNames: Map<string, string>;
 };
 
 export async function loadOrderSyncEnv(workspaceId: string, overrides: Record<string, NormalizedStatus>): Promise<OrderSyncEnv> {
-  const [products, creatives] = await Promise.all([
-    db.product.findMany({ where: { workspaceId }, select: { id: true, sku: true, name: true, active: true, costVersions: { orderBy: { effectiveFrom: "desc" }, take: 1, select: { salePrice: true } } } }),
+  const [products, creatives, links, stock] = await Promise.all([
+    db.product.findMany({ where: { workspaceId }, select: { id: true, sku: true, name: true, active: true, fromMdm: true, costVersions: { orderBy: { effectiveFrom: "desc" }, take: 1, select: { salePrice: true } } } }),
     db.creative.findMany({ where: { workspaceId }, select: { id: true, normalizedKey: true } }),
+    db.mdmProductLink.findMany({ where: { workspaceId }, select: { mdmProductId: true, productId: true } }),
+    db.mdmStockItem.findMany({ where: { workspaceId }, distinct: ["mdmProductId"], select: { mdmProductId: true, productName: true } }),
   ]);
   return {
     workspaceId,
     overrides,
-    products: products.map((p) => ({ id: p.id, sku: p.sku, name: p.name, active: p.active, salePrice: p.costVersions[0]?.salePrice ?? null })),
+    products: products.map((p) => ({ id: p.id, sku: p.sku, name: p.name, active: p.active, fromMdm: p.fromMdm, salePrice: p.costVersions[0]?.salePrice ?? null })),
     creatives: new Map(creatives.map((c) => [c.normalizedKey, c.id])),
+    mdmLinks: new Map(links.map((l) => [l.mdmProductId, l.productId])),
+    stockNames: new Map(stock.map((x) => [x.mdmProductId, x.productName])),
   };
 }
 
@@ -54,27 +65,82 @@ export async function ordersNeedingHistory(workspaceId: string, orders: MdmOrder
   return new Set(candidates.filter((id) => !skip.has(id)));
 }
 
-type Line = { productId: string | null; sku: string | null; productName: string | null; quantity: number; unitPrice: number };
+type Line = { productId: string | null; sku: string | null; productName: string | null; quantity: number; unitPrice: number; mdmProductId: string | null; mdmVariantId: string | null };
 
-/**
- * MDM products are matched to the workspace's products by SKU (MDM product ID) or name.
- * A workspace selling a single active product gets every unmatched line linked to it,
- * so its costs count even when MDM names the product differently.
- */
-function mapLines(o: MdmOrder, products: ProductRef[]): Line[] {
+const mdmId = (v: string | null) => v?.trim().slice(0, 100) || null;
+
+/** A product whose SKU is one of `skus` (MDM product or variant ID, or name), else whose name is `name`. */
+function matchProduct(products: ProductRef[], skus: (string | null)[], name: string | null) {
   const bySku = new Map(products.map((p) => [p.sku.toLowerCase(), p]));
-  const byName = new Map(products.map((p) => [p.name.toLowerCase(), p]));
-  const active = products.filter((p) => p.active);
-  const only = active.length === 1 ? active[0] : null;
-  return o.products.map((l) => {
-    const product =
-      (l.ref && bySku.get(l.ref.toLowerCase())) || (l.variantOf && bySku.get(l.variantOf.toLowerCase())) || (l.name && (bySku.get(l.name.toLowerCase()) ?? byName.get(l.name.toLowerCase()))) || only;
-    return { productId: product?.id ?? null, sku: product?.sku ?? null, productName: l.name ?? product?.name ?? null, quantity: l.quantity, unitPrice: l.unitPrice ?? product?.salePrice ?? 0 };
-  });
+  for (const k of skus) if (k && bySku.has(k.toLowerCase())) return bySku.get(k.toLowerCase())!;
+  return name ? (products.find((p) => p.name.toLowerCase() === name.toLowerCase()) ?? null) : null;
 }
 
-const lineSig = (lines: { productId: string | null; sku: string | null; productName: string | null; quantity: number; unitPrice: number }[]) =>
-  JSON.stringify(lines.map((l) => JSON.stringify([l.productId, l.sku, l.productName, l.quantity, l.unitPrice])).sort());
+/** A product made for an MDM product nobody has set up yet. Its costs are filled in on the Products page. */
+async function createMdmProduct(env: OrderSyncEnv, id: string, name: string | null, currency: string): Promise<ProductRef> {
+  const taken = new Set(env.products.map((p) => p.sku.toLowerCase()));
+  const base = id.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 60) || "MDM";
+  let sku = base;
+  for (let n = 2; taken.has(sku.toLowerCase()); n++) sku = `${base}-${n}`;
+  const p = await db.product.create({
+    data: { workspaceId: env.workspaceId, name: (env.stockNames.get(id) ?? name ?? `MDM product ${id}`).slice(0, 120), sku, currency, fromMdm: true },
+    select: { id: true, sku: true, name: true, active: true },
+  });
+  const ref: ProductRef = { ...p, fromMdm: true, salePrice: null };
+  env.products.push(ref);
+  return ref;
+}
+
+/**
+ * The product an MDM product counts as. The first time MDM sends it, it is linked for good (an owner
+ * can move it on the Products page) to: a product whose SKU or name matches it; else, while the
+ * workspace sells one product that no MDM product counts as yet, that product, so the costs already
+ * entered keep counting; else a new product created for it.
+ */
+async function productForMdm(env: OrderSyncEnv, id: string, line: MdmOrder["products"][number], currency: string): Promise<ProductRef> {
+  const linked = env.mdmLinks.get(id);
+  const known = linked ? env.products.find((p) => p.id === linked) : undefined;
+  if (known) return known;
+  const active = env.products.filter((p) => p.active);
+  const taken = new Set(env.mdmLinks.values());
+  const product =
+    matchProduct(env.products, [id, line.ref, line.name], line.name) ??
+    (active.length === 1 && !active[0].fromMdm && !taken.has(active[0].id) ? active[0] : null) ??
+    (await createMdmProduct(env, id, line.name, currency));
+  await db.mdmProductLink.upsert({
+    where: { workspaceId_mdmProductId: { workspaceId: env.workspaceId, mdmProductId: id } },
+    create: { workspaceId: env.workspaceId, mdmProductId: id, productId: product.id, mdmName: line.name?.slice(0, 200) ?? null },
+    update: {},
+  });
+  env.mdmLinks.set(id, product.id);
+  return product;
+}
+
+/**
+ * The order's lines, each with the product it counts for. Lines carrying an MDM product ID go
+ * through `productForMdm`; a line without one goes to a product matching its name, or to the
+ * workspace's single active product so its costs still count.
+ */
+async function resolveLines(env: OrderSyncEnv, o: MdmOrder): Promise<Line[]> {
+  const lines: Line[] = [];
+  for (const l of o.products) {
+    const mdmProductId = mdmId(l.variantOf ?? l.ref);
+    const active = env.products.filter((p) => p.active);
+    const product = mdmProductId ? await productForMdm(env, mdmProductId, l, o.currency) : (matchProduct(env.products, [l.name], l.name) ?? (active.length === 1 ? active[0] : null));
+    lines.push({
+      productId: product?.id ?? null,
+      sku: product?.sku ?? null,
+      productName: l.name ?? product?.name ?? null,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice ?? product?.salePrice ?? 0,
+      mdmProductId,
+      mdmVariantId: l.variantOf ? mdmId(l.ref) : null,
+    });
+  }
+  return lines;
+}
+
+const lineSig = (lines: Omit<Line, "mdmVariantId">[]) => JSON.stringify(lines.map((l) => JSON.stringify([l.productId, l.sku, l.productName, l.quantity, l.unitPrice, l.mdmProductId])).sort());
 
 function platformOf(source: string | null): AdPlatform {
   if (!source) return "META";
@@ -133,7 +199,7 @@ export type OrderOutcome = { counter: "added" | "updated" | "unchanged"; orderId
 export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrder, history: MdmUtm | null, historyChecked: boolean): Promise<OrderOutcome> {
   const ws = env.workspaceId;
   const fresh: MdmUtm = o.utm.content || !history?.content ? o.utm : { source: o.utm.source ?? history.source, medium: o.utm.medium ?? history.medium, campaign: o.utm.campaign ?? history.campaign, content: history.content };
-  const lines = mapLines(o, env.products);
+  const lines = await resolveLines(env, o);
   const { status, normalized } = orderStatusFor(o, env.overrides);
   const find = async (tx: Prisma.TransactionClient) =>
     (await tx.order.findFirst({ where: { workspaceId: ws, mdmOrderId: o.trackingId }, include: orderInclude })) ?? (o.externalId ? await findStoreOrder(tx, ws, o.externalId) : null);
@@ -164,6 +230,7 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
     const sealed = (e: ExistingOrder | null) => (!customer || (e && customerKey(openCustomer(e.customerEncrypted, ws)) === customerKey(customer)) ? {} : sealCustomer(customer, ws));
     const utmData = { utmSource: utm.source, utmMedium: utm.medium, utmCampaign: utm.campaign, utmContent: utm.content };
     const checked = historyChecked ? { mdmHistoryCheckedAt: new Date() } : {};
+    const upsell = typeof o.upsell === "boolean" ? { mdmUpsell: o.upsell } : {};
     const attribution = { rawUtmContent: utm.content, normalizedCreativeKey: key, creativeId, method: creativeId ? ("UTM_CONTENT" as const) : ("NONE" as const), confidence: creativeId ? 1 : 0 };
 
     let orderId: string;
@@ -190,6 +257,7 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
           currency: o.currency,
           ...utmData,
           ...checked,
+          ...upsell,
           lines: { create: lines.map((l) => ({ workspaceId: ws, ...l, currency: o.currency })) },
           attribution: { create: { workspaceId: ws, orderPlacedAt: o.placedAt, ...attribution } },
         },
@@ -213,6 +281,7 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
               ...(!existing.wilaya && o.wilaya ? { wilaya: o.wilaya, city: o.city } : {}),
             }),
         ...(fillUtm ? utmData : {}),
+        ...upsell,
       };
       const changed = Object.entries(data).some(([k, v]) => !same(existing[k as keyof typeof existing], v));
       if (changed || historyChecked) await tx.order.update({ where: { id: existing.id }, data: { ...data, ...checked } });
@@ -251,4 +320,29 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
     if (counter !== "unchanged") await tx.syncItem.create({ data: { workspaceId: ws, jobId, entityType: "order", providerId: o.trackingId.slice(0, 200), localId: orderId, result: counter === "added" ? "ADDED" : "UPDATED" } });
     return { counter, orderId, hasContent, linkedParcels: loose.length };
   });
+}
+
+/** Pages of MDM's upsell search read per sync, at most. */
+const UPSELL_PAGES = 50;
+
+/**
+ * Marks the orders MDM's call center upsold. MDM's order doesn't say so itself, but its order search
+ * filters on it, so the sync reads the upsold orders changed since the last sync (all of them on a
+ * full sync, which also clears the mark from orders MDM no longer counts as upsold). If MDM answers
+ * the filtered search with as many orders as the plain one, it ignored the filter and nothing changes.
+ */
+export async function syncUpsells(workspaceId: string, read: (cursor: string | null) => Promise<MdmOrdersPage>, o: { full: boolean; plainTotal: number | null }) {
+  const ids = new Set<string>();
+  let cursor: string | null = null;
+  for (let n = 0; n < UPSELL_PAGES; n++) {
+    const page = await read(cursor);
+    if (n === 0 && page.total != null && o.plainTotal != null && o.plainTotal >= 20 && page.total >= o.plainTotal) return { marked: 0, ignored: true };
+    for (const x of page.items) ids.add(x.trackingId);
+    cursor = page.nextCursor;
+    if (!cursor) break;
+  }
+  const list = [...ids];
+  if (o.full) await db.order.updateMany({ where: { workspaceId, mdmUpsell: true }, data: { mdmUpsell: false } });
+  for (let i = 0; i < list.length; i += 500) await db.order.updateMany({ where: { workspaceId, mdmOrderId: { in: list.slice(i, i + 500) } }, data: { mdmUpsell: true } });
+  return { marked: list.length, ignored: false };
 }

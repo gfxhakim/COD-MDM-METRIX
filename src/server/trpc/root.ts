@@ -6,6 +6,8 @@ import { ordersRouter } from "@/server/trpc/routers/orders";
 import { expensesRouter } from "@/server/trpc/routers/expenses";
 import { bankRouter, importsRouter, spendReviewRouter } from "@/server/trpc/routers/imports";
 import { integrationsRouter, syncRouter } from "@/server/trpc/routers/mdm";
+import { moneyRouter } from "@/server/trpc/routers/money";
+import { profitRouter } from "@/server/trpc/routers/profit";
 import { creativesRouter, reportsRouter, simulatorRouter } from "@/server/trpc/routers/economics";
 
 export const appRouter = router({
@@ -24,6 +26,8 @@ export const appRouter = router({
   spendReview: spendReviewRouter,
   integrations: integrationsRouter,
   sync: syncRouter,
+  money: moneyRouter,
+  profit: profitRouter,
 });
 
 export type AppRouter = typeof appRouter;

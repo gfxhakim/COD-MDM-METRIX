@@ -6,6 +6,7 @@ import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Columns3, Download, Megaphone } from "lucide-react";
 import * as React from "react";
 import { Money, Rate, Ratio } from "@/components/app/format";
+import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { PageHeader } from "@/components/app/page-header";
 import { VerdictBadge, type VerdictValue } from "@/components/app/verdict";
 import { Badge } from "@/components/ui/badge";
@@ -82,7 +83,8 @@ export function CreativesView() {
   const [showColumns, setShowColumns] = React.useState(false);
   React.useEffect(() => setHidden(loadHidden()), []); // eslint-disable-line react-hooks/set-state-in-effect -- read per-viewer preference after hydration
 
-  const range = { from: from ? new Date(`${from}T00:00:00Z`) : undefined, to: to ? new Date(`${to}T23:59:59Z`) : undefined, revenueView: view || undefined };
+  const ads = useAdsFilter().filter;
+  const range = { from: from ? new Date(`${from}T00:00:00Z`) : undefined, to: to ? new Date(`${to}T23:59:59Z`) : undefined, revenueView: view || undefined, ads };
   const q = useQuery({ ...trpc.creatives.matrix.queryOptions(range), placeholderData: keepPreviousData });
   const exportCsv = useMutation(
     trpc.creatives.exportCsv.mutationOptions({
@@ -135,6 +137,7 @@ export function CreativesView() {
       />
       <Card>
         <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
+          <AdsFilter className="col-span-2" />
           <Input aria-label="Search creatives" placeholder="Search creative or campaign" value={search} onChange={(e) => setSearch(e.target.value)} className="col-span-2 w-full sm:w-56" />
           <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full sm:w-38" />
           <Input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full sm:w-38" />

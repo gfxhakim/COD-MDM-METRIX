@@ -120,6 +120,18 @@ enum ExpenseCategory {
   PACKAGING
   WAREHOUSE
   OTHER
+  SALARIES
+  OTHER_ADS
+  CONTENT
+  TRANSPORT
+  TAXES
+}
+
+enum ExpenseFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
 }
 
 enum ExpenseAllocation {
@@ -213,33 +225,42 @@ model Workspace {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  members          WorkspaceMember[]
-  auditLogs        AuditLog[]
-  connections      IntegrationConnection[]
-  syncJobs         SyncJob[]
-  syncItems        SyncItem[]
-  rawRecords       RawExternalRecord[]
-  statusMappings   StatusMapping[]
-  unmatchedRecords UnmatchedRecord[]
-  products         Product[]
-  costVersions     ProductCostVersion[]
-  orders           Order[]
-  orderLines       OrderLine[]
-  attributions     Attribution[]
-  parcels          Parcel[]
-  parcelEvents     ParcelStatusEvent[]
-  cashEvents       CashEvent[]
-  creatives        Creative[]
-  adSpend          AdSpend[]
-  adAccounts       AdAccount[]
-  campaigns        Campaign[]
-  metaTokens       MetaToken[]
-  expenses         Expense[]
-  bankTransactions BankTransaction[]
-  importBatches    ImportBatch[]
-  importRowErrors  ImportRowError[]
-  metricSnapshots  MetricSnapshot[]
-  scenarios        SimulatorScenario[]
+  members           WorkspaceMember[]
+  auditLogs         AuditLog[]
+  connections       IntegrationConnection[]
+  syncJobs          SyncJob[]
+  syncItems         SyncItem[]
+  rawRecords        RawExternalRecord[]
+  statusMappings    StatusMapping[]
+  unmatchedRecords  UnmatchedRecord[]
+  products          Product[]
+  costVersions      ProductCostVersion[]
+  orders            Order[]
+  orderLines        OrderLine[]
+  attributions      Attribution[]
+  parcels           Parcel[]
+  parcelEvents      ParcelStatusEvent[]
+  cashEvents        CashEvent[]
+  mdmAccount        MdmAccount?
+  mdmPayouts        MdmPayout[]
+  mdmFees           MdmFee[]
+  mdmStock          MdmStockItem[]
+  mdmArrivals       MdmStockArrival[]
+  mdmProductLinks   MdmProductLink[]
+  profitPlans       ProfitPlan[]
+  expenseCategories CustomExpenseCategory[]
+  recurringExpenses RecurringExpense[]
+  creatives         Creative[]
+  adSpend           AdSpend[]
+  adAccounts        AdAccount[]
+  campaigns         Campaign[]
+  metaTokens        MetaToken[]
+  expenses          Expense[]
+  bankTransactions  BankTransaction[]
+  importBatches     ImportBatch[]
+  importRowErrors   ImportRowError[]
+  metricSnapshots   MetricSnapshot[]
+  scenarios         SimulatorScenario[]
 }
 
 model WorkspaceMember {
@@ -336,7 +357,7 @@ model SyncJob {
   failedCount            Int                 @default(0)
   unknownStatusCount     Int                 @default(0)
   unmatchedCount         Int                 @default(0)
-  /// "ORDERS" (MDM orders are read first) then "PARCELS". Resumed jobs continue in the saved phase.
+  /// "ORDERS" (MDM orders are read first), then "PARCELS", then "ACCOUNT" (wallet, fees, payouts, stock). Resumed jobs continue in the saved phase.
   phase                  String              @default("PARCELS")
   ordersAddedCount       Int                 @default(0)
   ordersUpdatedCount     Int                 @default(0)
@@ -457,20 +478,65 @@ model Product {
   sku         String
   currency    String   @default("DZD")
   active      Boolean  @default(true)
+  /// Created by the MDM sync for a product MDM sent with an order. Its costs are entered by hand.
+  fromMdm     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  costVersions ProductCostVersion[]
-  orderLines   OrderLine[]
-  creatives    Creative[]
-  expenses     Expense[]
-  scenarios    SimulatorScenario[]
-  campaigns    Campaign[]
-  adAccounts   AdAccount[]
+  workspace         Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mdmLinks          MdmProductLink[]
+  profitPlan        ProfitPlan?
+  recurringExpenses RecurringExpense[]
+  costVersions      ProductCostVersion[]
+  orderLines        OrderLine[]
+  creatives         Creative[]
+  expenses          Expense[]
+  scenarios         SimulatorScenario[]
+  campaigns         Campaign[]
+  adAccounts        AdAccount[]
 
   @@unique([workspaceId, sku])
   @@index([workspaceId, active])
+}
+
+/// Which product in the app each MDM product counts as. The sync adds one the first time MDM sends a
+/// product with an order (linking an existing product, or creating one); an owner can move it to another product.
+model MdmProductLink {
+  workspaceId  String
+  /// MDM's product ID (for a variant, the product it is a variant of).
+  mdmProductId String
+  productId    String
+  /// MDM's name for the product, as last seen on an order.
+  mdmName      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, mdmProductId])
+  @@index([productId])
+}
+
+/// What the Profit tracker counts for one product, once an owner or admin saved it: where the stock
+/// count comes from, and the values typed over the ones read from the data.
+model ProfitPlan {
+  productId   String   @id
+  workspaceId String
+  /// MDM_AVAILABLE, MDM_WITH_INCOMING, MDM_RECEIVED or TYPED (src/domain/profitTracker.ts).
+  stockSource String   @default("MDM_AVAILABLE")
+  /// The units typed in, for TYPED.
+  stockUnits  Int?
+  /// { salePrice?, unitCost?, deliveryRate?, cpa?, … }: only the values someone typed.
+  overrides   Json?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 /// Immutable history of unit-economics assumptions. Never updated in place;
@@ -547,6 +613,8 @@ model Order {
   storeName             String?
   /// When the sync last looked for a content ID in this order's MDM status history.
   mdmHistoryCheckedAt   DateTime?
+  /// MDM marks the order as upsold by its call center (read with MDM's upsell filter).
+  mdmUpsell             Boolean     @default(false)
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
@@ -555,6 +623,7 @@ model Order {
   attribution Attribution?
   parcels     Parcel[]
   cashEvents  CashEvent[]
+  mdmFees     MdmFee[]
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, source, externalOrderId])
@@ -567,21 +636,25 @@ model Order {
 }
 
 model OrderLine {
-  id          String  @id @default(uuid())
-  workspaceId String
-  orderId     String
-  productId   String?
-  sku         String?
-  productName String?
-  quantity    Int
-  unitPrice   Int
-  currency    String  @default("DZD")
+  id           String  @id @default(uuid())
+  workspaceId  String
+  orderId      String
+  productId    String?
+  sku          String?
+  productName  String?
+  quantity     Int
+  unitPrice    Int
+  currency     String  @default("DZD")
+  /// MDM's product ID for this line (for a variant, the product it is a variant of), and the variant's own ID.
+  mdmProductId String?
+  mdmVariantId String?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, productId])
+  @@index([workspaceId, mdmProductId])
   @@index([orderId])
 }
 
@@ -638,6 +711,7 @@ model Parcel {
   order      Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
   events     ParcelStatusEvent[]
   cashEvents CashEvent[]
+  mdmFees    MdmFee[]
   unmatched  UnmatchedRecord[]
 
   @@unique([workspaceId, provider, trackingId])
@@ -692,6 +766,152 @@ model CashEvent {
 }
 
 // ─────────────────────── Marketing & finance ───────────────────────
+
+// ─────────────────────────── MDM money and stock (read-only copies) ───────────────────────────
+
+/// What the last syncs read from the workspace's MDM account beyond orders and parcels: the
+/// wallet, MDM's price list and the stock value. One row per workspace. Amounts are minor units.
+model MdmAccount {
+  workspaceId     String    @id
+  /// MDM's ID for the seller, needed to read the price list.
+  sellerId        String?
+  /// { currency, onHold, ready, paid, details } (src/server/mdm/account.ts).
+  wallet          Json?
+  walletAt        DateTime?
+  /// Call center, fulfilment and delivery prices MDM charges this seller.
+  prices          Json?
+  pricesAt        DateTime?
+  /// Units and value of the stock by state (entered, available, in delivery, returning, lost).
+  capital         Json?
+  capitalAt       DateTime?
+  /// Where the next incremental read of fees and payouts starts.
+  feesSyncedAt    DateTime?
+  payoutsSyncedAt DateTime?
+  /// Per part: when it was last read, and why it could not be (no permission, MDM error).
+  parts           Json?
+  updatedAt       DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/// A payout MDM made (or is preparing) to the seller.
+model MdmPayout {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  providerId   String
+  amount       Int
+  currency     String    @default("DZD")
+  /// MDM's own status word, kept as sent.
+  status       String
+  confirmed    Boolean   @default(false)
+  storeNames   String?
+  /// What the payout is made of, by MDM line type: { items: [{ type, count, total, grossTotal }], taxes }.
+  breakdown    Json?
+  /// When `breakdown` was read; cleared when MDM changes the payout, so it is read again.
+  breakdownAt  DateTime?
+  mdmCreatedAt DateTime
+  mdmUpdatedAt DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerId])
+  @@index([workspaceId, mdmCreatedAt])
+}
+
+/// One line of MDM's seller account: money collected for an order, or a fee MDM charged for it.
+model MdmFee {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  providerId   String
+  /// What MDM says the line is about (a parcel or an order, by MDM's tracking ID).
+  entityId     String?
+  type         String
+  subType      String?
+  amount       Int
+  grossAmount  Int?
+  taxes        Int?
+  currency     String   @default("DZD")
+  status       String
+  /// MDM's payout this line was paid in, once it is.
+  payoutId     String?
+  parcelId     String?
+  orderId      String?
+  mdmCreatedAt DateTime
+  mdmUpdatedAt DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parcel    Parcel?   @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, providerId])
+  @@index([workspaceId, mdmCreatedAt])
+  @@index([workspaceId, type])
+  @@index([workspaceId, payoutId])
+  @@index([parcelId])
+  @@index([orderId])
+}
+
+/// Stock of one product variant at MDM, as of the last sync.
+model MdmStockItem {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  /// MDM's variant ID.
+  providerId    String
+  mdmProductId  String
+  productName   String
+  variantName   String?
+  sku           String?
+  sellingPrice  Int?
+  purchasePrice Int?
+  currency      String    @default("DZD")
+  archived      Boolean   @default(false)
+  totalInbound  Int       @default(0)
+  incoming      Int       @default(0)
+  available     Int       @default(0)
+  processing    Int       @default(0)
+  inDelivery    Int       @default(0)
+  delivered     Int       @default(0)
+  returning     Int       @default(0)
+  returned      Int       @default(0)
+  damaged       Int       @default(0)
+  discharged    Int       @default(0)
+  lost          Int       @default(0)
+  /// Null until MDM answered the stock read for this variant.
+  stockAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerId])
+}
+
+/// Stock sent into MDM's warehouse (a check-in): what was expected and what arrived.
+model MdmStockArrival {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  providerId    String
+  status        String
+  operation     String?
+  /// [{ name, sku, expected }]
+  products      Json
+  expectedUnits Int      @default(0)
+  receivedUnits Int      @default(0)
+  damagedUnits  Int      @default(0)
+  mdmCreatedAt  DateTime
+  mdmUpdatedAt  DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerId])
+  @@index([workspaceId, mdmCreatedAt])
+}
 
 model Creative {
   id                 String     @id @default(uuid())
@@ -777,6 +997,8 @@ model Expense {
   productId         String?
   costType          CostType          @default(FIXED)
   bankTransactionId String?           @unique
+  /// A category the business made; `category` stays OTHER then.
+  customCategoryId  String?
   importBatchId     String?
   /// Dedup key for imported expenses (null for manual entries).
   sourceRowHash     String?
@@ -784,15 +1006,63 @@ model Expense {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
-  bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id], onDelete: SetNull)
-  importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product         Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  bankTransaction BankTransaction?       @relation(fields: [bankTransactionId], references: [id], onDelete: SetNull)
+  importBatch     ImportBatch?           @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  customCategory  CustomExpenseCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, sourceRowHash])
   @@index([workspaceId, date])
   @@index([workspaceId, category])
   @@index([workspaceId, productId])
+}
+
+/// An expense category a business made for itself (next to the built-in ones).
+model CustomExpenseCategory {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  expenses  Expense[]
+  recurring RecurringExpense[]
+
+  @@unique([workspaceId, name])
+}
+
+/// An expense that repeats (rent, salaries, a subscription). No expense rows are written for it:
+/// reports spread it over the days it covers (src/domain/recurring.ts), so every period gets its share.
+model RecurringExpense {
+  id               String            @id @default(uuid())
+  workspaceId      String
+  name             String
+  category         ExpenseCategory
+  customCategoryId String?
+  /// For one period of `frequency`, in the workspace currency.
+  amount           Int
+  currency         String            @default("DZD")
+  originalAmount   Int?
+  originalCurrency String?
+  fxRate           Float?
+  frequency        ExpenseFrequency
+  /// The first day it counts, at noon UTC like expense dates.
+  startDate        DateTime
+  /// The last day it counts. Null while it goes on.
+  endDate          DateTime?
+  allocation       ExpenseAllocation @default(GLOBAL)
+  productId        String?
+  costType         CostType          @default(FIXED)
+  createdById      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product        Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  customCategory CustomExpenseCategory? @relation(fields: [customCategoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
 }
 
 /// Bank rows land here first and do not affect profit until categorized or excluded.

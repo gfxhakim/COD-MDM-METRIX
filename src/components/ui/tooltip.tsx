@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 
-export function Tooltip({ content, children }: { content: React.ReactNode; children: React.ReactNode }) {
+export function Tooltip({ content, children, side }: { content: React.ReactNode; children: React.ReactNode; side?: "top" | "right" | "bottom" | "left" }) {
   return (
     <TooltipPrimitive.Root delayDuration={150}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content sideOffset={6} className="animate-pop z-50 max-w-xs rounded-xl bg-ink px-3 py-2 text-xs leading-relaxed text-white shadow-xl">
+        <TooltipPrimitive.Content side={side} sideOffset={6} className="animate-pop z-50 max-w-xs rounded-xl bg-ink px-3 py-2 text-xs leading-relaxed text-white shadow-xl">
           {content}
           <TooltipPrimitive.Arrow className="fill-ink" />
         </TooltipPrimitive.Content>

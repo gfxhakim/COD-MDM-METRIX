@@ -24,7 +24,9 @@ import {
   type ExportFormat,
   type StatusGroupKey,
 } from "@/domain/orderExport";
+import { adFilterLabel, type AdFilter } from "@/domain/adFilter";
 import { addDays, RANGES, rangeDays, shortDay, todayIn, type RangeKey } from "@/lib/dateRanges";
+import { download } from "@/lib/download";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import type { AppRouter } from "@/server/trpc/root";
@@ -42,6 +44,9 @@ export type PageFilters = {
   creativeId?: string;
   creativeName?: string;
   source?: OrderSource;
+  upsell?: boolean;
+  /** Meta ads picked in the ads filter. */
+  ads?: AdFilter;
 };
 
 const FORMATS: { key: ExportFormat; label: string; hint: string; icon: React.ReactNode }[] = [
@@ -115,19 +120,6 @@ function groupsFromPage(f: PageFilters): StatusGroupKey[] | null {
   return null;
 }
 
-function download(filename: string, mime: string, base64: string) {
-  const bin = atob(base64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Some browsers read the file after click() returns.
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
-
 export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }: { workspaceId: string; timezone: string; filters: PageFilters; onClose: () => void; onPrint: (data: PrintData, title: string) => void }) {
   const trpc = useTRPC();
   const toast = useToast();
@@ -155,6 +147,8 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     productId: carry.productId || undefined,
     creativeId: carry.creativeId || undefined,
     source: carry.source || undefined,
+    upsell: carry.upsell,
+    ads: carry.ads,
   };
   const preview = useQuery({ ...trpc.orders.exportPreview.queryOptions(query), enabled: !badRange, placeholderData: keepPreviousData });
 
@@ -234,6 +228,8 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     carry.productId ? { key: "productId" as const, label: carry.productName ?? "One product" } : null,
     carry.creativeId ? { key: "creativeId" as const, label: `Ad ${carry.creativeName ?? ""}`.trim() } : null,
     carry.source ? { key: "source" as const, label: `Source: ${carry.source.toLowerCase()}` } : null,
+    carry.upsell !== undefined ? { key: "upsell" as const, label: carry.upsell ? "Upsold orders" : "Orders without upsell" } : null,
+    carry.ads ? { key: "ads" as const, label: `Meta ads: ${adFilterLabel(carry.ads)}` } : null,
   ].filter((c) => c !== null);
 
   return (
