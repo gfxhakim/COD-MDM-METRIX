@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
+import { PHONE, useMedia } from "@/lib/use-media";
 import { formatDate, toDateInput } from "@/lib/utils";
 import { useCan } from "@/components/app/use-can";
 import { AdLinksPicker, type AdLinks } from "./ad-links";
@@ -296,6 +297,52 @@ export function ProductsView() {
   );
   const currency = ws.data?.currency ?? "DZD";
   const rates: Rates = ws.data?.exchangeRates ?? {};
+  // Phones get one card per product instead of a twelve-column table.
+  const phone = useMedia(PHONE);
+
+  const nameBlock = (p: ProductRow) => (
+    <span className="flex min-w-0 flex-col gap-1">
+      <span className="flex flex-wrap items-center gap-1.5 font-medium">
+        {p.name}
+        {p.fromMdm ? <Badge tone="brand">From MDM</Badge> : null}
+        {!p.currentCost ? (
+          canWrite ? (
+            <button type="button" onClick={() => setVersioning(p)} className="rounded-full focus-visible:outline-2"><Badge tone="warning">Needs details · add costs</Badge></button>
+          ) : <Badge tone="warning">Needs details</Badge>
+        ) : null}
+      </span>
+      {p.mdmProducts.length ? (
+        <span className="max-w-64 truncate text-[11px] text-subtle" title={p.mdmProducts.map((m) => `${m.name ?? m.id} (${m.id})`).join(", ")}>
+          In MDM: {p.mdmProducts.map((m) => m.name ?? m.id).join(", ")}
+        </span>
+      ) : null}
+    </span>
+  );
+  const adsLink = (p: ProductRow) =>
+    p.linkedCampaigns || p.linkedAdAccounts ? (
+      <Link href="/campaigns" className="hover:text-fg hover:underline">
+        {[p.linkedAdAccounts ? `${p.linkedAdAccounts} ad account${p.linkedAdAccounts === 1 ? "" : "s"}` : null, p.linkedCampaigns ? `${p.linkedCampaigns} campaign${p.linkedCampaigns === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ")}
+      </Link>
+    ) : <span className="text-subtle">Not linked</span>;
+  const actions = (p: ProductRow) => (
+    <div className="flex justify-end gap-1">
+      <Button size="icon" variant="ghost" asChild><Link href={`/simulator?productId=${p.id}`} aria-label={`Breakeven simulator for ${p.name}`}><Calculator /></Link></Button>
+      <Button size="icon" variant="ghost" aria-label={`Cost versions for ${p.name}`} onClick={() => setVersioning(p)}><History /></Button>
+      {canWrite ? (
+        <>
+          <Button size="icon" variant="ghost" aria-label={`Edit ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>
+          <Button size="icon" variant="ghost" aria-label={`Delete ${p.name}`} onClick={() => { if (confirm(`Delete ${p.name}? Products with orders are deactivated instead.`)) del.mutate({ id: p.id }); }}><Trash2 /></Button>
+        </>
+      ) : null}
+    </div>
+  );
+  const COSTS = [
+    ["sourcingCost", "Sourcing"],
+    ["forwardShippingFee", "Shipping"],
+    ["rtoFee", "RTO fee"],
+    ["callCenterFee", "Call center"],
+    ["packagingFee", "Packaging"],
+  ] as const;
 
   return (
     <>
@@ -307,6 +354,37 @@ export function ProductsView() {
       <Card>
         {products.error ? <ErrorState message={errorMessage(products.error)} /> : products.isLoading ? <Loading /> : !products.data?.length ? (
           <EmptyState icon={<Package />} title="No products yet" description="Products MDM sends with your orders appear here after a sync. You can also add one by hand. Then enter each product's costs to unlock profit." action={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> New product</Button> : null} />
+        ) : phone ? (
+          <ul aria-label="Products" className="flex flex-col gap-2 p-3">
+            {products.data.map((p) => (
+              <li key={p.id} className="rounded-2xl bg-surface-2 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">{nameBlock(p)}</div>
+                  <span className="num shrink-0 text-sm font-bold">{p.currentCost ? money.fmt(p.currentCost.salePrice, p.currency) : "—"}</span>
+                </div>
+                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-subtle">
+                  <span className="font-mono">{p.sku}</span>
+                  {p.active ? <Badge tone="positive">Active</Badge> : <Badge>Inactive</Badge>}
+                  {p.currentCost ? <span>Costs since {formatDate(p.currentCost.effectiveFrom)} · v{p.versionCount}</span> : null}
+                </p>
+                {p.currentCost ? (
+                  <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2">
+                    {COSTS.map(([k, label]) => (
+                      <div key={k} className="min-w-0">
+                        <dt className="text-[11px] text-muted">{label}</dt>
+                        <dd className="num truncate text-[13px] font-semibold">{money.fmt(p.currentCost![k], p.currency)}</dd>
+                      </div>
+                    ))}
+                    <div className="min-w-0">
+                      <dt className="text-[11px] text-muted">Ads</dt>
+                      <dd className="truncate text-[13px] font-semibold">{adsLink(p)}</dd>
+                    </div>
+                  </dl>
+                ) : null}
+                <div className="mt-2 border-t border-border pt-2">{actions(p)}</div>
+              </li>
+            ))}
+          </ul>
         ) : (
           <Table>
             <THead>
@@ -328,24 +406,7 @@ export function ProductsView() {
             <tbody>
               {products.data.map((p) => (
                 <Tr key={p.id}>
-                  <Td>
-                    <span className="flex min-w-0 flex-col gap-1">
-                      <span className="flex flex-wrap items-center gap-1.5 font-medium">
-                        {p.name}
-                        {p.fromMdm ? <Badge tone="brand">From MDM</Badge> : null}
-                        {!p.currentCost ? (
-                          canWrite ? (
-                            <button type="button" onClick={() => setVersioning(p)} className="rounded-full focus-visible:outline-2"><Badge tone="warning">Needs details · add costs</Badge></button>
-                          ) : <Badge tone="warning">Needs details</Badge>
-                        ) : null}
-                      </span>
-                      {p.mdmProducts.length ? (
-                        <span className="max-w-64 truncate text-[11px] text-subtle" title={p.mdmProducts.map((m) => `${m.name ?? m.id} (${m.id})`).join(", ")}>
-                          In MDM: {p.mdmProducts.map((m) => m.name ?? m.id).join(", ")}
-                        </span>
-                      ) : null}
-                    </span>
-                  </Td>
+                  <Td>{nameBlock(p)}</Td>
                   <Td className="font-mono text-xs text-muted">{p.sku}</Td>
                   {(["salePrice", "sourcingCost", "forwardShippingFee", "rtoFee", "callCenterFee", "packagingFee"] as const).map((k) => (
                     <Td key={k} className="num text-right">
@@ -353,27 +414,10 @@ export function ProductsView() {
                       {k === "sourcingCost" && p.currentCost ? <OriginalAmount amount={p.currentCost.sourcingCostOriginal} currency={p.currentCost.sourcingCurrency} rate={p.currentCost.sourcingFxRate} /> : null}
                     </Td>
                   ))}
-                  <Td className="text-xs text-muted">
-                    {p.linkedCampaigns || p.linkedAdAccounts ? (
-                      <Link href="/campaigns" className="hover:text-fg hover:underline">
-                        {[p.linkedAdAccounts ? `${p.linkedAdAccounts} ad account${p.linkedAdAccounts === 1 ? "" : "s"}` : null, p.linkedCampaigns ? `${p.linkedCampaigns} campaign${p.linkedCampaigns === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ")}
-                      </Link>
-                    ) : <span className="text-subtle">Not linked</span>}
-                  </Td>
+                  <Td className="text-xs text-muted">{adsLink(p)}</Td>
                   <Td className="text-xs text-muted">{p.currentCost ? formatDate(p.currentCost.effectiveFrom) : "—"} <span className="text-subtle">· v{p.versionCount}</span></Td>
                   <Td>{p.active ? <Badge tone="positive">Active</Badge> : <Badge>Inactive</Badge>}</Td>
-                  <Td>
-                    <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" asChild><Link href={`/simulator?productId=${p.id}`} aria-label={`Breakeven simulator for ${p.name}`}><Calculator /></Link></Button>
-                      <Button size="icon" variant="ghost" aria-label={`Cost versions for ${p.name}`} onClick={() => setVersioning(p)}><History /></Button>
-                      {canWrite ? (
-                        <>
-                          <Button size="icon" variant="ghost" aria-label={`Edit ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>
-                          <Button size="icon" variant="ghost" aria-label={`Delete ${p.name}`} onClick={() => { if (confirm(`Delete ${p.name}? Products with orders are deactivated instead.`)) del.mutate({ id: p.id }); }}><Trash2 /></Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </Td>
+                  <Td>{actions(p)}</Td>
                 </Tr>
               ))}
             </tbody>

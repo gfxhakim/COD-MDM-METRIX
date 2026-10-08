@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { DEF } from "@/lib/definitions";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
+import { PHONE, useMedia } from "@/lib/use-media";
 import { cn } from "@/lib/utils";
 
 const NO_ACCOUNT = "__none__";
@@ -110,6 +111,8 @@ export function CampaignsView() {
   const hidden = (r?.rows.length ?? 0) - rows.length;
   const toggle = (key: string) => setOpen((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const m = r?.total;
+  // On phones each campaign is one row: its numbers in a line under its name, its product picker below.
+  const phone = useMedia(PHONE);
 
   return (
     <>
@@ -171,6 +174,7 @@ export function CampaignsView() {
             <THead>
               <tr>
                 <Th>Campaign</Th>
+                {phone ? null : <>
                 <Th><Term label="Product" definition="The product this campaign's spend and ads count for. A campaign's own link comes first, then its ad account's default, then the product of its ads." /></Th>
                 <Th className="text-right">Spend</Th>
                 <Th className="text-right">Orders</Th>
@@ -180,6 +184,7 @@ export function CampaignsView() {
                 <Th className="text-right"><Term label="Net profit" definition={DEF.trueNetProfit} /></Th>
                 <Th className="text-right"><Term label="POAS" definition={DEF.truePoas} /></Th>
                 <Th><Term label="Verdict" definition={DEF.verdict} /></Th>
+                </>}
               </tr>
             </THead>
             <tbody>
@@ -187,6 +192,14 @@ export function CampaignsView() {
                 const expanded = open.has(c.key);
                 const inherited = c.productSource !== "CAMPAIGN" && c.productId ? productName.get(c.productId) : null;
                 const inheritedLabel = inherited ? `${c.productSource === "ACCOUNT" ? "From account" : "From its ads"}: ${inherited}` : null;
+                const productControl = c.kind !== "CAMPAIGN" ? <span className="text-subtle">—</span> : canLink ? (
+                  <Select aria-label={`Product for ${c.name ?? c.externalId}`} value={c.ownProductId ?? ""} disabled={setProduct.isPending} onChange={(e) => setProduct.mutate({ id: c.campaignId!, productId: e.target.value || null })} className={cn("h-8 text-xs", phone ? "w-full" : "w-52")}>
+                    <option value="">{inheritedLabel ?? "Not linked"}</option>
+                    {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </Select>
+                ) : (
+                  <span className="text-xs">{c.productId ? productName.get(c.productId) : <span className="text-subtle">Not linked</span>}{inherited ? <span className="text-subtle"> ({c.productSource === "ACCOUNT" ? "account" : "its ads"})</span> : null}</span>
+                );
                 return (
                   <React.Fragment key={c.key}>
                     <Tr className={cn(c.kind === "NO_CAMPAIGN" && "border-t-2 border-border-strong bg-surface-2/40")}>
@@ -195,7 +208,7 @@ export function CampaignsView() {
                           <button type="button" className="mt-0.5 rounded p-0.5 text-muted hover:bg-surface-3 hover:text-fg disabled:opacity-30" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : "Show"} ads of ${c.name ?? c.externalId}`} disabled={!c.ads.length} onClick={() => toggle(c.key)}>
                             {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                           </button>
-                          <div className="flex min-w-48 max-w-80 flex-col gap-1">
+                          <div className={cn("flex flex-col gap-1", phone ? "min-w-0 flex-1" : "min-w-48 max-w-80")}>
                             <span className="font-medium">{c.name ?? c.externalId}</span>
                             <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-subtle">
                               {c.kind === "CAMPAIGN" ? <StatusBadge status={c.status} spent={c.metrics.adSpend > 0} /> : null}
@@ -203,9 +216,15 @@ export function CampaignsView() {
                               {!account && c.kind === "CAMPAIGN" ? <span>· {accountName(c.adAccountId)}</span> : null}
                               <span>· {c.ads.length} ad{c.ads.length === 1 ? "" : "s"}</span>
                             </span>
-                            <span className="num text-[11px] text-muted sm:hidden">
-                              <span className="whitespace-nowrap">{money.fmt(c.metrics.adSpend, cur)} spent</span> · <span className="whitespace-nowrap">{c.metrics.placed} orders</span> · <span className={cn("whitespace-nowrap", c.metrics.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{money.fmt(c.metrics.trueNetProfit, cur)} profit</span>
-                            </span>
+                            {phone ? (
+                              <>
+                                <span className="num flex flex-wrap items-center gap-x-1 text-[11px] text-muted">
+                                  <span className="whitespace-nowrap">{money.fmt(c.metrics.adSpend, cur)} spent</span> · <span className="whitespace-nowrap">{c.metrics.placed} orders</span> · <span className={cn("whitespace-nowrap", c.metrics.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{money.fmt(c.metrics.trueNetProfit, cur)} profit</span>
+                                  {c.verdict ? <VerdictBadge verdict={c.verdict as VerdictValue | null} /> : null}
+                                </span>
+                                {c.kind === "CAMPAIGN" ? <span className="mt-1 block">{productControl}</span> : null}
+                              </>
+                            ) : null}
                             {c.otherProductOrders > 0 ? (
                               <Badge tone="warning" className="w-fit" title="These orders came from this campaign's ads, but their own products don't include the campaign's product. Check the campaign's product link.">
                                 {c.otherProductOrders} order{c.otherProductOrders === 1 ? "" : "s"} for another product
@@ -214,28 +233,34 @@ export function CampaignsView() {
                           </div>
                         </div>
                       </Td>
-                      <Td>
-                        {c.kind !== "CAMPAIGN" ? <span className="text-subtle">—</span> : canLink ? (
-                          <Select aria-label={`Product for ${c.name ?? c.externalId}`} value={c.ownProductId ?? ""} disabled={setProduct.isPending} onChange={(e) => setProduct.mutate({ id: c.campaignId!, productId: e.target.value || null })} className="h-8 w-44 text-xs">
-                            <option value="">{inheritedLabel ?? "Not linked"}</option>
-                            {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </Select>
-                        ) : (
-                          <span className="text-xs">{c.productId ? productName.get(c.productId) : <span className="text-subtle">Not linked</span>}{inherited ? <span className="text-subtle"> ({c.productSource === "ACCOUNT" ? "account" : "its ads"})</span> : null}</span>
-                        )}
-                      </Td>
-                      <MetricCells m={c.metrics} currency={cur} />
-                      <Td><VerdictBadge verdict={c.verdict as VerdictValue | null} /></Td>
+                      {phone ? null : (
+                        <>
+                          <Td>{productControl}</Td>
+                          <MetricCells m={c.metrics} currency={cur} />
+                          <Td><VerdictBadge verdict={c.verdict as VerdictValue | null} /></Td>
+                        </>
+                      )}
                     </Tr>
                     {expanded
                       ? c.ads.map((a) => (
                           <Tr key={`${c.key}:${a.key}`} className="bg-surface-2/30 text-xs">
-                            <Td className="pl-12">
-                              <span className="flex flex-col"><span className="font-mono">{a.externalCreativeId}</span><span className="max-w-64 truncate text-[11px] text-subtle">{a.name ?? "Unnamed ad"}</span></span>
+                            <Td className={cn(phone ? "pl-10 whitespace-normal" : "pl-12")}>
+                              <span className="flex flex-col"><span className="font-mono">{a.externalCreativeId}</span><span className="max-w-64 truncate text-[11px] text-subtle">{a.name ?? "Unnamed ad"}</span>
+                                {phone ? (
+                                  <span className="num mt-0.5 flex flex-wrap items-center gap-x-1 text-[11px] text-muted">
+                                    <span className="whitespace-nowrap">{money.fmt(a.metrics.adSpend, cur)} spent</span> · <span className="whitespace-nowrap">{a.metrics.placed} orders</span> · <span className={cn("whitespace-nowrap", a.metrics.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{money.fmt(a.metrics.trueNetProfit, cur)} profit</span>
+                                    {a.verdict ? <VerdictBadge verdict={a.verdict as VerdictValue | null} /> : null}
+                                  </span>
+                                ) : null}
+                              </span>
                             </Td>
-                            <Td><span className="text-subtle">Ad</span></Td>
-                            <MetricCells m={a.metrics} currency={cur} />
-                            <Td><VerdictBadge verdict={a.verdict as VerdictValue | null} /></Td>
+                            {phone ? null : (
+                              <>
+                                <Td><span className="text-subtle">Ad</span></Td>
+                                <MetricCells m={a.metrics} currency={cur} />
+                                <Td><VerdictBadge verdict={a.verdict as VerdictValue | null} /></Td>
+                              </>
+                            )}
                           </Tr>
                         ))
                       : null}
@@ -243,7 +268,7 @@ export function CampaignsView() {
                 );
               })}
               {rows.length === 0 ? (
-                <tr><Td colSpan={10} className="py-8 text-center text-muted">No running campaigns in this period. Choose &quot;All campaigns&quot; to see the others.</Td></tr>
+                <tr><Td colSpan={phone ? 1 : 10} className="whitespace-normal py-8 text-center text-muted">No running campaigns in this period. Choose &quot;All campaigns&quot; to see the others.</Td></tr>
               ) : null}
             </tbody>
           </Table>

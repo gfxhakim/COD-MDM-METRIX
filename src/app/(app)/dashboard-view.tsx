@@ -460,7 +460,7 @@ export function DashboardView() {
         </div>
         <div className="flex flex-wrap items-center gap-2 md:justify-end">
         <AdsFilter />
-        <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:flex", filtersOpen ? "flex" : "hidden")}>
+        <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:contents", filtersOpen ? "flex" : "hidden")}>
           <div className="flex items-center gap-1.5">
             <Input aria-label="From date" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
             <span className="text-subtle" aria-hidden>→</span>
