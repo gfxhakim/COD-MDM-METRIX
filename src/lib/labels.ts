@@ -1,4 +1,6 @@
 export const EXPENSE_CATEGORIES = [
+  ["OWNER_PAY", "My pay"],
+  ["SALARIES", "Employee pay"],
   ["AI_TOOLS", "AI Tools"],
   ["SOFTWARE", "Software"],
   ["OFFICE", "Office"],
@@ -7,7 +9,6 @@ export const EXPENSE_CATEGORIES = [
   ["CALL_CENTER", "Call Center"],
   ["PACKAGING", "Packaging"],
   ["WAREHOUSE", "Warehouse"],
-  ["SALARIES", "Salaries"],
   ["OTHER_ADS", "Other ads (TikTok, Google…)"],
   ["CONTENT", "Content & creatives"],
   ["TRANSPORT", "Transport"],
