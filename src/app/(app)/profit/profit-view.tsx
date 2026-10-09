@@ -512,7 +512,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
               {adsMissing ? (
                 <div className="flex flex-col gap-1.5 rounded-2xl bg-warning-soft px-4 py-3 text-sm" role="note">
                   <p className="flex items-start gap-2 font-semibold text-warning"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />No ads are linked to {row.name} yet</p>
-                  <p className="text-muted">This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>, or type an ad spend per order on the left.</p>
+                  <p className="text-muted">This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>, or type an ad spend per order under Ads and fees.</p>
                 </div>
               ) : !projection.ok ? (
                 <p className="flex items-start gap-2 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{projection.reason}</p>
