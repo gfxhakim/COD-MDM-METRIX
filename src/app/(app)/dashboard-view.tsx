@@ -427,7 +427,7 @@ export function DashboardView() {
     }
     const risky = r.wilayas.filter((w) => w.shipped >= 10 && (w.returnRate ?? 0) >= 0.3).sort((a, b) => (b.returnRate ?? 0) - (a.returnRate ?? 0)).slice(0, 2);
     if (risky.length) {
-      tips.push(<>{risky.map((w) => w.wilaya).join(" and ")} send{risky.length > 1 ? "" : "s"} back about <b className="text-fg">{Math.round((risky[0].returnRate ?? 0) * 10)} parcels in 10</b>. Confirm those orders twice.</>);
+      tips.push(<>{risky.map((w, i) => <React.Fragment key={w.wilaya}>{i ? " and " : null}<bdi>{w.wilaya}</bdi></React.Fragment>)} send{risky.length > 1 ? "" : "s"} back about <b className="text-fg">{Math.round((risky[0].returnRate ?? 0) * 10)} parcels in 10</b>. Confirm those orders twice.</>);
     }
     if (unpaid > 0) tips.push(<><b className="text-fg">{fmt(unpaid)}</b> is delivered but not paid out to you yet.</>);
   }

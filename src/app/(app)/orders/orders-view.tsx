@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
+import { wilayaLabel } from "@/domain/wilayas";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { PHONE, useMedia } from "@/lib/use-media";
 import { formatDate, timeAgo } from "@/lib/utils";
@@ -107,7 +108,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           </Select>
           <Select aria-label="Wilaya" value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full">
             <option value="">All wilayas</option>
-            {facets.data?.wilayas.map((w) => <option key={w} value={w}>{w}</option>)}
+            {facets.data?.wilayas.map((w) => <option key={w} value={w}>{wilayaLabel(w)}</option>)}
           </Select>
           <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full">
             <option value="">All products</option>
@@ -144,7 +145,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                     <OrderStatusBadge status={o.status} />
                     <ParcelStatusBadge status={o.normalizedStatus} />
-                    <span>{o.wilaya ?? "No wilaya"} · {formatDate(o.placedAt)}</span>
+                    <span>{o.wilaya ? <bdi>{o.wilaya}</bdi> : "No wilaya"} · {formatDate(o.placedAt)}</span>
                   </span>
                 </button>
               </li>

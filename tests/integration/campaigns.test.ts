@@ -94,12 +94,12 @@ async function build(t: Tenant) {
 describe("campaign report and product links", () => {
   it("shows each campaign with its own orders and spend, per ad account", async () => {
     const t = await makeTenant("CampaignReport");
-    const ids = await build(t);
+    await build(t);
     const all = await t.caller.campaigns.report(RANGE);
     const by = (ext: string | null) => all.rows.find((r) => r.externalId === ext)!;
-    // Not linked yet: each counts for the product its ads have.
-    expect(by("c1")).toMatchObject({ ownProductId: null, productId: ids.lamp.id, productSource: "ADS" });
-    expect(by("c2")).toMatchObject({ productId: ids.chair.id, productSource: "ADS", otherProductOrders: 0 });
+    // Not linked yet: no product, even though their ads have one. Nothing is guessed.
+    expect(by("c1")).toMatchObject({ ownProductId: null, productId: null, productSource: null });
+    expect(by("c2")).toMatchObject({ productId: null, productSource: null, otherProductOrders: 0 });
     expect(by("c1")).toMatchObject({ adAccountId: "act_111", running: true, metrics: { adSpend: 100000, placed: 2 }, ads: [{ externalCreativeId: "cr_1" }] });
     expect(by("c2")).toMatchObject({ metrics: { adSpend: 50000, placed: 1 } });
     // No spend in the period and no status from Meta: not running, but its orders still count.
@@ -117,13 +117,13 @@ describe("campaign report and product links", () => {
     await expect(t.caller.campaigns.report({ ...RANGE, adAccountId: "act_../x" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("counts spend for the campaign's product first, then its ad account's, then the ad's own", async () => {
+  it("counts spend for a product only through its campaign's link, else its ad account's", async () => {
     const t = await makeTenant("CampaignLinks");
     const ids = await build(t);
     const spendFor = async (productId: string) => (await t.caller.reports.dashboard({ ...RANGE, productId })).metrics.adSpend;
-    // Before any link: each ad's own product.
-    expect(await spendFor(ids.lamp.id)).toBe(100000);
-    expect(await spendFor(ids.chair.id)).toBe(50000);
+    // Before any link: no product, though the ads have one of their own.
+    expect(await spendFor(ids.lamp.id)).toBe(0);
+    expect(await spendFor(ids.chair.id)).toBe(0);
 
     const links = await t.caller.campaigns.links();
     const c = (ext: string) => links.campaigns.find((x) => x.externalId === ext)!;

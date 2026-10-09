@@ -1,4 +1,5 @@
 import { readPartStates } from "@/domain/mdmAccount";
+import { mdmWilaya } from "@/domain/wilayas";
 import { dayRange } from "@/lib/zonedDays";
 import { db } from "@/server/db";
 import type { MdmCapital, MdmPayoutBreakdown, MdmPriceList, MdmWallet } from "@/server/mdm/types";
@@ -25,7 +26,7 @@ export async function moneyOverview(ctx: WorkspaceContext) {
     parts: readPartStates(acc?.parts),
     wallet: (acc?.wallet as MdmWallet | null) ?? null,
     walletAt: acc?.walletAt ?? null,
-    prices: (acc?.prices as MdmPriceList | null) ?? null,
+    prices: withWilayaNames((acc?.prices as MdmPriceList | null) ?? null),
     pricesAt: acc?.pricesAt ?? null,
     capital: (acc?.capital as MdmCapital | null) ?? null,
     capitalAt: acc?.capitalAt ?? null,
@@ -67,4 +68,9 @@ export async function moneyFees(ctx: WorkspaceContext, input: { from?: string; t
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
   const lines = rows.reduce((a, x) => a + x.lines, 0);
   return { rows, lines, linkedToOrders: linked };
+}
+
+/** Price lists saved before wilayas had one name show them under the same Arabic names as orders. */
+function withWilayaNames(prices: MdmPriceList | null): MdmPriceList | null {
+  return prices && { ...prices, delivery: prices.delivery.map((d) => ({ ...d, wilaya: mdmWilaya(d.wilaya, d.code) ?? d.wilaya })) };
 }

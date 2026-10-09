@@ -6,6 +6,7 @@ import { profitPlanSchema, type Defaults, type ProductData, type ProfitPlan } fr
 import { dayRange } from "@/lib/zonedDays";
 import { audit } from "@/server/audit";
 import { db } from "@/server/db";
+import { ensureCampaigns } from "@/server/repositories/campaigns";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 import { evaluate, groupTotals } from "./economics";
 import { loadFacts } from "./facts";
@@ -28,7 +29,9 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
   assertCan(ctx, "money.read");
   const workspaceId = ctx.workspaceId;
   const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { timezone: true, isDemo: true } });
-  const [facts, products, stock, links] = await Promise.all([
+  // Campaigns only seen in ad spend get their row first, so their spend can be linked from here.
+  await ensureCampaigns(workspaceId);
+  const [facts, products, stock, links, linkedCampaigns, linkedAccounts] = await Promise.all([
     loadFacts(ctx, dayRange(input, ws.timezone), input.ads),
     db.product.findMany({
       where: { workspaceId },
@@ -40,6 +43,8 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
       select: { mdmProductId: true, productName: true, archived: true, available: true, incoming: true, totalInbound: true, inDelivery: true, returning: true, sellingPrice: true, purchasePrice: true, currency: true, stockAt: true },
     }),
     db.mdmProductLink.findMany({ where: { workspaceId }, select: { mdmProductId: true, productId: true } }),
+    db.campaign.findMany({ where: { workspaceId, productId: { not: null } }, select: { productId: true }, distinct: ["productId"] }),
+    db.adAccount.findMany({ where: { workspaceId, defaultProductId: { not: null } }, select: { defaultProductId: true }, distinct: ["defaultProductId"] }),
   ]);
 
   // ── Real orders and ad spend per product ──
@@ -47,11 +52,31 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
   const totalsByProduct = groupTotals(evaluated, (o) => o.productId ?? NONE);
   const spendByProduct = new Map<string, number>();
   for (const s of facts.spend) spendByProduct.set(s.productId ?? NONE, (spendByProduct.get(s.productId ?? NONE) ?? 0) + s.spend);
-  const active = products.filter((p) => p.active);
-  // Ad spend linked to no product counts for the only product, while there is just one.
-  const unlinkedSpend = spendByProduct.get(NONE) ?? 0;
-  const soleProductId = active.length === 1 ? active[0].id : null;
-  if (soleProductId && unlinkedSpend) spendByProduct.set(soleProductId, (spendByProduct.get(soleProductId) ?? 0) + unlinkedSpend);
+  // Spend whose campaign (or ad account) nobody linked to a product counts for none: listed on its
+  // own, per campaign, so it can be linked from here.
+  const campaignOfAd = new Map(facts.creatives.map((c) => [c.id, c.campaignId]));
+  const campaignByExternal = new Map(facts.campaigns.map((c) => [c.externalId, c]));
+  const unlinkedBy = new Map<string | null, number>();
+  for (const s of facts.spend) {
+    if (s.productId) continue;
+    const k = s.campaignId ?? (s.creativeId ? campaignOfAd.get(s.creativeId) ?? null : null);
+    unlinkedBy.set(k, (unlinkedBy.get(k) ?? 0) + s.spend);
+  }
+  const unlinked = {
+    total: spendByProduct.get(NONE) ?? 0,
+    campaigns: [...unlinkedBy]
+      .flatMap(([k, spend]) => {
+        const c = k ? campaignByExternal.get(k) : undefined;
+        return c && spend > 0 ? [{ id: c.id, name: c.name ?? c.externalId, spend }] : [];
+      })
+      .sort((a, b) => b.spend - a.spend),
+    /** Spend whose campaign isn't known (yet), so it can't be linked by campaign. */
+    other: [...unlinkedBy].reduce((a, [k, spend]) => a + (k && campaignByExternal.has(k) ? 0 : spend), 0),
+  };
+
+  // Products with ads someone linked to them (a campaign, an ad account, or spend counted for them).
+  // The calculation with ads only reads a cost per order from those; the others wait for a link or a typed one.
+  const adsLinked = new Set<string>([...linkedCampaigns.map((c) => c.productId!), ...linkedAccounts.map((a) => a.defaultProductId!), ...[...spendByProduct.keys()].filter((k) => k !== NONE)]);
 
   const groups = [...totalsByProduct].map(([k, t]) => ({ key: k, productId: k, deliveredOrders: t.deliveredOrders, deliveredRevenue: t.deliveredRevenue }));
   const { allocated } = allocateOverhead(groups, facts.expenses, facts.defaults.overheadPolicy);
@@ -114,7 +139,7 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
           deliveryRate: m.deliveryRate,
           lostRate: m.finished > 0 ? m.lost / m.finished : null,
           unitsPerOrder: t.deliveredOrders > 0 ? Math.round((t.deliveredUnits / t.deliveredOrders) * 100) / 100 : null,
-          cpa: m.placedCpa,
+          cpa: adsLinked.has(p.id) ? m.placedCpa : null,
           avgShippingFee: per(t.outboundShipping, m.finished),
           avgReturnFee: per(t.rtoCost, t.returned),
         },
@@ -126,6 +151,7 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
         sku: p.sku,
         active: p.active,
         fromMdm: p.fromMdm,
+        adsLinked: adsLinked.has(p.id),
         ...data,
         stockDetail: st ? { inDelivery: st.inDelivery, returning: st.returning, at: st.at, names: st.names } : null,
         planUpdatedAt: p.profitPlan?.updatedAt ?? null,
@@ -154,8 +180,7 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
     adScoped: facts.adScoped,
     defaults,
     minFinished,
-    unlinkedSpend: soleProductId ? 0 : unlinkedSpend,
-    unlinkedSpendFor: soleProductId && unlinkedSpend ? soleProductId : null,
+    unlinked,
     products: rows,
   };
 }

@@ -74,13 +74,12 @@ async function withRetry<T>(fn: () => Promise<T>, deps: MetaSyncDeps): Promise<T
 
 // ─────────────────────────── creatives ───────────────────────────
 
-type Env = { workspaceId: string; currency: string; rates: Record<string, number | undefined>; creatives: Map<string, string>; unnamed: Set<string>; noCampaign: Set<string>; onlyProduct: string | null };
+type Env = { workspaceId: string; currency: string; rates: Record<string, number | undefined>; creatives: Map<string, string>; unnamed: Set<string>; noCampaign: Set<string> };
 
 async function loadEnv(workspaceId: string): Promise<Env> {
-  const [ws, creatives, products] = await Promise.all([
+  const [ws, creatives] = await Promise.all([
     db.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { currency: true, exchangeRates: true } }),
     db.creative.findMany({ where: { workspaceId }, select: { id: true, normalizedKey: true, name: true, campaignId: true } }),
-    db.product.findMany({ where: { workspaceId, active: true }, select: { id: true } }),
   ]);
   return {
     workspaceId,
@@ -89,7 +88,6 @@ async function loadEnv(workspaceId: string): Promise<Env> {
     creatives: new Map(creatives.map((c) => [c.normalizedKey, c.id])),
     unnamed: new Set(creatives.filter((c) => !c.name).map((c) => c.normalizedKey)),
     noCampaign: new Set(creatives.filter((c) => !c.campaignId).map((c) => c.normalizedKey)),
-    onlyProduct: products.length === 1 ? products[0].id : null,
   };
 }
 
@@ -114,7 +112,7 @@ async function creativeFor(env: Env, r: MetaSpendRow): Promise<string> {
   }
   const c = await db.creative.upsert({
     where: { workspaceId_platform_externalCreativeId: { workspaceId: env.workspaceId, platform: "META", externalCreativeId: r.adId } },
-    create: { workspaceId: env.workspaceId, platform: "META", externalCreativeId: r.adId, normalizedKey: key, name: r.adName, campaignId: r.campaignId, campaignName: r.campaignName, adsetName: r.adsetName, productId: env.onlyProduct },
+    create: { workspaceId: env.workspaceId, platform: "META", externalCreativeId: r.adId, normalizedKey: key, name: r.adName, campaignId: r.campaignId, campaignName: r.campaignName, adsetName: r.adsetName },
     update: {},
     select: { id: true },
   });

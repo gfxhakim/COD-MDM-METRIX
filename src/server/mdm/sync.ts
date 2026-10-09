@@ -4,8 +4,10 @@ import { audit } from "@/server/audit";
 import { InputError } from "@/server/errors";
 import { rateLimit } from "@/server/rateLimit";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
+import { tidyWilayas } from "@/server/wilayas";
 import { describeCustomSync, readCustomFilters, type CustomSyncChoices, type CustomSyncFilters } from "@/domain/customSync";
 import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/statusMapping";
+import { wilayaName } from "@/domain/wilayas";
 import { normalizeReference } from "@/lib/normalize";
 import { syncMdmAccount } from "./account";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
@@ -204,8 +206,10 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
   } catch (e) {
     return finish(job, "FAILED", counters, safeMdmMessage(e));
   }
-  // New built-in defaults also re-sort parcels MDM won't send again. Never blocks the sync.
+  // New built-in defaults also re-sort parcels MDM won't send again, and old wilaya names take
+  // their one Arabic name. Neither blocks the sync.
   await applyStatusDefaults(ws).catch((e) => console.error(`[mdm] could not apply status defaults for workspace ${ws}`, e instanceof Error ? e.message : e));
+  await tidyWilayas(ws).catch((e) => console.error(`[mdm] could not rename wilayas for workspace ${ws}`, e instanceof Error ? e.message : e));
   const overrides = await workspaceStatusOverrides(ws);
 
   const canceled = async () => (await db.syncJob.findUniqueOrThrow({ where: { id: job.id }, select: { cancelRequested: true } })).cancelRequested;
@@ -513,7 +517,7 @@ async function upsertParcel(workspaceId: string, jobId: string, p: MdmParcel, ov
       currency: p.currency,
       shippingFee: p.shippingFee,
       returnFee: p.returnFee,
-      wilaya: p.wilaya,
+      wilaya: wilayaName(p.wilaya),
       dispatchedAt: p.dispatchedAt ?? (SHIPPED_STATES.includes(normalized) ? existing?.dispatchedAt ?? p.statusAt : null),
       deliveredAt: normalized === "DELIVERED" ? p.deliveredAt ?? p.statusAt : null,
       returnedAt: normalized === "RETURNED" ? p.returnedAt ?? p.statusAt : null,

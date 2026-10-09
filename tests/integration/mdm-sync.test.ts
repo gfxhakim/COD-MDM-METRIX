@@ -105,7 +105,7 @@ describe("credentials", () => {
     expect(await db.syncItem.findFirstOrThrow({ where: { jobId: job.id, result: "FAILED" } })).toMatchObject({ entityType: "order", providerId: "MO-BROKEN" });
     expect(await db.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ mdmOrderId: "MO-1", status: "CONFIRMED", utmContent: "120000000000021" });
     const p = await db.parcel.findFirstOrThrow({ where: { workspaceId: live.ws.id, trackingId: "LP-1" } });
-    expect(p).toMatchObject({ orderId: order.id, matchMethod: "MDM_ORDER", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "Oran" });
+    expect(p).toMatchObject({ orderId: order.id, matchMethod: "MDM_ORDER", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "وهران" });
     const stored = JSON.stringify([await db.parcel.findMany({ where: { workspaceId: live.ws.id } }), await db.order.findMany({ where: { workspaceId: live.ws.id } }), await db.rawExternalRecord.findMany({ where: { workspaceId: live.ws.id } })]);
     expect(stored).not.toMatch(/Amina|Placeholder|0551111111|551111111|Courier|203\.0\.113\.7|12 rue X/);
     // The customer is kept only encrypted, and shown to the owner through the app.
@@ -369,7 +369,7 @@ describe("MDM orders", () => {
 
     const get = (mdmOrderId: string) => db.order.findFirstOrThrow({ where: { workspaceId: d.ws.id, mdmOrderId }, include: { lines: true, attribution: { include: { creative: true } } } });
     const a1 = await get("ORD-A1");
-    expect(a1).toMatchObject({ source: "MDM_EXPRESS", externalOrderId: "ORD-A1", status: "CONFIRMED", codAmount: 390000, wilaya: "Alger", utmContent: "120000000000009", phoneMasked: null });
+    expect(a1).toMatchObject({ source: "MDM_EXPRESS", externalOrderId: "ORD-A1", status: "CONFIRMED", codAmount: 390000, wilaya: "الجزائر", utmContent: "120000000000009", phoneMasked: null });
     expect(a1.phoneHash).toMatch(/^[0-9a-f]{64}$/);
     expect(a1.lines).toMatchObject([{ productId: product.id, quantity: 1, unitPrice: 390000 }]);
     expect(a1.attribution).toMatchObject({ method: "UTM_CONTENT", creative: { externalCreativeId: "120000000000009", platform: "META", productId: product.id } });

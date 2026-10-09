@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Alexandria, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const alexandria = Alexandria({ variable: "--font-alexandria", subsets: ["latin", "latin-ext"] });
+const alexandria = Alexandria({ variable: "--font-alexandria", subsets: ["latin", "latin-ext", "arabic"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {

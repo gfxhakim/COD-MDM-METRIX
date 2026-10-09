@@ -2,6 +2,7 @@ import type { NormalizedStatus } from "@prisma/client";
 import { matchesCustomSync, MDM_STATUS_ORDER, textKey, type CustomSyncChoices, type CustomSyncFilters } from "@/domain/customSync";
 import { STATUS_GROUPS, statusGroupOf } from "@/domain/orderExport";
 import { normalizeProviderStatus, providerStatusLabel, statusKey } from "@/domain/statusMapping";
+import { sortWilayas, wilayaName } from "@/domain/wilayas";
 import { normalizeReference } from "@/lib/normalize";
 import { dayRange } from "@/lib/zonedDays";
 import { db } from "@/server/db";
@@ -172,7 +173,7 @@ export async function customSyncOptions(ctx: WorkspaceContext) {
   };
   return {
     groups: STATUS_GROUPS.map((g) => ({ key: g.key, label: g.label, hint: g.hint, statuses: statuses.filter((s) => s.group === g.key).map(({ key, label }) => ({ key, label })) })),
-    wilayas: unique(wilayas.map((w) => w.wilaya)),
+    wilayas: sortWilayas(wilayas.map((w) => wilayaName(w.wilaya))),
     stores: unique(stores.map((s) => s.storeName)),
     products: unique(products.map((p) => p.productName)),
   };

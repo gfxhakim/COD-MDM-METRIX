@@ -1,4 +1,5 @@
 import { normalizeProviderStatus } from "@/domain/statusMapping";
+import { mdmWilaya } from "@/domain/wilayas";
 import { createLiveAccountReader } from "./live-account";
 import { isObj, money, obj, str, date } from "./parse";
 import { assertPublicHost, validateMdmBaseUrl } from "./url";
@@ -101,7 +102,7 @@ export function mapMdmParcel(raw: unknown): LiveParcel {
     currency,
     shippingFee: money(fees.shipping, currency),
     returnFee: money(fees.return, currency),
-    wilaya: str(dest.stateName) ?? str(dest.stateCode),
+    wilaya: mdmWilaya(str(dest.stateName), str(dest.stateCode)),
     dispatchedAt: firstAt(events, "SHIPPED"),
     deliveredAt: firstAt(events, "DELIVERED"),
     returnedAt: firstAt(events, "RETURNED"),
@@ -149,7 +150,7 @@ export function mapMdmOrder(raw: unknown): MdmOrder {
     customer: { name, phone2: str(client.phone2), address: str(dest.streetAddress) },
     deliveryType: typeof o.isStopDesk === "boolean" ? (o.isStopDesk ? "STOP_DESK" : "HOME") : null,
     storeName: str(store.name),
-    wilaya: str(dest.stateName) ?? str(dest.stateCode),
+    wilaya: mdmWilaya(str(dest.stateName), str(dest.stateCode)),
     city: str(dest.cityName),
     utm: { source: utmValue(utm.source), medium: utmValue(utm.medium), campaign: utmValue(utm.campaign), content: utmValue(utm.content) },
     products,

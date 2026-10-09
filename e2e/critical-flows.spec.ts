@@ -273,7 +273,11 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.locator("li li", { hasText: "COD" }).first()).toBeVisible();
     await expect(page.locator("tr", { hasText: "DEMO-BLK" })).toContainText("142");
     await expect(page.getByText("Expected 350")).toBeVisible();
-    await expect(page.locator("tr", { hasText: "Alger" })).toBeVisible();
+    // Every wilaya shows under its one Arabic name, and its French name still finds it.
+    await expect(page.locator("tr", { hasText: "الجزائر" })).toBeVisible();
+    await page.getByLabel("Find a wilaya").fill("Oran");
+    await expect(page.locator("tr", { hasText: "وهران" })).toBeVisible();
+    await expect(page.locator("tr", { hasText: "الجزائر" })).toHaveCount(0);
   });
 
   test("17. see what a product's stock earns before ads, with ads and fees, and save its numbers", async ({ page }) => {
@@ -281,6 +285,15 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link").nth(1)).toHaveAccessibleName(/Profit tracker/);
     await page.goto("/profit");
     await expect(page.getByRole("heading", { name: "Profit tracker", level: 1 })).toBeVisible();
+    // The lamp's campaign isn't linked, so its spend counts for no product: it is listed to link here.
+    await expect(page.getByText("Ads not linked to a product")).toBeVisible();
+    await expect(page.locator("tr", { hasText: "LED Night Lamp" })).toContainText("No ads linked");
+    await page.getByLabel("Product for LN-03 | Conversions | DZ").selectOption({ label: "LED Night Lamp" });
+    await expect(page.getByText("Its ad spend now counts for LED Night Lamp")).toBeVisible();
+    // Only the demo's imported spend with no campaign ID is left, and it has nothing to link.
+    await expect(page.getByLabel("Product for LN-03 | Conversions | DZ")).toHaveCount(0);
+    await expect(page.getByText("comes from ads with no known campaign")).toBeVisible();
+    await expect(page.locator("tr", { hasText: "LED Night Lamp" })).not.toContainText("No ads linked");
     await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
     const card = page.getByRole("region", { name: "Posture Corrector Pro" });
     // The MDM stock read by the sync counts for the product with the same name: 142 + 71 units,

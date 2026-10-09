@@ -90,7 +90,7 @@ export async function demoFixtures(workspaceId: string): Promise<MdmParcel[]> {
   await fixed("MDM-DEMO-SRC-1", () => db.order.findFirst({ where: { workspaceId, status: "PENDING", parcels: { none: {} } }, orderBy: { orderNumber: "asc" }, select: sel }), "source");
   const orphanExisting = await db.parcel.findFirst({ where: { workspaceId, trackingId: "MDM-DEMO-ORPHAN-1" }, select: { dispatchedAt: true } });
   const orphanAt = orphanExisting?.dispatchedAt ?? new Date(Math.floor((Date.now() - 30 * HOUR) / (24 * HOUR)) * 24 * HOUR);
-  out.push({ trackingId: "MDM-DEMO-ORPHAN-1", reference: "SHOP-77123", sourceOrderId: null, status: "in_transit", statusAt: orphanAt, codAmount: 490000, currency: "DZD", shippingFee: 70000, returnFee: 30000, wilaya: "Sétif", dispatchedAt: orphanAt, deliveredAt: null, returnedAt: null, events: [{ status: "in_transit", at: orphanAt }], raw: { tracking: "MDM-DEMO-ORPHAN-1", reference: "SHOP-77123", status: "in_transit", demo: true } });
+  out.push({ trackingId: "MDM-DEMO-ORPHAN-1", reference: "SHOP-77123", sourceOrderId: null, status: "in_transit", statusAt: orphanAt, codAmount: 490000, currency: "DZD", shippingFee: 70000, returnFee: 30000, wilaya: "سطيف", dispatchedAt: orphanAt, deliveredAt: null, returnedAt: null, events: [{ status: "in_transit", at: orphanAt }], raw: { tracking: "MDM-DEMO-ORPHAN-1", reference: "SHOP-77123", status: "in_transit", demo: true } });
   return out;
 }
 
@@ -184,7 +184,7 @@ export async function demoAccount(workspaceId: string): Promise<MockAccount> {
       delivery: [
         { wilaya: "Alger", code: "16", home: 40000, stopDesk: 25000, return: 20000, exchange: 40000 },
         { wilaya: "Oran", code: "31", home: 60000, stopDesk: 40000, return: 25000, exchange: 60000 },
-        { wilaya: "Sétif", code: "19", home: 60000, stopDesk: 40000, return: 25000, exchange: 60000 },
+        { wilaya: "سطيف", code: "19", home: 60000, stopDesk: 40000, return: 25000, exchange: 60000 },
       ],
       usdRate: null,
       euroRate: null,
