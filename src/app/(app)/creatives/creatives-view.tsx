@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, Columns3, Download, Megaphone } from "lucide-react"
 import * as React from "react";
 import { Money, Rate, Ratio } from "@/components/app/format";
 import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
+import { MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { VerdictBadge, type VerdictValue } from "@/components/app/verdict";
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +28,10 @@ const COLUMN_DEFS: Partial<Record<MatrixColumnKey, string>> = {
   returnRate: DEF.returnRate, trueNetProfit: DEF.trueNetProfit, truePoas: DEF.truePoas, verdict: DEF.verdict,
   revenue: "Delivered revenue or remitted cash, depending on the selected view.",
 };
-const DEFAULT_HIDDEN: MatrixColumnKey[] = ["campaign", "confirmed", "delivered", "returned"];
-const STORAGE_KEY = "cft.matrix.columns";
+/** A beginner sees what each ad spent, what it brought and what it earned; the rest is under Columns. */
+const DEFAULT_HIDDEN: MatrixColumnKey[] = ["campaign", "confirmed", "confirmationRate", "cpco", "shipped", "deliveryRate", "returned", "cpdo", "revenue"];
+// v2: the shorter default above applies once, even where columns were picked before.
+const STORAGE_KEY = "cft.matrix.columns.v2";
 
 function loadHidden(): MatrixColumnKey[] {
   try {
@@ -81,6 +84,8 @@ export function CreativesView() {
   const [sort, setSort] = React.useState<{ key: MatrixColumnKey; dir: "asc" | "desc" }>({ key: "trueNetProfit", dir: "desc" });
   const [hidden, setHidden] = React.useState<MatrixColumnKey[]>(DEFAULT_HIDDEN);
   const [showColumns, setShowColumns] = React.useState(false);
+  const [moreFilters, setMoreFilters] = useMoreDetails("creatives-filters");
+  const showFilters = moreFilters || !!from || !!to || !!verdict || minSample > 0 || !!view;
   React.useEffect(() => setHidden(loadHidden()), []); // eslint-disable-line react-hooks/set-state-in-effect -- read per-viewer preference after hydration
 
   const ads = useAdsFilter().filter;
@@ -128,7 +133,7 @@ export function CreativesView() {
     <>
       <PageHeader
         title="Creative attribution matrix"
-        description="Every creative from spend to delivered profit, aggregated on the server from stored orders, parcels, spend, cost versions and expenses."
+        description="What each ad spent, the orders it brought and the profit it made."
         actions={
           <Button onClick={() => exportCsv.mutate({ ...range, columns: columns.map((c) => c.key), minSample, currency: money.view as CurrencyCode })} disabled={exportCsv.isPending}>
             <Download /> Export CSV
@@ -139,6 +144,9 @@ export function CreativesView() {
         <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
           <AdsFilter className="col-span-2" />
           <Input aria-label="Search creatives" placeholder="Search creative or campaign" value={search} onChange={(e) => setSearch(e.target.value)} className="col-span-2 w-full sm:w-56" />
+          <MoreDetailsButton open={showFilters} onToggle={(o) => { setMoreFilters(o); if (!o) { setFrom(""); setTo(""); setVerdict(""); setMinSample(0); setView(""); } }} what="filters" className="col-span-2 justify-self-start" />
+          {showFilters ? (
+            <>
           <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full sm:w-38" />
           <Input aria-label="To date" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full sm:w-38" />
           <Select aria-label="Verdict" value={verdict} onChange={(e) => setVerdict(e.target.value as VerdictValue | "")} className="w-full sm:w-40">
@@ -151,6 +159,8 @@ export function CreativesView() {
           <Select aria-label="Revenue basis" value={view || data?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as "DELIVERED" | "REMITTED")} className="col-span-2 w-full sm:w-52">
             <option value="DELIVERED">Delivered revenue view</option><option value="REMITTED">Cash remitted view</option>
           </Select>
+            </>
+          ) : null}
           <div className="relative col-span-2 justify-self-end sm:ml-auto">
             <Button variant="ghost" size="sm" aria-expanded={showColumns} onClick={() => setShowColumns((s) => !s)}><Columns3 /> Columns</Button>
             {showColumns ? (

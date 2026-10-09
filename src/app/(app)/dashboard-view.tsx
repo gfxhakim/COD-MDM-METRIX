@@ -7,6 +7,7 @@ import * as React from "react";
 import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { useMoney } from "@/components/app/currency";
 import { FitMoney, FitText, moneyParts } from "@/components/app/fit-money";
+import { MoreDetails, useMoreDetails } from "@/components/app/more-details";
 import { Money, Rate, Ratio } from "@/components/app/format";
 import { useShell } from "@/components/app/shell";
 import { VERDICT_LABEL, type VerdictValue } from "@/components/app/verdict";
@@ -101,9 +102,9 @@ function niceTop(max: number) {
 }
 
 /** Round arrow button in the corner of a card. */
-function CornerLink({ href, label, onRed }: { href: string; label: string; onRed?: boolean }) {
+function CornerLink({ href, label, onRed, onClick }: { href: string; label: string; onRed?: boolean; onClick?: () => void }) {
   return (
-    <Link href={href} aria-label={label} title={label} className={cn("press group/corner grid size-9 shrink-0 place-items-center rounded-full", onRed ? "bg-white/20 text-white hover:bg-white/30" : "bg-surface-3 text-fg hover:bg-brand-soft hover:text-brand-strong")}>
+    <Link href={href} aria-label={label} title={label} onClick={onClick} className={cn("press group/corner grid size-9 shrink-0 place-items-center rounded-full", onRed ? "bg-white/20 text-white hover:bg-white/30" : "bg-surface-3 text-fg hover:bg-brand-soft hover:text-brand-strong")}>
       <ArrowUpRight className="size-4 transition-transform duration-300 group-hover/corner:-translate-y-0.5 group-hover/corner:translate-x-0.5" aria-hidden="true" />
     </Link>
   );
@@ -366,6 +367,12 @@ export function DashboardView() {
   const [creativeId, setCreativeId] = React.useState("");
   const [view, setView] = React.useState<RevenueView | "">("");
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [, setMore] = useMoreDetails("dashboard");
+  // The full wilaya table is under More details: open it, then scroll to it once it is there.
+  const openWilayas = () => {
+    setMore(true);
+    window.setTimeout(() => document.getElementById("wilayas")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
   const ads = useAdsFilter().filter;
   const { boxRef: presetsRef, pill: presetPill } = useSlidingPill<HTMLDivElement>();
   const facets = useQuery(trpc.orders.facets.queryOptions());
@@ -452,7 +459,7 @@ export function DashboardView() {
                 </button>
               ))}
             </div>
-            <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("press relative grid size-10 shrink-0 place-items-center rounded-full shadow-card md:hidden", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label="More filters">
+            <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("press relative grid size-10 shrink-0 place-items-center rounded-full shadow-card", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label="More filters" title="More filters: days, product, ad and revenue basis">
               <SlidersHorizontal className="size-4" aria-hidden="true" />
               {from || to || productId || creativeId || view ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
             </button>
@@ -460,7 +467,7 @@ export function DashboardView() {
         </div>
         <div className="flex flex-wrap items-center gap-2 md:justify-end">
         <AdsFilter />
-        <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:contents", filtersOpen ? "flex" : "hidden")}>
+        <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:justify-end", filtersOpen ? "flex" : "hidden")}>
           <div className="flex items-center gap-1.5">
             <Input aria-label="From date" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
             <span className="text-subtle" aria-hidden>→</span>
@@ -671,7 +678,7 @@ export function DashboardView() {
             </Panel>
 
             <Panel className="gap-3">
-              <PanelTitle def={DEF.deliveryRate} action={<CornerLink href="#wilayas" label="Open the full wilaya table" />}>Delivery by wilaya</PanelTitle>
+              <PanelTitle def={DEF.deliveryRate} action={<CornerLink href="#wilayas" label="Open the full wilaya table" onClick={openWilayas} />}>Delivery by wilaya</PanelTitle>
               {r.wilayas.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted">No wilaya data yet.</p>
               ) : (
@@ -690,95 +697,97 @@ export function DashboardView() {
         )}
       </div>
 
-      <div className={cn("stagger mt-[18px] grid grid-cols-1 gap-[18px] transition-opacity duration-300 lg:grid-cols-2 xl:grid-cols-3", report.isPlaceholderData && "opacity-60")}>
-        <Card>
-          <CardHeader title="Profit breakdown" description={m ? `Revenue basis: ${m.revenueView === "DELIVERED" ? "delivered revenue" : "cash remitted"}` : undefined} />
-          <CardBody className="p-3 pt-0">
-            {!m ? <Skeleton className="h-48" /> : (
-              <dl className="flex flex-col text-sm">
-                {[
-                  ["Revenue", m.revenue, DEF.deliveredRevenue],
-                  ["Ad spend", -m.adSpend, DEF.adSpend],
-                  ["COGS", -m.cogs, DEF.cogs],
-                  ["Outbound shipping", -m.outboundShipping, "Forward shipping on every shipped parcel (observed carrier fee when available)."],
-                  ["RTO fees", -m.rtoCost, "RTO fee on returned parcels."],
-                  ["Call center", -m.callCenterCost, "Call-center fee × the configured basis (lead, confirmed order or call attempt)."],
-                  ["Packaging", -m.packagingCost, "Packaging fee on every shipped parcel."],
-                  ["Overhead", -m.allocatedOverhead, DEF.overhead],
-                ].map(([label, v, def]) => (
-                  <div key={label as string} className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
-                    <dt className="text-muted"><Term label={label as string} definition={def as string} /></dt>
-                    <dd className={cn("num text-right", (v as number) < 0 ? "text-fg" : "text-positive")}>{fmt(v as number)}</dd>
+      <MoreDetails id="dashboard" hint="Where the profit goes, the ads with the most returns, data health and every wilaya." className="mt-[18px]">
+        <div className={cn("stagger grid grid-cols-1 gap-[18px] transition-opacity duration-300 lg:grid-cols-2 xl:grid-cols-3", report.isPlaceholderData && "opacity-60")}>
+          <Card>
+            <CardHeader title="Profit breakdown" description={m ? `Revenue basis: ${m.revenueView === "DELIVERED" ? "delivered revenue" : "cash remitted"}` : undefined} />
+            <CardBody className="p-3 pt-0">
+              {!m ? <Skeleton className="h-48" /> : (
+                <dl className="flex flex-col text-sm">
+                  {[
+                    ["Revenue", m.revenue, DEF.deliveredRevenue],
+                    ["Ad spend", -m.adSpend, DEF.adSpend],
+                    ["COGS", -m.cogs, DEF.cogs],
+                    ["Outbound shipping", -m.outboundShipping, "Forward shipping on every shipped parcel (observed carrier fee when available)."],
+                    ["RTO fees", -m.rtoCost, "RTO fee on returned parcels."],
+                    ["Call center", -m.callCenterCost, "Call-center fee × the configured basis (lead, confirmed order or call attempt)."],
+                    ["Packaging", -m.packagingCost, "Packaging fee on every shipped parcel."],
+                    ["Overhead", -m.allocatedOverhead, DEF.overhead],
+                  ].map(([label, v, def]) => (
+                    <div key={label as string} className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
+                      <dt className="text-muted"><Term label={label as string} definition={def as string} /></dt>
+                      <dd className={cn("num text-right", (v as number) < 0 ? "text-fg" : "text-positive")}>{fmt(v as number)}</dd>
+                    </div>
+                  ))}
+                  <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-brand-soft px-2 py-2 font-bold">
+                    <dt>True net profit</dt>
+                    <dd className={cn("num text-right", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
                   </div>
-                ))}
-                <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-brand-soft px-2 py-2 font-bold">
-                  <dt>True net profit</dt>
-                  <dd className={cn("num text-right", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 px-2 pt-2 text-xs text-muted">
-                  <dt><Term label="Cost per delivered order" definition={DEF.cpdo} /></dt>
-                  <dd><Money value={m.cpdo} currency={cur} /></dd>
-                </div>
-              </dl>
+                  <div className="flex items-center justify-between gap-3 px-2 pt-2 text-xs text-muted">
+                    <dt><Term label="Cost per delivered order" definition={DEF.cpdo} /></dt>
+                    <dd><Money value={m.cpdo} currency={cur} /></dd>
+                  </div>
+                </dl>
+              )}
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader title="Worst RTO ads" description="Cheap orders that come back cost twice." />
+            {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title="No shipped parcels yet" /> : (
+              <Table>
+                <THead><tr><Th>Ad</Th><Th className="text-right">RTO</Th><Th className="text-right">Returned</Th></tr></THead>
+                <tbody>
+                  {r.worstRtoCreatives.map((c) => (
+                    <Tr key={c.key}>
+                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ml-1" title="Fewer shipped parcels than the BAD TRAFFIC threshold">small n</Badge> : null}</Td>
+                      <Td className="text-right"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
+                      <Td className="num text-right text-muted">{c.returned}/{c.shipped}</Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
             )}
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Worst RTO ads" description="Cheap orders that come back cost twice." />
-          {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title="No shipped parcels yet" /> : (
+          </Card>
+          <Card className="lg:col-span-2 xl:col-span-1">
+            <CardHeader title="Data health" description="What could make these numbers wrong." />
+            <CardBody className="flex flex-col gap-0.5 p-3 pt-0">
+              {!h ? <Skeleton className="h-40" /> : (
+                <>
+                  <HealthRow icon={<Link2Off />} label="MDM connection" value={h.connectionStatus === "CONNECTED" ? `synced ${timeAgo(h.lastSuccessfulSyncAt)}` : h.connectionStatus.replace("_", " ").toLowerCase()} href="/settings?tab=mdm" tone={h.connectionStatus === "CONNECTED" ? undefined : "warning"} />
+                  <HealthRow icon={<Unlink />} label="Unmatched records" value={h.unmatchedRecords} href="/syncs" tone={h.unmatchedRecords ? "negative" : undefined} />
+                  <HealthRow icon={<AlertTriangle />} label="Unknown parcel statuses" value={h.unknownStatusParcels} href="/orders?parcelStatus=UNKNOWN" tone={h.unknownStatusParcels ? "negative" : undefined} />
+                  <HealthRow icon={<FileWarning />} label="Import / sync errors" value={h.importRowErrors + h.failedSyncItems} href="/imports" tone={h.importRowErrors + h.failedSyncItems ? "warning" : undefined} />
+                  <HealthRow icon={<FileWarning />} label="Unmatched ad spend rows" value={h.unmatchedSpendRows} href="/creatives" tone={h.unmatchedSpendRows ? "warning" : undefined} />
+                  <HealthRow icon={<FileWarning />} label="Bank rows awaiting review" value={h.pendingBankRows} href="/expenses" tone={h.pendingBankRows ? "warning" : undefined} />
+                  <p className="px-2 pt-2 text-[11px] text-subtle">Last successful MDM sync: {formatDateTime(h.lastSuccessfulSyncAt)}</p>
+                </>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
+        <Card className="scroll-mt-24" id="wilayas">
+          <CardHeader title="By wilaya" description="Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya." />
+          {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title="No wilaya data" /> : (
             <Table>
-              <THead><tr><Th>Ad</Th><Th className="text-right">RTO</Th><Th className="text-right">Returned</Th></tr></THead>
+              <THead><tr><Th>Wilaya</Th><Th className="text-right">Placed</Th><Th className="text-right">Shipped</Th><Th className="text-right">Delivery rate</Th><Th className="text-right">RTO rate</Th><Th className="text-right">Delivered revenue</Th><Th className="text-right">Contribution before ads</Th></tr></THead>
               <tbody>
-                {r.worstRtoCreatives.map((c) => (
-                  <Tr key={c.key}>
-                    <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ml-1" title="Fewer shipped parcels than the BAD TRAFFIC threshold">small n</Badge> : null}</Td>
-                    <Td className="text-right"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
-                    <Td className="num text-right text-muted">{c.returned}/{c.shipped}</Td>
+                {r.wilayas.map((w) => (
+                  <Tr key={w.wilaya}>
+                    <Td>{w.wilaya}</Td>
+                    <Td className="num text-right">{w.placed}</Td>
+                    <Td className="num text-right">{w.shipped}</Td>
+                    <Td className="text-right"><Rate value={w.deliveryRate} /></Td>
+                    <Td className="text-right"><Rate value={w.returnRate} className={(w.returnRate ?? 0) > 0.3 ? "text-negative" : undefined} /></Td>
+                    <Td className="text-right"><Money value={w.deliveredRevenue} currency={cur} /></Td>
+                    <Td className="text-right"><Money value={w.contributionBeforeAds} currency={cur} signed /></Td>
                   </Tr>
                 ))}
               </tbody>
             </Table>
           )}
         </Card>
-        <Card className="lg:col-span-2 xl:col-span-1">
-          <CardHeader title="Data health" description="What could make these numbers wrong." />
-          <CardBody className="flex flex-col gap-0.5 p-3 pt-0">
-            {!h ? <Skeleton className="h-40" /> : (
-              <>
-                <HealthRow icon={<Link2Off />} label="MDM connection" value={h.connectionStatus === "CONNECTED" ? `synced ${timeAgo(h.lastSuccessfulSyncAt)}` : h.connectionStatus.replace("_", " ").toLowerCase()} href="/settings?tab=mdm" tone={h.connectionStatus === "CONNECTED" ? undefined : "warning"} />
-                <HealthRow icon={<Unlink />} label="Unmatched records" value={h.unmatchedRecords} href="/syncs" tone={h.unmatchedRecords ? "negative" : undefined} />
-                <HealthRow icon={<AlertTriangle />} label="Unknown parcel statuses" value={h.unknownStatusParcels} href="/orders?parcelStatus=UNKNOWN" tone={h.unknownStatusParcels ? "negative" : undefined} />
-                <HealthRow icon={<FileWarning />} label="Import / sync errors" value={h.importRowErrors + h.failedSyncItems} href="/imports" tone={h.importRowErrors + h.failedSyncItems ? "warning" : undefined} />
-                <HealthRow icon={<FileWarning />} label="Unmatched ad spend rows" value={h.unmatchedSpendRows} href="/creatives" tone={h.unmatchedSpendRows ? "warning" : undefined} />
-                <HealthRow icon={<FileWarning />} label="Bank rows awaiting review" value={h.pendingBankRows} href="/expenses" tone={h.pendingBankRows ? "warning" : undefined} />
-                <p className="px-2 pt-2 text-[11px] text-subtle">Last successful MDM sync: {formatDateTime(h.lastSuccessfulSyncAt)}</p>
-              </>
-            )}
-          </CardBody>
-        </Card>
-      </div>
-
-      <Card className="mt-[18px] scroll-mt-24" id="wilayas">
-        <CardHeader title="By wilaya" description="Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya." />
-        {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title="No wilaya data" /> : (
-          <Table>
-            <THead><tr><Th>Wilaya</Th><Th className="text-right">Placed</Th><Th className="text-right">Shipped</Th><Th className="text-right">Delivery rate</Th><Th className="text-right">RTO rate</Th><Th className="text-right">Delivered revenue</Th><Th className="text-right">Contribution before ads</Th></tr></THead>
-            <tbody>
-              {r.wilayas.map((w) => (
-                <Tr key={w.wilaya}>
-                  <Td>{w.wilaya}</Td>
-                  <Td className="num text-right">{w.placed}</Td>
-                  <Td className="num text-right">{w.shipped}</Td>
-                  <Td className="text-right"><Rate value={w.deliveryRate} /></Td>
-                  <Td className="text-right"><Rate value={w.returnRate} className={(w.returnRate ?? 0) > 0.3 ? "text-negative" : undefined} /></Td>
-                  <Td className="text-right"><Money value={w.deliveredRevenue} currency={cur} /></Td>
-                  <Td className="text-right"><Money value={w.contributionBeforeAds} currency={cur} signed /></Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
+      </MoreDetails>
     </>
   );
 }
