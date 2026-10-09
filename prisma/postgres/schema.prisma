@@ -249,6 +249,8 @@ model Workspace {
   mdmStock          MdmStockItem[]
   mdmArrivals       MdmStockArrival[]
   mdmProductLinks   MdmProductLink[]
+  mdmProductChoices MdmProductChoice[]
+  mdmSkippedOrders  MdmSkippedOrder[]
   profitPlans       ProfitPlan[]
   expenseCategories CustomExpenseCategory[]
   recurringExpenses RecurringExpense[]
@@ -330,6 +332,11 @@ model IntegrationConnection {
   lastSyncSummary       Json?
   lastError             String?
   syncIntervalMinutes   Int                 @default(45)
+  /// MDM only: whether products MDM sends for the first time are brought in, or wait until someone picks them.
+  bringNewMdmProducts   Boolean             @default(true)
+  /// MDM only: when someone last chose to bring in more (a product turned on, or older days).
+  /// The next regular sync after it re-reads every MDM order once to fetch them.
+  choicesWidenedAt      DateTime?
   credentialUpdatedAt   DateTime?
   credentialUpdatedById String?
   createdAt             DateTime            @default(now())
@@ -503,6 +510,39 @@ model Product {
 
 /// Which product in the app each MDM product counts as. The sync adds one the first time MDM sends a
 /// product with an order (linking an existing product, or creating one); an owner can move it to another product.
+/**
+ * Which MDM products the sync brings in, and from which day. MDM products with no row follow
+ * IntegrationConnection.bringNewMdmProducts. Orders already in the app keep updating either way.
+ */
+model MdmProductChoice {
+  workspaceId  String
+  /// MDM's product ID (for a variant, the product it is a variant of).
+  mdmProductId String
+  /// MDM's name for the product, as last seen.
+  name         String?
+  /// False: MDM orders with only this product (or products not brought in) are skipped.
+  bring        Boolean   @default(true)
+  /// Orders placed before this day are skipped. Null: every order.
+  since        DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, mdmProductId])
+}
+
+/// MDM orders the sync skipped because of the product choices, so their parcels are skipped too.
+model MdmSkippedOrder {
+  workspaceId String
+  mdmOrderId  String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, mdmOrderId])
+}
+
 model MdmProductLink {
   workspaceId  String
   /// MDM's product ID (for a variant, the product it is a variant of).

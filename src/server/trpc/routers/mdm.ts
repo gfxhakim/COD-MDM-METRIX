@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { z } from "zod";
 import { NormalizedStatus } from "@prisma/client";
 import { customSyncInput } from "@/domain/customSync";
+import * as choices from "@/server/mdm/choices";
 import * as conn from "@/server/mdm/connection";
 import { customSyncOptions } from "@/server/mdm/custom";
 import * as sync from "@/server/mdm/sync";
@@ -57,6 +58,13 @@ export const syncRouter = router({
       return { jobId: res.job.id, alreadyRunning: res.alreadyRunning };
     }),
   customOptions: permitted("sync.run").query(({ ctx }) => customSyncOptions(ctx.ws)),
+  /** Which MDM products the sync brings in, and from which day. */
+  mdmProducts: workspaceProcedure.query(({ ctx }) => choices.listChoices(ctx.ws)),
+  setMdmProduct: permitted("integrations.manage")
+    .input(z.object({ mdmProductId: z.string().trim().min(1).max(100), bring: z.boolean(), sinceDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() }))
+    .mutation(({ ctx, input }) => choices.setChoice(ctx.ws, input)),
+  setBringNewMdmProducts: permitted("integrations.manage").input(z.object({ bring: z.boolean() })).mutation(({ ctx, input }) => choices.setBringNew(ctx.ws, input.bring)),
+  removeNotBrought: permitted("integrations.manage").input(z.object({ mdmProductId: z.string().trim().min(1).max(100) })).mutation(({ ctx, input }) => choices.removeNotBrought(ctx.ws, input.mdmProductId)),
   cancel: permitted("sync.run").input(z.object({ id })).mutation(({ ctx, input }) => sync.cancelSync(ctx.ws, input.id)),
   retry: permitted("sync.run")
     .input(z.object({ id }))

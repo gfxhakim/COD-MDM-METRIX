@@ -22,6 +22,7 @@ import { describeCustomSync, readCustomFilters } from "@/domain/customSync";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { CustomSyncPanel } from "./custom-sync-panel";
+import { MdmProductsCard } from "./mdm-products-card";
 
 const JOB_TONE: Record<SyncJobStatus, "positive" | "warning" | "negative" | "neutral" | "info"> = { QUEUED: "info", RUNNING: "info", SUCCEEDED: "positive", PARTIAL: "warning", FAILED: "negative", CANCELED: "neutral" };
 const JOB_LABEL: Record<SyncJobStatus, string> = { QUEUED: "Queued", RUNNING: "Running", SUCCEEDED: "Succeeded", PARTIAL: "Partial", FAILED: "Failed", CANCELED: "Canceled" };
@@ -85,7 +86,9 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
             </div>
             {d.job.error ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-negative">{d.job.error}</p> : null}
             {d.job.ordersNote ? <p className="rounded-lg border border-info/30 bg-info-soft p-3 text-info">{d.job.ordersNote}</p> : null}
-            {d.job.mode === "CUSTOM" ? <CustomSummary job={d.job} /> : null}
+            {d.job.mode === "CUSTOM" ? <CustomSummary job={d.job} /> : d.job.skippedCount ? (
+              <p className="rounded-lg border border-border bg-surface-2 p-3 text-muted"><span className="num font-semibold text-fg">{d.job.skippedCount}</span> MDM order{d.job.skippedCount === 1 ? " was" : "s were"} left out because {d.job.skippedCount === 1 ? "its products aren't" : "their products aren't"} brought in (see What to bring from MDM).</p>
+            ) : null}
             <p className="text-xs font-medium text-muted">Orders</p>
             <div className="grid grid-cols-3 gap-2">
               {[["New", d.job.ordersAddedCount], ["Updated", d.job.ordersUpdatedCount], ["With a content ID", d.job.ordersWithContentCount]].map(([l, v]) => (
@@ -279,7 +282,7 @@ export function SyncView() {
               <div>
                 <p className="font-medium">{running.mode === "CUSTOM" ? "Custom sync: " : ""}{running.status === "QUEUED" ? (running.nextRunAt && new Date(running.nextRunAt) > new Date() ? `Waiting to retry (${timeAgo(running.nextRunAt).replace(" ago", "")})` : "Queued") : running.phase === "ACCOUNT" ? "Syncing money and stock" : `${running.mode === "CUSTOM" ? "reading" : "Syncing"} ${running.phase === "ORDERS" ? "orders" : "parcels"}, page ${running.page + 1}${running.totalCount ? ` of ${Math.max(1, Math.ceil(running.totalCount / 100))}` : ""}`}</p>
                 {running.mode === "CUSTOM" ? <p className="text-xs text-muted">{choicesOf(running)}</p> : c?.ordersFullReadPending ? <p className="text-xs text-muted">Reading every MDM order once to fill in customer names, phones, addresses and order details, so this sync takes longer than usual.</p> : null}
-                <p className="text-xs text-muted">Orders: {running.mode === "CUSTOM" ? `${running.ordersMatchedCount} matched (${running.ordersAddedCount} new, ${running.ordersUpdatedCount} updated) · ${running.skippedCount} left alone` : `${running.ordersAddedCount} new · ${running.ordersUpdatedCount} updated`} · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
+                <p className="text-xs text-muted">Orders: {running.mode === "CUSTOM" ? `${running.ordersMatchedCount} matched (${running.ordersAddedCount} new, ${running.ordersUpdatedCount} updated) · ${running.skippedCount} left alone` : `${running.ordersAddedCount} new · ${running.ordersUpdatedCount} updated${running.skippedCount ? ` · ${running.skippedCount} left out` : ""}`} · Parcels: {running.addedCount} added · {running.updatedCount} updated · {running.unchangedCount} unchanged · {running.failedCount} failed{running.error ? ` · ${running.error}` : ""}</p>
               </div>
             </div>
             {canRun ? <Button size="sm" variant="ghost" disabled={running.cancelRequested} onClick={() => cancel.mutate({ id: running.id })}><Ban /> {running.cancelRequested ? "Canceling…" : "Cancel"}</Button> : null}
@@ -300,6 +303,7 @@ export function SyncView() {
       ) : null}
 
       <div className="flex flex-col gap-6">
+        {workspace.data ? <MdmProductsCard timezone={workspace.data.timezone} /> : null}
         <UnmatchedQueue />
         <Card>
           <CardHeader title="Sync history" />
