@@ -22,8 +22,9 @@ async function build(t: Tenant) {
   const campaigns = [["701", "act_1", "ACTIVE"], ["702", "act_1", "PAUSED"], ["703", "act_2", "ACTIVE"], ["709", "act_9", null]] as const;
   const placedAt = new Date(Date.now() - 3 * DAY);
   for (const [externalId, adAccountId, status] of campaigns) {
-    await db.campaign.create({ data: { workspaceId: w, externalId, name: `Campaign ${externalId}`, adAccountId, status } });
-    const creative = await db.creative.create({ data: { workspaceId: w, externalCreativeId: `ad_${externalId}`, normalizedKey: `ad_${externalId}`, campaignId: externalId, productId: product.id } });
+    // Each campaign is linked to Lamp: ad spend counts for a product only through such a link.
+    await db.campaign.create({ data: { workspaceId: w, externalId, name: `Campaign ${externalId}`, adAccountId, status, productId: product.id } });
+    const creative = await db.creative.create({ data: { workspaceId: w, externalCreativeId: `ad_${externalId}`, normalizedKey: `ad_${externalId}`, campaignId: externalId } });
     const spend = { "701": 100000, "702": 50000, "703": 200000, "709": 30000 }[externalId];
     // Spend read from Meta carries its ad account; imported spend (709) does not.
     await db.adSpend.create({ data: { workspaceId: w, date: placedAt, creativeId: creative.id, campaignId: externalId, adAccountId: externalId === "709" ? null : adAccountId, spend, sourceRowHash: `s${externalId}` } });

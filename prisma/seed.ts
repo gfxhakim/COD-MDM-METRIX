@@ -93,6 +93,13 @@ async function seedMain() {
     );
   }
 
+  // ── Their campaigns: Posture Corrector and Mini Blender are linked to their product, the lamp's
+  // campaign isn't yet, so its spend counts for no product until someone links it.
+  for (const pi of [0, 1, 2]) {
+    const pr = products[pi];
+    await db.campaign.create({ data: { workspaceId: w, platform: "META", externalId: `camp_${pr.sku}`, name: `${pr.sku} | Conversions | DZ`, productId: pi < 2 ? pr.id : null } });
+  }
+
   // ── Import batch with one failed row
   const batch = await db.importBatch.create({
     data: { workspaceId: w, kind: "ORDERS", status: "PARTIAL", fileName: "demo-orders-easysell.csv", fileSize: 18_432, totalRows: 61, importedRows: 60, duplicateRows: 0, errorRows: 1, createdById: user.id, finishedAt: new Date(now - 1 * DAY), columnMapping: { orderNumber: "Order #", placedAt: "Created at" } },

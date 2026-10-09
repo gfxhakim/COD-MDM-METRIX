@@ -320,6 +320,8 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
   const changed = !samePlan(plan, row.plan);
   const potential = stockPotential({ units: parsed.units, salePrice: parsed.inputs.salePrice, unitCost: parsed.inputs.unitCost, unitsPerOrder: parsed.inputs.unitsPerOrder, feesPerOrder: feesPerOrder(parsed.inputs), includeFees: parsed.includeFees });
   const projection = stockProjection(parsed.inputs);
+  // The calculation with ads waits for this product's ads: a linked campaign, or an ad spend per order typed here.
+  const adsMissing = !row.adsLinked && edits.cpa === undefined && row.plan?.overrides.cpa === undefined;
   const actual = actualBreakdown(row.actual, parsed.inputs.salePrice > 0 ? parsed.inputs.salePrice : null);
 
   const save = useMutation(
@@ -488,7 +490,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                 </p>
               </Group>
               <Group title="Ads and fees">
-                <Field label="Ad spend per order placed" htmlFor="pt-cpa" hint={moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
+                <Field label="Ad spend per order placed" htmlFor="pt-cpa" hint={adsMissing ? "No campaign is linked to this product yet" : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Delivery fee per parcel" htmlFor="pt-s" hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
                   <Field label="Return fee per parcel" htmlFor="pt-r" hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
@@ -507,7 +509,12 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
             </div>
 
             <div className="flex min-w-0 flex-col gap-4">
-              {!projection.ok ? (
+              {adsMissing ? (
+                <div className="flex flex-col gap-1.5 rounded-2xl bg-warning-soft px-4 py-3 text-sm" role="note">
+                  <p className="flex items-start gap-2 font-semibold text-warning"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />No ads are linked to {row.name} yet</p>
+                  <p className="text-muted">This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>, or type an ad spend per order on the left.</p>
+                </div>
+              ) : !projection.ok ? (
                 <p className="flex items-start gap-2 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{projection.reason}</p>
               ) : (
                 <>
@@ -598,8 +605,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
             <ul className="flex flex-col gap-1.5 text-xs text-subtle">
               {row.sample.inTransit > 0 ? <li>• {count(row.sample.inTransit)} parcels are still with the carrier ({fmt(row.actual.cashInTransit)}). They count once delivered or returned.</li> : null}
               {row.actual.missingCostOrders > 0 ? <li className="text-warning">• {count(row.actual.missingCostOrders)} orders have no cost for this product on their date, so their units cost nothing here. Add a cost version that starts earlier.</li> : null}
-              {data.unlinkedSpend > 0 ? <li>• {fmt(data.unlinkedSpend)} of ad spend isn&apos;t linked to any product, so it isn&apos;t counted here. Link campaigns in Products.</li> : null}
-              {data.unlinkedSpendFor === row.id ? <li>• Ad spend not linked to a product counts for {row.name}, your only product.</li> : null}
+              {data.unlinked.total > 0 ? <li>• {fmt(data.unlinked.total)} of ad spend isn&apos;t linked to any product, so it isn&apos;t counted here. Link its campaigns at the top of this page.</li> : null}
             </ul>
           </div>
         ) : null}
@@ -630,7 +636,9 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
   const cur = data.currency;
   const fmt = (v: number) => money.fmt(v, cur, { decimals: false });
   const rows = data.products.map((p) => ({ p, ...productSummary(p, data.defaults) }));
-  const real = (r: (typeof rows)[number]) => (r.projection.ok ? r.projection : null);
+  // Without a linked campaign (or a typed ad spend per order) there is no calculation with ads.
+  const noAds = (r: (typeof rows)[number]) => !r.p.adsLinked && r.seed.sources.cpa !== "you";
+  const real = (r: (typeof rows)[number]) => (r.projection.ok && !noAds(r) ? r.projection : null);
   return (
     <Card className="min-w-0">
       <CardHeader title="Your products" description="Each product's stock, what it earns before ads, and what it really earns with your ads, rates and fees. Pick one to change its numbers." />
@@ -656,12 +664,13 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
                     <button type="button" className="text-left font-semibold hover:text-brand-strong" aria-pressed={selected === r.p.id} onClick={(e) => { e.stopPropagation(); onSelect(r.p.id); }}>{r.p.name}</button>
                     <span className="mt-0.5 flex flex-wrap gap-1">
                       {!r.p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}
+                      {noAds(r) ? <Badge tone="warning">No ads linked</Badge> : null}
                       {r.p.plan ? <Badge tone="info">Saved numbers</Badge> : null}
                     </span>
                   </Td>
                   <Td className="num text-right">{count(r.seed.units)}<span className="block text-[11px] text-subtle">{r.seed.stockSource === "TYPED" ? (r.p.plan?.stockUnits != null ? "typed" : "example") : "MDM"}</span></Td>
                   <Td className="num text-right font-semibold">{fmt(r.potential.benefit)}</Td>
-                  <Td className={cn("num text-right font-bold", x && x.benefit < 0 ? "text-negative" : "text-positive")} title={r.projection.ok ? undefined : r.projection.reason}>{x ? fmt(x.benefit) : "—"}</Td>
+                  <Td className={cn("num text-right font-bold", x && x.benefit < 0 ? "text-negative" : "text-positive")} title={noAds(r) ? "Link this product's campaigns to count its ads" : r.projection.ok ? undefined : r.projection.reason}>{x ? fmt(x.benefit) : noAds(r) ? <span className="text-xs font-semibold text-subtle">Link ads</span> : "—"}</Td>
                   <Td className="num text-right text-negative">{x ? fmt(x.missing) : "—"}</Td>
                   <Td className="num text-right">{x ? fmt(x.benefitPerUnit) : "—"}</Td>
                   <Td className="num text-right">{x ? fmt(x.breakevenCpa) : "—"}</Td>
@@ -677,16 +686,74 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
           return (
             <li key={r.p.id}>
               <button type="button" aria-pressed={selected === r.p.id} onClick={() => onSelect(r.p.id)} className={cn("press flex w-full min-w-0 flex-col gap-2 rounded-2xl p-3 text-left", selected === r.p.id ? "bg-brand-soft ring-1 ring-brand/30" : "bg-surface-2")}>
-                <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">{r.p.name}{!r.p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}</span>
+                <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">{r.p.name}{!r.p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}{noAds(r) ? <Badge tone="warning">No ads linked</Badge> : null}</span>
                 <span className="grid grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 text-[11px] text-subtle">
                   <span className="min-w-0">Stock<b className="num block truncate text-[13px] text-fg">{count(r.seed.units)}</b></span>
                   <span className="min-w-0">Before ads<b className="num block truncate text-[13px] text-fg">{fmt(r.potential.benefit)}</b></span>
-                  <span className="min-w-0">Real benefit<b className={cn("num block truncate text-[13px]", x && x.benefit < 0 ? "text-negative" : "text-positive")}>{x ? fmt(x.benefit) : "—"}</b></span>
+                  <span className="min-w-0">Real benefit<b className={cn("num block truncate text-[13px]", x && x.benefit < 0 ? "text-negative" : x ? "text-positive" : "text-subtle")}>{x ? fmt(x.benefit) : noAds(r) ? "Link ads" : "—"}</b></span>
                 </span>
               </button>
             </li>
           );
         })}
+      </ul>
+    </Card>
+  );
+}
+
+/**
+ * Ad spend counts for a product only through a campaign (or ad account) someone linked to it.
+ * What nobody linked is listed here with a product picker per campaign, so it can be linked at once.
+ */
+function UnlinkedAds({ data, canLink }: { data: Tracker; canLink: boolean }) {
+  const trpc = useTRPC();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const money = useMoney();
+  const fmt = (v: number) => money.fmt(v, data.currency, { decimals: false });
+  const [all, setAll] = React.useState(false);
+  const link = useMutation(
+    trpc.campaigns.setProduct.mutationOptions({
+      onSuccess: async (_r, vars) => {
+        await Promise.all([qc.invalidateQueries({ queryKey: trpc.profit.pathKey() }), qc.invalidateQueries({ queryKey: trpc.campaigns.pathKey() })]);
+        const product = data.products.find((p) => p.id === vars.productId);
+        toast("success", product ? `Its ad spend now counts for ${product.name}` : "Campaign unlinked");
+      },
+      onError: (e) => toast("error", errorMessage(e)),
+    }),
+  );
+  const { total, campaigns, other } = data.unlinked;
+  if (total <= 0) return null;
+  const shown = all ? campaigns : campaigns.slice(0, 5);
+  return (
+    <Card className="min-w-0 border border-warning/30">
+      <CardHeader
+        title={<span className="flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />Ads not linked to a product</span>}
+        description={`${fmt(total)} of ad spend counts for no product, so no product's profit includes it. Your business's total profit still does.${campaigns.length ? " Pick the product each campaign sells." : ""}`}
+      />
+      <ul className="flex flex-col gap-2 px-4 pb-4">
+        {shown.map((c) => (
+          <li key={c.id} className="flex flex-col gap-2 rounded-2xl bg-surface-2 p-3 sm:flex-row sm:items-center">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{c.name}</span>
+              <span className="num text-xs text-muted">{fmt(c.spend)} spent</span>
+            </span>
+            {canLink ? (
+              <Select aria-label={`Product for ${c.name}`} value="" disabled={link.isPending} onChange={(e) => e.target.value && link.mutate({ id: c.id, productId: e.target.value })} className="h-9 w-full text-sm sm:w-56">
+                <option value="">Link to a product…</option>
+                {data.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </Select>
+            ) : null}
+          </li>
+        ))}
+        {campaigns.length > 5 ? (
+          <li><Button size="sm" variant="ghost" onClick={() => setAll((v) => !v)}>{all ? "Show fewer" : `Show all ${campaigns.length} campaigns`}</Button></li>
+        ) : null}
+        {other > 0 ? <li className="text-xs text-subtle">{campaigns.length ? `${fmt(other)} more` : fmt(other)} comes from ads with no known campaign, such as imported rows without a campaign ID, so it can&apos;t be linked here.</li> : null}
+        <li className="text-xs text-subtle">
+          {canLink ? "You can also link a whole ad account, or several campaigns at once, " : "The owner or an admin can link them "}
+          in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>.
+        </li>
       </ul>
     </Card>
   );
@@ -773,6 +840,7 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
       ) : (
         <div className="flex min-w-0 flex-col gap-[18px]">
           {data.demo ? <div><Badge tone="brand">Demo data</Badge></div> : null}
+          <UnlinkedAds data={data} canLink={canEdit} />
           {data.products.length > 1 ? <ProductsOverview data={data} selected={selected?.id ?? ""} onSelect={select} /> : null}
           <div ref={detailRef} className="scroll-mt-24">
             {selected ? <ProductCalculator key={selected.id} row={selected} data={data} canSave={canSave} canEdit={canEdit && !!editRow} onEditDetails={() => setEditing(true)} /> : null}

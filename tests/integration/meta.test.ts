@@ -107,7 +107,8 @@ describe("Meta spend sync", () => {
     expect(first).toHaveLength(6);
 
     const creative = await db.creative.findFirstOrThrow({ where: { workspaceId: t.ws.id, externalCreativeId: "120000000000041" } });
-    expect(creative).toMatchObject({ name: "Hook 41", campaignName: "Spring", productId: product.id });
+    // Its product comes only from a campaign or ad account link someone sets, even with one product.
+    expect(creative).toMatchObject({ name: "Hook 41", campaignName: "Spring", productId: null });
     // The order that arrived first is now attributed to it.
     expect(await db.attribution.findUniqueOrThrow({ where: { orderId } })).toMatchObject({ creativeId: creative.id, method: "UTM_CONTENT" });
     // The creative first seen through orders gets the ad's name.

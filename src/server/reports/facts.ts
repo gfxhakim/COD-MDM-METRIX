@@ -12,7 +12,7 @@ export type DateRange = { from?: Date; to?: Date };
 
 /** `productId` is the product the spend counts for (see `loadFacts`). `campaignId` is the platform's campaign ID. */
 export type SpendFact = { creativeId: string | null; productId: string | null; campaignId: string | null; adAccountId: string | null; date: Date; spend: number };
-/** `productId` is the product the ad counts for: its campaign's, else its own (see `loadFacts`). */
+/** `productId` is the product the ad counts for: its campaign's; only an ad without a campaign keeps its own (see `loadFacts`). */
 export type CreativeInfo = { id: string; externalCreativeId: string; name: string | null; campaignId: string | null; campaignName: string | null; platform: AdPlatform; productId: string | null };
 export type CampaignInfo = {
   id: string;
@@ -53,9 +53,10 @@ const between = (r: DateRange) => (r.from || r.to ? { gte: r.from, lte: r.to } :
  * (orders without an ad don't), only the spend of those campaigns or accounts, only those campaigns,
  * and the share of the expenses those orders take under the overhead rule.
  *
- * Which product ad spend counts for, most specific link first: the campaign's own product,
- * then its ad account's default product, then the ad's own product. Orders keep the product
- * of their own lines.
+ * Ad spend counts for a product only through a link someone set: the campaign's own product,
+ * else its ad account's product. Spend with no campaign at all (a CSV without one) can still
+ * count through its ad's product. Nothing is guessed: spend without a link counts for no product
+ * (it still counts in the business's totals). Orders keep the product of their own lines.
  */
 export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: AdFilter | null): Promise<WorkspaceFacts> {
   const w = ctx.workspaceId;
@@ -88,8 +89,10 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
     return { id: c.id, externalId: c.externalId, name: c.name, adAccountId: c.adAccountId, status: c.status, ownProductId: c.productId, productId: c.productId ?? inherited, productSource: c.productId ? "CAMPAIGN" : inherited ? "ACCOUNT" : null };
   });
   const campaignProduct = new Map(campaignInfo.filter((c) => c.productId).map((c) => [c.externalId, c.productId!]));
-  const creativeInfo: CreativeInfo[] = creatives.map((c) => ({ ...c, productId: (c.campaignId ? campaignProduct.get(c.campaignId) : undefined) ?? c.productId }));
+  // An ad in a campaign counts for its campaign's product; only an ad without a campaign keeps its own.
+  const creativeInfo: CreativeInfo[] = creatives.map((c) => ({ ...c, productId: c.campaignId ? (campaignProduct.get(c.campaignId) ?? null) : c.productId }));
   const creativeProduct = new Map(creativeInfo.map((c) => [c.id, c.productId]));
+  const creativeCampaign = new Map(creatives.map((c) => [c.id, c.campaignId]));
 
   const byProduct = new Map<string, typeof versions>();
   for (const v of versions) {
@@ -121,11 +124,17 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
       // through outbound shipping / RTO costs, so CARRIER_FEE events are not subtracted again here.
       remittedCash: o.cashEvents.reduce((a, e) => a + (e.type === "REMITTED" || e.type === "ADJUSTMENT" ? e.amount : 0), 0),
     }));
+  const spendProduct = (s: { creativeId: string | null; campaignId: string | null; adAccountId: string | null }) => {
+    const campaignId = s.campaignId ?? (s.creativeId ? creativeCampaign.get(s.creativeId) ?? null : null);
+    if (campaignId) return campaignProduct.get(campaignId) ?? (s.adAccountId ? accountProduct.get(s.adAccountId) ?? null : null);
+    if (s.adAccountId && accountProduct.has(s.adAccountId)) return accountProduct.get(s.adAccountId)!;
+    return s.creativeId ? creativeProduct.get(s.creativeId) ?? null : null;
+  };
   const spendFacts: SpendFact[] = spend.map((s) => ({
       creativeId: s.creativeId,
       campaignId: s.campaignId,
       adAccountId: s.adAccountId,
-      productId: (s.campaignId ? campaignProduct.get(s.campaignId) : undefined) ?? (s.adAccountId ? accountProduct.get(s.adAccountId) : undefined) ?? (s.creativeId ? creativeProduct.get(s.creativeId) ?? null : null),
+      productId: spendProduct(s),
       date: s.date,
       spend: s.spend,
     }));

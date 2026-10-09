@@ -25,8 +25,8 @@ export type CampaignRow = {
   running: boolean;
   productId: string | null;
   ownProductId: string | null;
-  /** ADS: not linked, and all its ads count for the same product through their own link. */
-  productSource: CampaignInfo["productSource"] | "ADS";
+  /** CAMPAIGN: linked itself; ACCOUNT: through its ad account; null: not linked, so its spend counts for no product. */
+  productSource: CampaignInfo["productSource"];
   metrics: Metrics;
   verdict: Verdict | null;
   /** Orders from this campaign whose own lines are all for another product than the campaign's. */
@@ -87,20 +87,11 @@ export async function campaignReport(ctx: WorkspaceContext, input: DateRange & {
       })
       .sort((x, y) => y.metrics.adSpend - x.metrics.adSpend || y.metrics.placed - x.metrics.placed);
 
-  // An unlinked campaign whose ads all have the same product counts for that product through them.
-  const adProducts = new Map<string, Set<string | null>>();
-  for (const c of facts.creatives) if (c.campaignId) adProducts.set(c.campaignId, (adProducts.get(c.campaignId) ?? new Set()).add(c.productId));
-  const fromAds = (externalId: string) => {
-    const set = adProducts.get(externalId);
-    return set?.size === 1 ? [...set][0] : null;
-  };
-
   const filter = input.adAccountId;
   const inScope = (c: CampaignInfo) => !filter || (filter === NO_ACCOUNT ? !c.adAccountId : c.adAccountId === filter);
   const rows: CampaignRow[] = facts.campaigns.filter(inScope).map((c) => {
     const a = accs.get(c.id) ?? emptyAcc();
     const metrics = computeMetrics(sumTotals(a.totals), a.spend, a.overhead, view);
-    const viaAds = c.productSource ? null : fromAds(c.externalId);
     return {
       key: c.id,
       kind: "CAMPAIGN",
@@ -110,9 +101,9 @@ export async function campaignReport(ctx: WorkspaceContext, input: DateRange & {
       adAccountId: c.adAccountId,
       status: c.status,
       running: (c.status !== null && RUNNING_STATUSES.has(c.status)) || a.spend > 0,
-      productId: c.productId ?? viaAds,
+      productId: c.productId,
       ownProductId: c.ownProductId,
-      productSource: c.productSource ?? (viaAds ? "ADS" : null),
+      productSource: c.productSource,
       metrics,
       verdict: metrics.placed > 0 || metrics.adSpend > 0 ? creativeVerdict(metrics, facts.thresholds) : null,
       otherProductOrders: a.otherProductOrders,

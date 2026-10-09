@@ -118,7 +118,7 @@ export function CampaignsView() {
     <>
       <PageHeader
         title="Ad accounts & campaigns"
-        description="Pick an ad account to see each of its campaigns with its own orders, spend and profit. Link a campaign to a product so its spend and ads count for that product."
+        description="Pick an ad account to see each of its campaigns with its own orders, spend and profit. A campaign's spend counts in a product's profit only once you link the campaign, or its whole ad account, to that product."
       />
       <Card>
         <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">
@@ -191,14 +191,14 @@ export function CampaignsView() {
               {rows.map((c) => {
                 const expanded = open.has(c.key);
                 const inherited = c.productSource !== "CAMPAIGN" && c.productId ? productName.get(c.productId) : null;
-                const inheritedLabel = inherited ? `${c.productSource === "ACCOUNT" ? "From account" : "From its ads"}: ${inherited}` : null;
+                const inheritedLabel = inherited ? `From account: ${inherited}` : null;
                 const productControl = c.kind !== "CAMPAIGN" ? <span className="text-subtle">—</span> : canLink ? (
                   <Select aria-label={`Product for ${c.name ?? c.externalId}`} value={c.ownProductId ?? ""} disabled={setProduct.isPending} onChange={(e) => setProduct.mutate({ id: c.campaignId!, productId: e.target.value || null })} className={cn("h-8 text-xs", phone ? "w-full" : "w-52")}>
                     <option value="">{inheritedLabel ?? "Not linked"}</option>
                     {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </Select>
                 ) : (
-                  <span className="text-xs">{c.productId ? productName.get(c.productId) : <span className="text-subtle">Not linked</span>}{inherited ? <span className="text-subtle"> ({c.productSource === "ACCOUNT" ? "account" : "its ads"})</span> : null}</span>
+                  <span className="text-xs">{c.productId ? productName.get(c.productId) : <span className="text-subtle">Not linked</span>}{inherited ? <span className="text-subtle"> (account)</span> : null}</span>
                 );
                 return (
                   <React.Fragment key={c.key}>
