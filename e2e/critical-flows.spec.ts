@@ -229,6 +229,40 @@ test.describe("new workspace", () => {
     expect(csv.suggestedFilename()).toBe("expenses_2026-09-16_to_2026-09-30.csv");
     const text = fs.readFileSync((await csv.path())!, "utf8");
     expect(text).toContain("E2E office rent;E2E Office;Every month;30000;30000;15000;2026-09-01;2026-09-30;All products;Fixed");
+
+    // Pay in two taps: "My pay" and "Employee pay" repeat every month for the whole business.
+    await page.getByRole("button", { name: "New expense" }).first().click();
+    const pay = page.getByRole("dialog");
+    await pay.getByRole("group", { name: "What is it?" }).getByRole("button", { name: "My pay" }).click();
+    await expect(pay.locator("#erep")).toHaveValue("MONTHLY");
+    await expect(pay.locator("#ename")).toHaveValue("My pay");
+    await expect(pay.locator("#ec")).toHaveValue("OWNER_PAY");
+    await expect(pay.getByText("Pay counts as an expense")).toBeVisible();
+    await pay.locator("#ed").fill("2026-09-16");
+    await pay.locator("#eend").fill("2026-09-30");
+    await pay.locator("#ea").fill("60000");
+    await pay.getByRole("button", { name: "Add repeating expense" }).click();
+    await expect(pay).toHaveCount(0);
+    await page.getByRole("button", { name: "New expense" }).first().click();
+    await pay.getByRole("button", { name: "Employee pay" }).click();
+    await expect(pay.getByLabel("Who is paid")).toHaveValue("");
+    await pay.getByLabel("Who is paid").fill("E2E confirmation agent");
+    await pay.locator("#ed").fill("2026-09-16");
+    await pay.locator("#eend").fill("2026-09-30");
+    await pay.locator("#ea").fill("30000");
+    await pay.getByRole("button", { name: "Add repeating expense" }).click();
+    await expect(pay).toHaveCount(0);
+    await page.getByLabel("Category").selectOption({ label: "All categories" });
+    const mine = page.getByRole("listitem").filter({ hasText: "My pay" }).filter({ hasText: "60,000" });
+    const agent = page.getByRole("listitem").filter({ hasText: "E2E confirmation agent" });
+    await expect(mine).toBeVisible();
+    await expect(agent).toContainText("Employee pay");
+    // Taken out again, so later walkthroughs see the same totals.
+    for (const name of ["My pay", "E2E confirmation agent"]) {
+      page.once("dialog", (d) => d.accept());
+      await page.getByRole("button", { name: `Delete ${name}` }).click();
+      await expect(page.getByRole("button", { name: `Delete ${name}` })).toHaveCount(0);
+    }
   });
 });
 

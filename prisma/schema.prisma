@@ -124,6 +124,8 @@ enum ExpenseCategory {
   CONTENT
   TRANSPORT
   TAXES
+  /// What the owner takes for themself. Employee pay is SALARIES. Both count as expenses.
+  OWNER_PAY
 }
 
 enum ExpenseFrequency {

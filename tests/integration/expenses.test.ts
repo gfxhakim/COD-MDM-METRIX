@@ -85,7 +85,7 @@ describe("expenses: own categories, repeating expenses, filters and export", () 
     const text = Buffer.from(csv.base64, "base64").toString("utf8");
     expect(text).toContain("Shopify plan;All products;Fixed;4500");
     expect(text).toContain("Design tools;Canva;Lamp");
-    expect(text).toContain("Confirmation agent;Salaries;Every day;2000;");
+    expect(text).toContain("Confirmation agent;Employee pay;Every day;2000;");
     expect(text).toMatch(/\r\nTotal;12000\r\n/);
     const xlsx = await t.caller.expenses.export({ format: "xlsx", from: dayAgo(4), to: dayAgo(1) });
     expect(xlsx.filename).toBe(`expenses_${dayAgo(4)}_to_${dayAgo(1)}.xlsx`);

@@ -134,6 +134,10 @@ describe("expense and bank validation", () => {
     expect(parseCategory("Frais bancaires").category).toBe("BANK_FEES");
     expect(parseCategory("DOMAINS_PROXIES").category).toBe("DOMAINS_PROXIES");
     expect(parseCategory("Airbnb")).toEqual({ category: "OTHER", recognized: false });
+    expect(parseCategory("My pay").category).toBe("OWNER_PAY");
+    expect(parseCategory("OWNER_PAY").category).toBe("OWNER_PAY");
+    expect(parseCategory("Salaire").category).toBe("SALARIES");
+    expect(parseCategory("Employee pay").category).toBe("SALARIES");
     const csv = parseCsv("date,category,amount,sku\n2026-04-01,Emballage,1500,PC-01\n2026-04-02,Logiciel,3000,\n2026-04-03,Other,0,\n2026-04-03,Other,10,NOPE");
     const r = validateExpenses(csv, { date: "date", category: "category", amount: "amount", productSku: "sku" }, { dateFormat: "ISO", currency: "DZD", products });
     expect(r.items.map((e) => [e.category, e.amount, e.productId])).toEqual([["PACKAGING", 150000, "p1"], ["SOFTWARE", 300000, null]]);

@@ -62,6 +62,15 @@ function CategoryOptions({ categories }: { categories: Category[] }) {
 
 type Repeats = "ONCE" | Frequency;
 
+/** Quick starts for a new expense: pay is the expense people most often forget to enter. */
+const KINDS = [
+  { key: "OWNER_PAY", label: "My pay", name: "My pay" },
+  { key: "SALARIES", label: "Employee pay", name: "" },
+  { key: "OTHER_COST", label: "Something else", name: "" },
+] as const;
+type Kind = (typeof KINDS)[number]["key"];
+const kindOf = (category: string): Kind => (category === "OWNER_PAY" || category === "SALARIES" ? category : "OTHER_COST");
+
 function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, rates, today }: { expense?: ExpenseRow; recurring?: RecurringRow; initialRepeats?: Repeats; onClose: () => void; currency: string; rates: Rates; today: string }) {
   const trpc = useTRPC();
   const qc = useQueryClient();
@@ -104,6 +113,17 @@ function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, 
   );
   const busy = create.isPending || update.isPending || createRec.isPending || updateRec.isPending;
   const repeating = f.repeats !== "ONCE";
+  const kind = kindOf(f.category);
+  const pay = kind !== "OTHER_COST";
+  // Pay is usually the same each month: picking it sets the expense to repeat monthly for the whole business.
+  const pickKind = (k: Kind) => {
+    if (k === kind) return;
+    const preset = KINDS.find((x) => x.key === k)!;
+    const oldName = KINDS.find((x) => x.key === kind)!.name;
+    const name = !f.name || f.name === oldName ? preset.name : f.name;
+    if (k === "OTHER_COST") setF({ ...f, category: "SOFTWARE", name });
+    else setF({ ...f, category: k, name, repeats: f.repeats === "ONCE" ? "MONTHLY" : f.repeats, costType: "FIXED", allocation: "GLOBAL", productId: "" });
+  };
 
   let perMonth: string | null = null;
   if (repeating && f.amount.amount) {
@@ -148,8 +168,16 @@ function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, 
   const title = recurring ? "Edit repeating expense" : expense ? "Edit expense" : "New expense";
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title={title} description={!row ? "Once, or every day, week, month or year: rent, salaries and subscriptions count by themselves each day." : undefined}>
+      <DialogContent title={title} description={!row ? "Once, or every day, week, month or year: rent, pay and subscriptions count by themselves each day." : undefined}>
         <form onSubmit={submit} className="flex flex-col gap-4">
+          {!row ? (
+            <div className="flex flex-col gap-2">
+              <div role="group" aria-label="What is it?" className="flex flex-wrap gap-2">
+                {KINDS.map((k) => <Chip key={k.key} active={kind === k.key} onClick={() => pickKind(k.key)}>{k.label}</Chip>)}
+              </div>
+              {pay ? <p className="text-xs text-muted">Pay counts as an expense: it lowers your profit like any other cost. Set to repeat each month, it counts by itself every day.</p> : null}
+            </div>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             {!expense ? (
               <Field label="Repeats" htmlFor="erep" className="sm:col-span-2">
@@ -160,8 +188,8 @@ function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, 
               </Field>
             ) : null}
             {repeating ? (
-              <Field label="Name" htmlFor="ename" className="sm:col-span-2">
-                <Input id="ename" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Rent, confirmation agent, Shopify…" maxLength={120} required />
+              <Field label={f.category === "SALARIES" ? "Who is paid" : "Name"} htmlFor="ename" className="sm:col-span-2">
+                <Input id="ename" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={f.category === "SALARIES" ? "Confirmation agent, driver, designer…" : "Rent, confirmation agent, Shopify…"} maxLength={120} required />
               </Field>
             ) : null}
             <Field label={repeating ? "First day" : "Date"} htmlFor="ed"><Input id="ed" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} required /></Field>
@@ -333,11 +361,11 @@ function RepeatingCard({ rows, currency, canWrite, today, onAdd, onEdit, periodL
     <Card>
       <CardHeader
         title={<span className="inline-flex items-center gap-2"><Repeat className="size-4 text-brand-strong" /> Repeating expenses</span>}
-        description="Rent, salaries, subscriptions: added once, they count a share every day."
+        description="Rent, your pay, employee pay, subscriptions: added once, they count a share every day."
         actions={canWrite ? <Button size="sm" variant="secondary" onClick={onAdd}><Plus /> Add repeating</Button> : null}
       />
       {!rows ? <Skeleton className="mx-5 mb-5 h-20" /> : rows.length === 0 ? (
-        <p className="px-5 pb-5 text-sm text-muted">None yet{canWrite ? ". Add rent or a salary once and it counts by itself every month." : "."}</p>
+        <p className="px-5 pb-5 text-sm text-muted">None yet{canWrite ? ". Add rent, your pay or an employee's pay once and it counts by itself every month." : "."}</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border border-t border-border">
           {rows.map((r) => (
