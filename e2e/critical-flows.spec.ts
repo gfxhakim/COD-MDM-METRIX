@@ -290,7 +290,9 @@ test.describe("demo workspace MDM (mock adapter)", () => {
   test("9. start an MDM sync and observe progress", async ({ page }) => {
     await page.goto("/syncs");
     await page.getByRole("button", { name: "Sync now" }).click();
-    // The request returns at once; the job runs in the background and the page polls it.
+    // The request returns at once; the job runs in the background and the page polls it. The
+    // history is under More details, like every page's extra sections.
+    await page.getByRole("button", { name: "More details" }).click();
     await expect(page.getByRole("heading", { name: "Sync history" })).toBeVisible();
     await expect(page.getByRole("row", { name: /manual.*(Succeeded|Partial)/ }).first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("MDM-DEMO-ORPHAN-1")).toBeVisible();
@@ -300,12 +302,15 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await page.goto("/money");
     await expect(page.getByRole("heading", { name: "Money & stock" })).toBeVisible();
     await expect(page.getByText("Ready to collect")).toBeVisible();
+    await expect(page.locator("tr", { hasText: "DEMO-BLK" })).toContainText("142");
+    // Payouts, arrivals and the price list are under More details.
+    await expect(page.getByRole("button", { name: /Confirmed/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "More details" }).click();
     // A payout opens to show what it is made of.
     const payout = page.getByRole("button", { name: /Confirmed/ });
     await payout.click();
     await expect(payout).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("li li", { hasText: "COD" }).first()).toBeVisible();
-    await expect(page.locator("tr", { hasText: "DEMO-BLK" })).toContainText("142");
     await expect(page.getByText("Expected 350")).toBeVisible();
     // Every wilaya shows under its one Arabic name, and its French name still finds it.
     await expect(page.locator("tr", { hasText: "الجزائر" })).toBeVisible();
@@ -360,6 +365,9 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await card.getByRole("tab", { name: /With ads, rates and fees/ }).click();
     await expect(card.getByText("Real benefit").first()).toBeVisible();
     await expect(card.getByRole("list", { name: "From the benefit before ads to the real benefit" })).toContainText("Ad spend");
+    // Rates and fees come from the data, folded until someone wants to change them.
+    await expect(card.getByLabel("Delivered (of shipped)")).toHaveCount(0);
+    await card.getByRole("button", { name: "Change rates and fees" }).click();
     await card.getByLabel("Delivered (of shipped)").fill("0");
     await expect(card.getByRole("alert")).toContainText("never sells");
     await card.getByLabel("Delivered (of shipped)").fill("70");
@@ -440,6 +448,8 @@ test.describe("demo workspace MDM (mock adapter)", () => {
 
   test("10. review an unmatched parcel", async ({ page }) => {
     await page.goto("/syncs");
+    // Parcels to review are named above the folded details, with a button that opens them.
+    await page.getByRole("button", { name: /^Review (it|them)$/ }).click();
     const row = page.locator("tr", { hasText: "MDM-DEMO-ORPHAN-1" });
     await row.getByRole("button", { name: "Link" }).click();
     const dialog = page.getByRole("dialog");
@@ -574,10 +584,17 @@ test("20. open pages from the red dock, and every page fits a phone screen", asy
   await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: "Expenses" }).click();
   await expect(page.getByRole("heading", { name: "Expenses", level: 1 })).toBeVisible();
   const tabs = ["workspace", "members", "economics", "mdm", "meta", "mappings", "audit"].map((t) => `/settings?tab=${t}`);
-  for (const path of ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports", ...tabs]) {
+  const pages = ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports"];
+  const fits = async (path: string, how: string) => {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     const wider = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(wider, `${path} is wider than a 360px phone`).toBe(0);
-  }
+    expect(wider, `${path} ${how} is wider than a 360px phone`).toBe(0);
+  };
+  for (const path of [...pages, ...tabs]) await fits(path, "folded");
+  // Again with every "More details" open, as this browser remembers it.
+  await page.evaluate(() => {
+    for (const id of ["dashboard", "expenses", "expenses-filters", "money", "simulator", "orders", "creatives-filters", "products", "profit-products", "profit-rates", "syncs"]) localStorage.setItem(`more-details:${id}`, "1");
+  });
+  for (const path of pages) await fits(path, "with More details open");
 });

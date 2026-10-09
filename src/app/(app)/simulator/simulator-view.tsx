@@ -6,6 +6,7 @@ import * as React from "react";
 import { useCurrencyView } from "@/components/app/currency";
 import { FitText } from "@/components/app/fit-money";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
+import { MoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -132,7 +133,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
     <>
       <PageHeader
         title="Breakeven CPA simulator"
-        description="How much can you pay per order and still make delivered profit? Observed values come from your stored data; everything you change here is a scenario."
+        description="The most you can pay per order and still make a profit. Change any number to try it."
         actions={
           <>
             <Select aria-label="Product" value={productId} onChange={(e) => { setProductId(e.target.value); setForm(null); }} className="w-52">
@@ -207,39 +208,41 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                   </Card>
                 </div>
                 {result.breakevenCpa < 0 ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-sm text-negative">This product loses money before any ad spend at these rates. No CPA is low enough.</p> : null}
-                <Card>
-                  <CardHeader title="Assumptions" />
-                  <CardBody className="flex flex-col gap-1 text-sm text-muted">
-                    {result.assumptions.map((a) => <p key={a}>• {a}</p>)}
-                  </CardBody>
-                </Card>
-                <Card>
-                  <CardHeader title="Delivery rate × CPA sensitivity" description={`Expected profit ${unit}. Rows: delivery probability. Columns: CPA you pay.`} />
-                  <div className="overflow-x-auto p-4">
-                    <table className="w-full border-separate border-spacing-0.5 text-xs">
-                      <thead>
-                        <tr>
-                          <th scope="col" className="px-2 py-1 text-left font-medium text-subtle">D \ CPA</th>
-                          {result.sensitivity.cpas.map((c) => <th key={c} scope="col" className="num px-2 py-1 text-right font-medium text-subtle">{fmt(c)}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.sensitivity.deliveryRates.map((d, i) => {
-                          const isCurrent = Math.abs(d - Number.parseFloat(f.deliveryProbability) / 100) < 0.005;
-                          const scale = Math.max(...result.sensitivity.profit.flat().map(Math.abs));
-                          return (
-                            <tr key={d}>
-                              <th scope="row" className={cn("num px-2 py-1 text-left font-medium", isCurrent ? "text-brand-strong" : "text-muted")}>{formatPercent(d, 0)}{isCurrent ? " ●" : ""}</th>
-                              {result.sensitivity.profit[i].map((v, j) => (
-                                <td key={j} className={cn("num rounded px-2 py-1.5 text-right", v < 0 ? "text-negative" : "text-fg")} style={cellStyle(v, scale)}>{fmt(v)}</td>
-                              ))}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
+                <MoreDetails id="simulator" hint="The assumptions behind these numbers, and the profit at other delivery rates and costs per order.">
+                  <Card>
+                    <CardHeader title="Assumptions" />
+                    <CardBody className="flex flex-col gap-1 text-sm text-muted">
+                      {result.assumptions.map((a) => <p key={a}>• {a}</p>)}
+                    </CardBody>
+                  </Card>
+                  <Card>
+                    <CardHeader title="Delivery rate × CPA sensitivity" description={`Expected profit ${unit}. Rows: delivery probability. Columns: CPA you pay.`} />
+                    <div className="overflow-x-auto p-4">
+                      <table className="w-full border-separate border-spacing-0.5 text-xs">
+                        <thead>
+                          <tr>
+                            <th scope="col" className="px-2 py-1 text-left font-medium text-subtle">D \ CPA</th>
+                            {result.sensitivity.cpas.map((c) => <th key={c} scope="col" className="num px-2 py-1 text-right font-medium text-subtle">{fmt(c)}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.sensitivity.deliveryRates.map((d, i) => {
+                            const isCurrent = Math.abs(d - Number.parseFloat(f.deliveryProbability) / 100) < 0.005;
+                            const scale = Math.max(...result.sensitivity.profit.flat().map(Math.abs));
+                            return (
+                              <tr key={d}>
+                                <th scope="row" className={cn("num px-2 py-1 text-left font-medium", isCurrent ? "text-brand-strong" : "text-muted")}>{formatPercent(d, 0)}{isCurrent ? " ●" : ""}</th>
+                                {result.sensitivity.profit[i].map((v, j) => (
+                                  <td key={j} className={cn("num rounded px-2 py-1.5 text-right", v < 0 ? "text-negative" : "text-fg")} style={cellStyle(v, scale)}>{fmt(v)}</td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </MoreDetails>
               </>
             ) : null}
             <Card>

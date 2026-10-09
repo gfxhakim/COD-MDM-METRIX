@@ -2,10 +2,11 @@
 
 import type { SyncJobStatus } from "@prisma/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, EyeOff, FlaskConical, History, Link2, Loader2, RefreshCw, RotateCcw, Settings, SlidersHorizontal, Undo2 } from "lucide-react";
+import { AlertTriangle, Ban, EyeOff, FlaskConical, History, Link2, Loader2, RefreshCw, RotateCcw, Settings, SlidersHorizontal, Undo2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import { Money } from "@/components/app/format";
+import { MoreDetails, useMoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { ParcelStatusBadge } from "@/components/app/status";
 import { useCan } from "@/components/app/use-can";
@@ -170,7 +171,7 @@ function UnmatchedQueue() {
   const [linking, setLinking] = React.useState<{ trackingId: string; reference: string | null } | null>(null);
   const ignore = useMutation(trpc.sync.ignoreUnmatched.mutationOptions({ onSuccess: () => invalidate(), onError: (e) => toast("error", errorMessage(e)) }));
   return (
-    <Card>
+    <Card id="unmatched" className="scroll-mt-24">
       <CardHeader title="Unmatched parcels" description="Parcels MDM knows about that could not be tied to an order by order reference, earlier tracking-ID link or store order ID. They are never guessed." />
       <Tabs value={status} onValueChange={(v) => setStatus(v as typeof status)}>
         <TabsList className="px-3"><TabsTrigger value="OPEN">To review</TabsTrigger><TabsTrigger value="IGNORED">Ignored</TabsTrigger><TabsTrigger value="RESOLVED">Resolved</TabsTrigger></TabsList>
@@ -223,6 +224,8 @@ export function SyncView() {
   const [customOpen, setCustomOpen] = React.useState(false);
   const jobs = useQuery({ ...trpc.sync.list.queryOptions({ limit: 30 }), refetchInterval: (query) => (query.state.data?.some((j) => active(j.status)) ? 2000 : false) });
   const unknown = useQuery(trpc.sync.unknownStatuses.queryOptions());
+  const toReview = useQuery(trpc.sync.unmatched.queryOptions({ status: "OPEN" }));
+  const [more, setMore] = useMoreDetails("syncs");
   const [viewing, setViewing] = React.useState<string | null>(null);
   const running = jobs.data?.find((j) => active(j.status));
   const wasRunning = React.useRef(false);
@@ -235,12 +238,20 @@ export function SyncView() {
   const c = conn.data;
   const connected = c?.status === "CONNECTED";
   const unknownCount = unknown.data?.reduce((a, u) => a + u.parcels, 0) ?? 0;
+  const reviewCount = toReview.data?.length ?? 0;
+  // The newest run, when it didn't fully work: said up here, since the history is folded.
+  const last = jobs.data?.[0];
+  const lastBad = !running && last && (last.status === "FAILED" || last.status === "PARTIAL") ? last : null;
+  const review = () => {
+    setMore(true);
+    setTimeout(() => document.getElementById("unmatched")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
 
   return (
     <>
       <PageHeader
         title="MDM Express sync"
-        description="Parcels and their status history come from MDM in the background. Every run is recorded, re-running never duplicates anything, and parcels that can't be matched wait for review."
+        description="Your orders, parcels, money and stock come from MDM. It syncs by itself, and Sync now brings in what changed right away."
         actions={canRun ? (
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <Button variant="outline" disabled={!connected || !!running || !workspace.data} onClick={() => setCustomOpen(true)} title="Sync only the orders you pick, by date, status and more"><SlidersHorizontal /> Custom sync</Button>
@@ -250,7 +261,7 @@ export function SyncView() {
         ) : null}
       />
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className={`mb-6 grid gap-4 ${unknownCount ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         <Card className="p-4">
           <p className="text-xs text-muted">Connection</p>
           {!c ? <Loading /> : (
@@ -267,11 +278,13 @@ export function SyncView() {
           <p className="mt-1 text-xs text-muted">{c?.lastSuccessfulSyncAt ? formatDateTime(c.lastSuccessfulSyncAt) : "Parcel data shown in reports may be missing."}</p>
           {c?.status === "CONNECTED" ? <p className="mt-1 text-xs text-muted">Syncs automatically every {c.syncIntervalMinutes < 60 ? `${c.syncIntervalMinutes} min` : `${c.syncIntervalMinutes / 60} h`}.</p> : null}
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted">Unknown MDM statuses</p>
-          <p className={`num mt-1 text-lg font-semibold ${unknownCount ? "text-warning" : ""}`}>{unknownCount} parcel{unknownCount === 1 ? "" : "s"}</p>
-          <p className="mt-1 text-xs text-muted">Counted as neither delivered nor returned. {unknownCount ? <Link href="/settings?tab=mappings" className="font-semibold text-brand-strong hover:underline">Map statuses</Link> : null}</p>
-        </Card>
+        {unknownCount ? (
+          <Card className="p-4">
+            <p className="text-xs text-muted">Unknown MDM statuses</p>
+            <p className="num mt-1 text-lg font-semibold text-warning">{unknownCount} parcel{unknownCount === 1 ? "" : "s"}</p>
+            <p className="mt-1 text-xs text-muted">Counted as neither delivered nor returned. <Link href="/settings?tab=mappings" className="font-semibold text-brand-strong hover:underline">Map statuses</Link></p>
+          </Card>
+        ) : null}
       </div>
 
       {running ? (
@@ -302,40 +315,65 @@ export function SyncView() {
         </Card>
       ) : null}
 
+      {lastBad ? (
+        <Card className={`mb-6 ${lastBad.status === "FAILED" ? "border-negative/30" : "border-warning/30"}`}>
+          <CardBody className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <p className="flex items-start gap-2">
+              <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${lastBad.status === "FAILED" ? "text-negative" : "text-warning"}`} aria-hidden="true" />
+              <span>
+                <b>{lastBad.status === "FAILED" ? "The last sync failed" : "The last sync brought in only part of the data"}</b>
+                <span className="block text-xs text-muted">{formatDateTime(lastBad.createdAt)}. The next sync tries again.</span>
+              </span>
+            </p>
+            <Button size="sm" variant="outline" onClick={() => setViewing(lastBad.id)}>See what happened</Button>
+          </CardBody>
+        </Card>
+      ) : null}
+
       <div className="flex flex-col gap-6">
         {workspace.data ? <MdmProductsCard timezone={workspace.data.timezone} /> : null}
-        <UnmatchedQueue />
-        <Card>
-          <CardHeader title="Sync history" />
-          {jobs.error ? <ErrorState message={errorMessage(jobs.error)} /> : !jobs.data ? <Loading /> : !jobs.data.length ? (
-            <EmptyState icon={<History />} title="No syncs yet" description={connected ? "Run your first sync with Sync now." : "Connect MDM Express in Settings, then run a sync."} />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <THead><tr><Th>Started</Th><Th>Type</Th><Th>Status</Th><Th className="text-right">New orders</Th><Th className="text-right">Parcels added</Th><Th className="text-right">Updated</Th><Th className="text-right">Unchanged</Th><Th className="text-right">Failed</Th><Th className="text-right">Unmatched</Th><Th>Duration</Th></tr></THead>
-                <tbody>
-                  {jobs.data.map((j) => (
-                    <Tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
-                      <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(j.createdAt)}</Td>
-                      <Td className="text-xs">
-                        {MODE_LABEL[j.mode] ?? j.mode} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}
-                        {j.mode === "CUSTOM" ? <span className="block max-w-64 truncate text-[11px] text-muted" title={choicesOf(j) ?? undefined}>{choicesOf(j)}</span> : null}
-                      </Td>
-                      <Td><Badge tone={JOB_TONE[j.status]}>{JOB_LABEL[j.status]}</Badge></Td>
-                      <Td className="num text-right">{j.ordersAddedCount}</Td>
-                      <Td className="num text-right">{j.addedCount}</Td>
-                      <Td className="num text-right">{j.updatedCount}</Td>
-                      <Td className="num text-right text-muted">{j.unchangedCount}</Td>
-                      <Td className={`num text-right ${j.failedCount ? "text-negative" : "text-muted"}`}>{j.failedCount}</Td>
-                      <Td className={`num text-right ${j.unmatchedCount ? "text-warning" : "text-muted"}`}>{j.unmatchedCount}</Td>
-                      <Td className="text-xs text-muted">{duration(j.startedAt, j.finishedAt)}</Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          )}
-        </Card>
+        {reviewCount && !more ? (
+          <Card className="border-warning/30">
+            <CardBody className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <p><b className="num">{reviewCount}</b> parcel{reviewCount === 1 ? "" : "s"} from MDM couldn&apos;t be tied to an order. {reviewCount === 1 ? "It waits" : "They wait"} for you to link or ignore {reviewCount === 1 ? "it" : "them"}.</p>
+              <Button size="sm" variant="outline" onClick={review}>Review {reviewCount === 1 ? "it" : "them"}</Button>
+            </CardBody>
+          </Card>
+        ) : null}
+        <MoreDetails id="syncs" hint="Parcels to review, and every past sync with what it brought in.">
+          <UnmatchedQueue />
+          <Card>
+            <CardHeader title="Sync history" />
+            {jobs.error ? <ErrorState message={errorMessage(jobs.error)} /> : !jobs.data ? <Loading /> : !jobs.data.length ? (
+              <EmptyState icon={<History />} title="No syncs yet" description={connected ? "Run your first sync with Sync now." : "Connect MDM Express in Settings, then run a sync."} />
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <THead><tr><Th>Started</Th><Th>Type</Th><Th>Status</Th><Th className="text-right">New orders</Th><Th className="text-right">Parcels added</Th><Th className="text-right">Updated</Th><Th className="text-right">Unchanged</Th><Th className="text-right">Failed</Th><Th className="text-right">Unmatched</Th><Th>Duration</Th></tr></THead>
+                  <tbody>
+                    {jobs.data.map((j) => (
+                      <Tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
+                        <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(j.createdAt)}</Td>
+                        <Td className="text-xs">
+                          {MODE_LABEL[j.mode] ?? j.mode} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}
+                          {j.mode === "CUSTOM" ? <span className="block max-w-64 truncate text-[11px] text-muted" title={choicesOf(j) ?? undefined}>{choicesOf(j)}</span> : null}
+                        </Td>
+                        <Td><Badge tone={JOB_TONE[j.status]}>{JOB_LABEL[j.status]}</Badge></Td>
+                        <Td className="num text-right">{j.ordersAddedCount}</Td>
+                        <Td className="num text-right">{j.addedCount}</Td>
+                        <Td className="num text-right">{j.updatedCount}</Td>
+                        <Td className="num text-right text-muted">{j.unchangedCount}</Td>
+                        <Td className={`num text-right ${j.failedCount ? "text-negative" : "text-muted"}`}>{j.failedCount}</Td>
+                        <Td className={`num text-right ${j.unmatchedCount ? "text-warning" : "text-muted"}`}>{j.unmatchedCount}</Td>
+                        <Td className="text-xs text-muted">{duration(j.startedAt, j.finishedAt)}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+          </Card>
+        </MoreDetails>
       </div>
       {viewing ? <JobDialog id={viewing} onClose={() => setViewing(null)} /> : null}
       {customOpen && workspace.data ? <CustomSyncPanel workspaceId={workspace.data.id} timezone={workspace.data.timezone} demo={c?.adapter === "mock"} onClose={() => setCustomOpen(false)} onStarted={invalidate} /> : null}
