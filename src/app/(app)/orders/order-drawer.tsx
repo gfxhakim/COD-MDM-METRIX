@@ -76,7 +76,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                   ["Second phone", <PhoneLink key="p2" value={o.customer?.phone2} />],
                   ["Delivery", o.deliveryType === "STOP_DESK" ? "Stop desk" : o.deliveryType === "HOME" ? "Home delivery" : "—"],
                   ["Address", o.customer?.address ?? "—"],
-                  ["Commune · wilaya", [o.city, o.wilaya].filter(Boolean).join(" · ") || "—"],
+                  ["Commune · wilaya", o.city || o.wilaya ? <span key="w">{o.city ? <bdi>{o.city}</bdi> : null}{o.city && o.wilaya ? " · " : null}{o.wilaya ? <bdi>{o.wilaya}</bdi> : null}</span> : "—"],
                 ]}
               />
             </Section>

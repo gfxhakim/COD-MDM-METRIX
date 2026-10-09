@@ -175,7 +175,8 @@ describe("custom MDM sync", () => {
     const carrier = options.groups.find((g) => g.key === "carrier")!;
     expect(carrier.statuses.map((s) => s.key)).toEqual(expect.arrayContaining(["dispatched", "out_for_delivery"]));
     expect(carrier.statuses.findIndex((s) => s.key === "dispatched")).toBeLessThan(carrier.statuses.findIndex((s) => s.key === "out_for_delivery"));
-    expect(options.wilayas).toEqual(["Alger", "Béjaïa", "Oran"]);
+    // One Arabic name per wilaya, in number order: Béjaïa (06), Alger (16), Oran (31).
+    expect(options.wilayas).toEqual(["بجاية", "الجزائر", "وهران"]);
     expect(options.stores).toEqual(["Main store", "Second store"]);
     expect(options.products).toEqual(["Lamp", "Lampe LED"]);
   });

@@ -19,6 +19,7 @@ import {
   type MdmWalletAmounts,
 } from "./types";
 import type { MdmRequest } from "./live";
+import { mdmWilaya } from "@/domain/wilayas";
 
 /**
  * The seller's money and stock at MDM, read from the endpoints MDM's OpenAPI document lists
@@ -198,7 +199,7 @@ export function parsePrices(body: unknown): MdmPriceList {
   const shipping = isObj(b.shipping) ? b.shipping : {};
   const delivery: MdmDeliveryPrice[] = (Array.isArray(shipping.deliveryFees) ? shipping.deliveryFees : []).filter(isObj).flatMap((f) => {
     const state = isObj(f.state) ? f.state : {};
-    const wilaya = str(state.name) ?? str(state.code);
+    const wilaya = mdmWilaya(str(state.name), str(state.code));
     return wilaya ? [{ wilaya, code: str(state.code), home: money(f.home, currency), stopDesk: money(f.stopdesk, currency), return: money(f.return, currency), exchange: money(f.exchange, currency) }] : [];
   });
   const ex = isObj(b.exchange) ? b.exchange : {};

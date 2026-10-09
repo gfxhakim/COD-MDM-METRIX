@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
+import { WILAYAS, wilayaLabel } from "@/domain/wilayas";
 import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { toDateInput } from "@/lib/utils";
@@ -96,7 +97,12 @@ export function NewOrderDialog({ onClose }: { onClose: () => void }) {
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="COD amount" htmlFor="cod" hint="Defaults to the line total"><MoneyInput id="cod" currency={currency} value={f.cod} onChange={(v) => setF({ ...f, cod: v })} /></Field>
-            <Field label="Wilaya" htmlFor="wi"><Input id="wi" value={f.wilaya} onChange={set("wilaya")} /></Field>
+            <Field label="Wilaya" htmlFor="wi">
+              <Select id="wi" value={f.wilaya} onChange={set("wilaya")}>
+                <option value="">Pick a wilaya</option>
+                {WILAYAS.map((w) => <option key={w.code} value={w.ar}>{wilayaLabel(w.ar)}</option>)}
+              </Select>
+            </Field>
             <Field label="City" htmlFor="ci"><Input id="ci" value={f.city} onChange={set("city")} /></Field>
             <Field label="Phone" htmlFor="ph" hint="Stored only as a hash + mask"><Input id="ph" type="tel" value={f.phone} onChange={set("phone")} autoComplete="off" /></Field>
             <Field label="UTM campaign" htmlFor="uc"><Input id="uc" value={f.utmCampaign} onChange={set("utmCampaign")} /></Field>

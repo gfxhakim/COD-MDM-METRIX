@@ -1,6 +1,7 @@
 import type { AdPlatform, NormalizedStatus, OrderStatus, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { CONFIRMING_STATES, normalizeProviderStatus } from "@/domain/statusMapping";
+import { wilayaName } from "@/domain/wilayas";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone } from "@/lib/pii";
 import { customerKey, normalizeCustomer, openCustomer, sealCustomer } from "@/server/customers";
@@ -251,7 +252,7 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
           ...phone,
           ...sealed(null),
           ...details,
-          wilaya: o.wilaya,
+          wilaya: wilayaName(o.wilaya),
           city: o.city,
           codAmount: o.total ?? lines.reduce((a, l) => a + l.quantity * l.unitPrice, 0),
           currency: o.currency,
@@ -275,10 +276,10 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
         ...sealed(existing),
         ...details,
         ...(fromMdm
-          ? { placedAt: o.placedAt, ...phone, wilaya: o.wilaya, city: o.city, codAmount: o.total ?? existing.codAmount, currency: o.currency }
+          ? { placedAt: o.placedAt, ...phone, wilaya: wilayaName(o.wilaya), city: o.city, codAmount: o.total ?? existing.codAmount, currency: o.currency }
           : {
               ...(!existing.phoneHash && o.phone ? phone : {}),
-              ...(!existing.wilaya && o.wilaya ? { wilaya: o.wilaya, city: o.city } : {}),
+              ...(!existing.wilaya && o.wilaya ? { wilaya: wilayaName(o.wilaya), city: o.city } : {}),
             }),
         ...(fillUtm ? utmData : {}),
         ...upsell,

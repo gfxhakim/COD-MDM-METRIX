@@ -2,6 +2,7 @@ import { z } from "zod";
 import { shortDay } from "@/lib/dateRanges";
 import { STATUS_GROUPS, statusGroupLabel, type StatusGroupKey } from "./orderExport";
 import { providerStatusLabel } from "./statusMapping";
+import { sameWilaya } from "./wilayas";
 
 /**
  * Custom MDM syncs: a one-off read of only the MDM orders a user picks (by dates, statuses,
@@ -103,7 +104,7 @@ export function matchesCustomSync(f: CustomSyncFilters, o: CustomSyncCandidate):
   if (f.fromAt && at < new Date(f.fromAt)) return false;
   if (f.toAt && at > new Date(f.toAt)) return false;
   if ((f.groups?.length || f.statuses?.length) && !o.statuses.some((s) => f.groups?.includes(s.group) || f.statuses?.includes(s.key))) return false;
-  if (!inList(f.wilayas, o.wilaya) || !inList(f.stores, o.storeName)) return false;
+  if ((f.wilayas?.length && !f.wilayas.some((w) => sameWilaya(w, o.wilaya))) || !inList(f.stores, o.storeName)) return false;
   if (f.deliveryType && o.deliveryType !== f.deliveryType) return false;
   if (f.products?.length && !o.productNames.some((n) => inList(f.products, n))) return false;
   if ((f.ad === "with" && !o.hasAd) || (f.ad === "without" && o.hasAd)) return false;

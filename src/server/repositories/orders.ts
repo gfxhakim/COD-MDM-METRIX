@@ -1,5 +1,6 @@
 import type { NormalizedStatus, OrderSource, OrderStatus, Prisma } from "@prisma/client";
 import type { AdFilter } from "@/domain/adFilter";
+import { sortWilayas, wilayaName } from "@/domain/wilayas";
 import { db } from "@/server/db";
 import { audit } from "@/server/audit";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
@@ -117,7 +118,7 @@ export async function listOrderFacets(ctx: WorkspaceContext) {
     db.product.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.creative.findMany({ where: { workspaceId: ctx.workspaceId }, select: { id: true, externalCreativeId: true, name: true }, orderBy: { externalCreativeId: "asc" } }),
   ]);
-  return { wilayas: wilayas.map((w) => w.wilaya!).filter(Boolean), products, creatives };
+  return { wilayas: sortWilayas(wilayas.map((w) => w.wilaya)), products, creatives };
 }
 
 export async function getOrderDetails(ctx: WorkspaceContext, id: string) {
@@ -183,7 +184,7 @@ export async function createManualOrder(ctx: WorkspaceContext, input: ManualOrde
         status: input.status,
         confirmedAt: input.status === "CONFIRMED" ? new Date() : null,
         canceledAt: input.status === "CANCELED" ? new Date() : null,
-        wilaya: input.wilaya || null,
+        wilaya: wilayaName(input.wilaya),
         city: input.city || null,
         phoneHash: input.phone ? hashPhone(input.phone, ctx.workspaceId) : null,
         phoneMasked: input.phone ? maskPhone(input.phone) : null,

@@ -22,7 +22,7 @@ const rand = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 429496
 const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rand() * xs.length)];
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
-const WILAYAS = ["Alger", "Oran", "Constantine", "Sétif", "Blida", "Béjaïa", "Tizi Ouzou", "Annaba", "Batna", "Tlemcen"] as const;
+const WILAYAS = ["الجزائر", "وهران", "قسنطينة", "سطيف", "البليدة", "بجاية", "تيزي وزو", "عنابة", "باتنة", "تلمسان"] as const;
 
 const STATUS_PATHS: Record<string, string[]> = {
   delivered: ["pending", "preparing", "packaged", "dispatched", "in delivery", "delivered"],
@@ -171,7 +171,7 @@ async function seedMain() {
   const orphan = await db.parcel.create({
     data: {
       workspaceId: w, provider: "MDM_EXPRESS", trackingId: `MDM-DEMO-${trackingSeq++}`, providerReference: "ES-99999", providerStatus: "delivered", normalizedStatus: "DELIVERED",
-      codAmount: DZD(3900), wilaya: "Oran", deliveredAt: new Date(now - 2 * DAY), lastProviderUpdateAt: new Date(now - 2 * DAY), isDemoFixture: true,
+      codAmount: DZD(3900), wilaya: "وهران", deliveredAt: new Date(now - 2 * DAY), lastProviderUpdateAt: new Date(now - 2 * DAY), isDemoFixture: true,
       events: { create: [{ workspaceId: w, providerStatus: "delivered", normalizedStatus: "DELIVERED", occurredAt: new Date(now - 2 * DAY), source: "DEMO_FIXTURE", eventHash: sha("orphan-delivered") }] },
     },
   });
@@ -224,7 +224,7 @@ async function seedOther() {
   const p = await db.product.create({ data: { workspaceId: ws.id, name: "Secret Serum", sku: "SS-01", costVersions: { create: { workspaceId: ws.id, effectiveFrom: new Date("2000-01-01T00:00:00Z"), salePrice: DZD(5500), sourcingCost: DZD(1200), forwardShippingFee: DZD(600), rtoFee: DZD(250), callCenterFee: DZD(100), packagingFee: DZD(60) } } } });
   for (let i = 0; i < 5; i++) {
     const n = `OB-${500 + i}`;
-    await db.order.create({ data: { workspaceId: ws.id, source: "SHOPIFY", externalOrderId: `sh_${i}`, orderNumber: n, normalizedOrderNumber: normalizeReference(n), placedAt: new Date(Date.now() - i * DAY), codAmount: DZD(5500), wilaya: "Oran", lines: { create: { workspaceId: ws.id, productId: p.id, sku: p.sku, productName: p.name, quantity: 1, unitPrice: DZD(5500) } } } });
+    await db.order.create({ data: { workspaceId: ws.id, source: "SHOPIFY", externalOrderId: `sh_${i}`, orderNumber: n, normalizedOrderNumber: normalizeReference(n), placedAt: new Date(Date.now() - i * DAY), codAmount: DZD(5500), wilaya: "وهران", lines: { create: { workspaceId: ws.id, productId: p.id, sku: p.sku, productName: p.name, quantity: 1, unitPrice: DZD(5500) } } } });
   }
 }
 

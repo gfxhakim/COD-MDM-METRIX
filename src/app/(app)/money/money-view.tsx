@@ -19,6 +19,7 @@ import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { ACCOUNT_PART_LABEL, ACCOUNT_PARTS, mdmWords, type AccountPart, type PartState } from "@/domain/mdmAccount";
+import { sameWilaya } from "@/domain/wilayas";
 import { RANGES, rangeDays, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import type { AppRouter } from "@/server/trpc/root";
@@ -435,7 +436,7 @@ function Prices({ data }: { data: Overview }) {
   const [all, setAll] = React.useState(false);
   const p = data.prices;
   const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const rows = p ? p.delivery.filter((d) => !q || norm(d.wilaya).includes(norm(q)) || d.code === q.trim()) : [];
+  const rows = p ? p.delivery.filter((d) => !q || norm(d.wilaya).includes(norm(q)) || d.code === q.trim() || sameWilaya(q, d.wilaya)) : [];
   const shown = all || q ? rows : rows.slice(0, 8);
   return (
     <Card className="min-w-0">

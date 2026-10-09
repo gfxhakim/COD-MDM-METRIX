@@ -273,7 +273,11 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.locator("li li", { hasText: "COD" }).first()).toBeVisible();
     await expect(page.locator("tr", { hasText: "DEMO-BLK" })).toContainText("142");
     await expect(page.getByText("Expected 350")).toBeVisible();
-    await expect(page.locator("tr", { hasText: "Alger" })).toBeVisible();
+    // Every wilaya shows under its one Arabic name, and its French name still finds it.
+    await expect(page.locator("tr", { hasText: "الجزائر" })).toBeVisible();
+    await page.getByLabel("Find a wilaya").fill("Oran");
+    await expect(page.locator("tr", { hasText: "وهران" })).toBeVisible();
+    await expect(page.locator("tr", { hasText: "الجزائر" })).toHaveCount(0);
   });
 
   test("17. see what a product's stock earns before ads, with ads and fees, and save its numbers", async ({ page }) => {

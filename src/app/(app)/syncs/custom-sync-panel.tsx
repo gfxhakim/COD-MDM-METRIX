@@ -10,6 +10,7 @@ import { Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { CUSTOM_SYNC_MAX_ORDERS, describeCustomSync, parseOrderIds, type CustomSyncChoices } from "@/domain/customSync";
 import { STATUS_GROUPS, type StatusGroupKey } from "@/domain/orderExport";
+import { wilayaLabel } from "@/domain/wilayas";
 import { addDays, RANGES, rangeDays, shortDay, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
@@ -60,14 +61,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /** Pick several names from a list: a native select to add one, removable pills for those picked. */
-function MultiPick({ label, all, picked, onChange, placeholder }: { label: string; all: string[]; picked: string[]; onChange: (v: string[]) => void; placeholder: string }) {
+function MultiPick({ label, all, picked, onChange, placeholder, show = (v) => v }: { label: string; all: string[]; picked: string[]; onChange: (v: string[]) => void; placeholder: string; show?: (v: string) => string }) {
   const left = all.filter((v) => !picked.includes(v));
   return (
     <Row label={label}>
       <div className="flex w-full min-w-0 flex-col gap-1.5">
         <Select aria-label={`Add a ${label.toLowerCase()}`} value="" disabled={!left.length} onChange={(e) => e.target.value && onChange([...picked, e.target.value])} className="h-8 text-[13px]">
           <option value="">{picked.length ? `Add another (${picked.length} picked)` : placeholder}</option>
-          {left.map((v) => <option key={v} value={v}>{v}</option>)}
+          {left.map((v) => <option key={v} value={v}>{show(v)}</option>)}
         </Select>
         {picked.length ? (
           <div className="flex flex-wrap gap-1.5">
@@ -229,7 +230,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
 
           <Section title="More filters">
             <div className="flex flex-col gap-3 rounded-2xl border border-border p-3">
-              <MultiPick label="Wilaya" all={options.data?.wilayas ?? []} picked={s.wilayas} onChange={(v) => set("wilayas", v)} placeholder="Every wilaya" />
+              <MultiPick label="Wilaya" all={options.data?.wilayas ?? []} picked={s.wilayas} onChange={(v) => set("wilayas", v)} placeholder="Every wilaya" show={wilayaLabel} />
               <Row label="Delivery">
                 <Chip active={!s.deliveryType} onClick={() => set("deliveryType", "")}>Any</Chip>
                 <Chip active={s.deliveryType === "HOME"} onClick={() => set("deliveryType", "HOME")}>Home</Chip>

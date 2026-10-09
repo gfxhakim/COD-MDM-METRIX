@@ -65,7 +65,7 @@ describe("MDM account responses", () => {
       currency: "DZD",
       callCenter: { type: "standard", perLead: 0, perConfirmed: 10000, perDelivered: 0, upsellExtra: 5000 },
       fulfilment: { type: "standard", perDispatched: 5000, perDelivered: 0, maxItems: 3, extraPerItem: 2000 },
-      delivery: [{ wilaya: "Alger", code: "16", home: 40000, stopDesk: 25000, return: 20000, exchange: 40000 }],
+      delivery: [{ wilaya: "الجزائر", code: "16", home: 40000, stopDesk: 25000, return: 20000, exchange: 40000 }],
       usdRate: 245,
       euroRate: null,
     });

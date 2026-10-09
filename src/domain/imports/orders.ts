@@ -3,6 +3,7 @@ import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import type { ParsedCsv } from "./csv";
 import { cell, currencyOf, int, money, RowError, type Mapping, type RowIssue } from "./common";
 import { parseDate, type DateFormat } from "./dates";
+import { wilayaName } from "../wilayas";
 
 export type ProductRef = { id: string; sku: string; name: string; salePrice: number | null };
 
@@ -156,7 +157,7 @@ export function validateOrders(
       currency,
       phone: first("phone") || null,
       customerRef: first("customerId") || null,
-      wilaya: first("wilaya") || null,
+      wilaya: wilayaName(first("wilaya")),
       city: first("city") || null,
       ...utm,
       creativeKey: normalizeCreativeKey(utm.utmContent) || null,
