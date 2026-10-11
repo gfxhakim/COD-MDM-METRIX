@@ -1,5 +1,6 @@
 import type { AdPlatform, NormalizedStatus, OrderStatus, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { mdmProductIdOf } from "@/domain/mdmChoices";
 import { CONFIRMING_STATES, normalizeProviderStatus } from "@/domain/statusMapping";
 import { wilayaName } from "@/domain/wilayas";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
@@ -125,7 +126,7 @@ async function productForMdm(env: OrderSyncEnv, id: string, line: MdmOrder["prod
 async function resolveLines(env: OrderSyncEnv, o: MdmOrder): Promise<Line[]> {
   const lines: Line[] = [];
   for (const l of o.products) {
-    const mdmProductId = mdmId(l.variantOf ?? l.ref);
+    const mdmProductId = mdmProductIdOf(l);
     const active = env.products.filter((p) => p.active);
     const product = mdmProductId ? await productForMdm(env, mdmProductId, l, o.currency) : (matchProduct(env.products, [l.name], l.name) ?? (active.length === 1 ? active[0] : null));
     lines.push({
@@ -181,6 +182,15 @@ async function findStoreOrder(tx: Prisma.TransactionClient, workspaceId: string,
   if (!ref) return null;
   const byNumber = await tx.order.findMany({ where: { workspaceId, mdmOrderId: null, normalizedOrderNumber: ref }, include: orderInclude, take: 2 });
   return byNumber.length === 1 ? byNumber[0] : null;
+}
+
+/** The MDM orders on this list that are already in the app: synced from MDM before, or imported from the store. */
+export async function ordersInApp(workspaceId: string, orders: MdmOrder[]): Promise<Set<string>> {
+  if (!orders.length) return new Set();
+  const synced = await db.order.findMany({ where: { workspaceId, mdmOrderId: { in: orders.map((o) => o.trackingId) } }, select: { mdmOrderId: true } });
+  const found = new Set(synced.map((o) => o.mdmOrderId!));
+  for (const o of orders) if (!found.has(o.trackingId) && o.externalId && (await findStoreOrder(db, workspaceId, o.externalId))) found.add(o.trackingId);
+  return found;
 }
 
 function same(a: unknown, b: unknown) {

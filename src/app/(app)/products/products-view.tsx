@@ -7,6 +7,7 @@ import * as React from "react";
 import { useMoney } from "@/components/app/currency";
 import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, rateInput, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
+import { MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -299,6 +300,7 @@ export function ProductsView() {
   const rates: Rates = ws.data?.exchangeRates ?? {};
   // Phones get one card per product instead of a twelve-column table.
   const phone = useMedia(PHONE);
+  const [more, setMore] = useMoreDetails("products");
 
   const nameBlock = (p: ProductRow) => (
     <span className="flex min-w-0 flex-col gap-1">
@@ -348,10 +350,15 @@ export function ProductsView() {
     <>
       <PageHeader
         title="Products & unit economics"
-        description="Costs are versioned by effective date. Changing a price never rewrites historical profit."
+        description="What each product sells for and costs. A new price counts from its day on, never for past orders."
         actions={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> New product</Button> : null}
       />
       <Card>
+        {products.data?.length ? (
+          <div className="flex justify-end px-3 pt-3">
+            <MoreDetailsButton open={more} onToggle={setMore} what="details" />
+          </div>
+        ) : null}
         {products.error ? <ErrorState message={errorMessage(products.error)} /> : products.isLoading ? <Loading /> : !products.data?.length ? (
           <EmptyState icon={<Package />} title="No products yet" description="Products MDM sends with your orders appear here after a sync. You can also add one by hand. Then enter each product's costs to unlock profit." action={canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> New product</Button> : null} />
         ) : phone ? (
@@ -390,15 +397,19 @@ export function ProductsView() {
             <THead>
               <tr>
                 <Th>Product</Th>
-                <Th>SKU</Th>
+                {more ? <Th>SKU</Th> : null}
                 <Th className="text-right">Sale price</Th>
                 <Th className="text-right"><Term label="Sourcing" definition="Cost of goods per delivered unit (COGS)." /></Th>
-                <Th className="text-right">Shipping</Th>
-                <Th className="text-right"><Term label="RTO fee" definition="Fee charged by the carrier for each parcel returned to origin." /></Th>
-                <Th className="text-right">Call center</Th>
-                <Th className="text-right">Packaging</Th>
+                {more ? (
+                  <>
+                    <Th className="text-right">Shipping</Th>
+                    <Th className="text-right"><Term label="RTO fee" definition="Fee charged by the carrier for each parcel returned to origin." /></Th>
+                    <Th className="text-right">Call center</Th>
+                    <Th className="text-right">Packaging</Th>
+                  </>
+                ) : null}
                 <Th><Term label="Ads" definition="Campaigns and whole ad accounts linked to this product. Edit the product to change them, or link campaigns on the Campaigns page." /></Th>
-                <Th>Costs since</Th>
+                {more ? <Th>Costs since</Th> : null}
                 <Th>Status</Th>
                 <Th><span className="sr-only">Actions</span></Th>
               </tr>
@@ -407,15 +418,15 @@ export function ProductsView() {
               {products.data.map((p) => (
                 <Tr key={p.id}>
                   <Td>{nameBlock(p)}</Td>
-                  <Td className="font-mono text-xs text-muted">{p.sku}</Td>
-                  {(["salePrice", "sourcingCost", "forwardShippingFee", "rtoFee", "callCenterFee", "packagingFee"] as const).map((k) => (
+                  {more ? <Td className="font-mono text-xs text-muted">{p.sku}</Td> : null}
+                  {(more ? (["salePrice", "sourcingCost", "forwardShippingFee", "rtoFee", "callCenterFee", "packagingFee"] as const) : (["salePrice", "sourcingCost"] as const)).map((k) => (
                     <Td key={k} className="num text-right">
                       {p.currentCost ? money.fmt(p.currentCost[k], p.currency) : "—"}
                       {k === "sourcingCost" && p.currentCost ? <OriginalAmount amount={p.currentCost.sourcingCostOriginal} currency={p.currentCost.sourcingCurrency} rate={p.currentCost.sourcingFxRate} /> : null}
                     </Td>
                   ))}
                   <Td className="text-xs text-muted">{adsLink(p)}</Td>
-                  <Td className="text-xs text-muted">{p.currentCost ? formatDate(p.currentCost.effectiveFrom) : "—"} <span className="text-subtle">· v{p.versionCount}</span></Td>
+                  {more ? <Td className="text-xs text-muted">{p.currentCost ? formatDate(p.currentCost.effectiveFrom) : "—"} <span className="text-subtle">· v{p.versionCount}</span></Td> : null}
                   <Td>{p.active ? <Badge tone="positive">Active</Badge> : <Badge>Inactive</Badge>}</Td>
                   <Td>{actions(p)}</Td>
                 </Tr>
@@ -424,7 +435,7 @@ export function ProductsView() {
           </Table>
         )}
       </Card>
-      <MdmProducts products={products.data ?? []} canWrite={canWrite} />
+      {more ? <MdmProducts products={products.data ?? []} canWrite={canWrite} /> : null}
       {creating ? <ProductDialog open onOpenChange={setCreating} currency={currency} rates={rates} products={products.data ?? []} /> : null}
       {editing ? <ProductDialog product={editing} open onOpenChange={(o) => !o && setEditing(null)} currency={currency} rates={rates} products={products.data ?? []} /> : null}
       {versioning ? <CostVersionDialog product={versioning} open onOpenChange={(o) => !o && setVersioning(null)} rates={rates} /> : null}

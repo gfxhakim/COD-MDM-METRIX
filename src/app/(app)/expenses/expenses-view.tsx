@@ -10,6 +10,7 @@ import { useMoney } from "@/components/app/currency";
 import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
 import { FitMoney } from "@/components/app/fit-money";
 import { minorToInput } from "@/components/app/money-input";
+import { MoreDetails, MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -447,12 +448,13 @@ export function ExpensesView() {
   const periodLabel = range === "all" ? "So far" : range === "custom" ? "These days" : (RANGES.find((r) => r.key === range)?.label ?? "");
   const running = recurring.data?.filter((r) => r.running).length ?? 0;
   const clear = () => { setCategory(""); setScope(""); setType(""); setSearch(""); };
+  const [moreFilters, setMoreFilters] = useMoreDetails("expenses-filters");
 
   return (
     <>
       <PageHeader
         title="Expenses"
-        description="Every cost of the business, once or repeating. Expenses for the whole business are shared across products in profit, by the rule in Settings → Economics."
+        description="Every cost of the business, once or repeating, your pay included."
         actions={
           <>
             <Button variant="secondary" onClick={() => setDialog({ kind: "export" })} className="flex-1 sm:flex-none"><Download /> Export</Button>
@@ -484,6 +486,9 @@ export function ExpensesView() {
           <option value="">All categories</option>
           <CategoryOptions categories={categories.data ?? []} />
         </Select>
+        <MoreDetailsButton open={moreFilters || !!scope || !!type} onToggle={(o) => { setMoreFilters(o); if (!o) { setScope(""); setType(""); } }} what="filters" className="col-span-2 justify-self-start" />
+        {moreFilters || scope || type ? (
+          <>
         <Select aria-label="Counts for" value={scope} onChange={(e) => setScope(e.target.value)} className="col-span-2 w-full sm:w-56">
           <option value="">Business and products</option>
           <option value="GLOBAL">The whole business</option>
@@ -493,6 +498,8 @@ export function ExpensesView() {
         <Select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)} className={cn("w-full sm:w-44", !filtered && "col-span-2")}>
           <option value="">Fixed and variable</option><option value="FIXED">Fixed</option><option value="VARIABLE">Variable</option>
         </Select>
+          </>
+        ) : null}
         {filtered ? <Button variant="ghost" onClick={clear}>Clear filters</Button> : null}
       </div>
 
@@ -520,8 +527,7 @@ export function ExpensesView() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-6">
           <RepeatingCard rows={recurring.data} currency={currency} canWrite={canWrite} today={today} periodLabel={periodLabel} onAdd={() => setDialog({ kind: "new", repeats: true })} onEdit={(row) => setDialog({ kind: "recurring", row })} />
 
           <Card className="min-w-0">
@@ -582,9 +588,10 @@ export function ExpensesView() {
               </>
             )}
           </Card>
-        </div>
+      </div>
 
-        <div className="flex min-w-0 flex-col gap-6">
+      <MoreDetails id="expenses" hint="Totals by category, by product and for each month." className="mt-6">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
           <Card>
             <CardHeader title="By category" description="One-off and repeating together." />
             {!s ? <Skeleton className="mx-5 mb-5 h-32" /> : <Bars rows={s.byCategory.map((c) => ({ key: c.category, label: c.name ?? categoryLabel(c.category), amount: c.amount }))} total={s.total} currency={currency} empty="No expenses in these days." />}
@@ -615,7 +622,7 @@ export function ExpensesView() {
             </CardBody>
           </Card>
         </div>
-      </div>
+      </MoreDetails>
 
       {dialog?.kind === "new" ? <ExpenseDialog initialRepeats={dialog.repeats ? "MONTHLY" : "ONCE"} onClose={() => setDialog(null)} currency={currency} rates={rates} today={today} /> : null}
       {dialog?.kind === "expense" ? <ExpenseDialog expense={dialog.row} onClose={() => setDialog(null)} currency={currency} rates={rates} today={today} /> : null}

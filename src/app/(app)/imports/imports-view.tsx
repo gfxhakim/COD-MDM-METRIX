@@ -27,7 +27,7 @@ export function ImportsView({ tab }: { tab: string }) {
 
   return (
     <>
-      <PageHeader title="Imports" description="Bring in orders, Meta ad spend, expenses and bank statements from CSV. Every import is validated before anything is written, and re-importing the same file never double counts." />
+      <PageHeader title="Imports" description="Add orders, Meta ad spend, expenses or bank statements from a file. Nothing is saved before you check it, and the same file never counts twice." />
       <Tabs value={active} onValueChange={(v) => router.replace(`${pathname}?tab=${v}`, { scroll: false })}>
         <TabsList className="mb-6">
           {TABS.map(([t, kind]) => (

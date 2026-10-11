@@ -10,6 +10,7 @@ import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/sta
 import { wilayaName } from "@/domain/wilayas";
 import { normalizeReference } from "@/lib/normalize";
 import { syncMdmAccount } from "./account";
+import { loadChoices, skippedParcels, sortOrders } from "./choices";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { anyShipped, customOrderPlan, customParcelsSince, matchedOrderIds, PARCEL_BATCH, pickCustomOrders, readStep, resolveCustomSync, writeStep } from "./custom";
 import { redactPayload, sha256, stableStringify } from "./redact";
@@ -85,8 +86,10 @@ export async function enqueueSync(workspaceId: string, input: { mode: "INCREMENT
   const existing = await db.syncJob.findUnique({ where: { activeLock: lockKey(workspaceId) } });
   if (existing) return { job: existing, alreadyRunning: true };
   // Until a sync has read MDM orders, the next one re-reads everything once so parcels
-  // synced earlier are linked to their MDM orders.
-  const since = connection.ordersSyncedAt ? connection.lastSuccessfulSyncAt : null;
+  // synced earlier are linked to their MDM orders. The same once someone chose to bring in more
+  // MDM products or older days, so the orders skipped until then come in.
+  const widened = !!connection.choicesWidenedAt && !!connection.ordersSyncedAt && connection.choicesWidenedAt > connection.ordersSyncedAt;
+  const since = connection.ordersSyncedAt && !widened ? connection.lastSuccessfulSyncAt : null;
   const updatedSince = input.mode === "INCREMENTAL" && since ? new Date(since.getTime() - INCREMENTAL_OVERLAP_MS) : null;
   const mode = input.mode === "CUSTOM" ? "CUSTOM" : updatedSince ? "INCREMENTAL" : "FULL";
   try {
@@ -232,6 +235,7 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
       if (custom && !adapter.listOrders) return finish(job, "FAILED", counters, CUSTOM_NEEDS_ORDERS);
       if (adapter.listOrders) {
         const env = await loadOrderSyncEnv(ws, overrides);
+        const choices = await loadChoices(ws);
         let history = !!adapter.orderUtm && !ordersNote;
         let plan = custom ? customOrderPlan(custom) : null;
         let at = readStep(custom ? cursor : null);
@@ -262,7 +266,10 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
             counters.failed++;
             await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: id.slice(0, 200), result: "FAILED", error: "MDM sent this order in an unexpected shape, so it was skipped." } });
           }
-          let items = result.items;
+          // Orders of MDM products not brought in are left out; orders already in the app still update.
+          const sorted = await sortOrders(ws, choices, result.items);
+          counters.skipped += sorted.skipped.length;
+          let items = sorted.kept;
           if (custom) {
             // Orders that don't match are left exactly as they are.
             const picked = await pickCustomOrders(ws, job.id, custom, items, overrides, at.step > 0 || !!custom.fallbackOrders);
@@ -371,7 +378,9 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
       for (;;) {
         if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
         const result = await withRetry(() => adapter.listParcels({ cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
-        for (const p of result.items) await saveParcel(p);
+        // Parcels of orders skipped by the product choices are skipped with them.
+        const skip = await skippedParcels(ws, result.items);
+        for (const p of result.items) if (!p.mdmOrderId || !skip.has(p.mdmOrderId)) await saveParcel(p);
         page++;
         cursor = result.nextCursor;
         await db.syncJob.update({

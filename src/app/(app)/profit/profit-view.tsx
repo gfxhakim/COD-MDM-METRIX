@@ -9,6 +9,7 @@ import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { useMoney } from "@/components/app/currency";
 import { FitText, FitMoney } from "@/components/app/fit-money";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
+import { MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +69,8 @@ type Form = Record<MoneyKey | RateKey | "unitsPerOrder" | "stockUnits", string> 
 };
 
 const pctText = (v: number) => String(Math.round(v * 1000) / 10);
+/** The fields under "Change rates and fees". */
+const FOLDED_KEYS = ["confirmationRate", "shippingRate", "deliveryRate", "lostRate", "returnRate", "returnAuto", "cpa", "forwardShippingFee", "rtoFee", "callCenterFee", "callCenterBasis", "packagingFee", "extraFeePerDelivered", "otherCosts"] as const;
 
 function toForm(seed: Seed, currency: string): Form {
   const i = seed.inputs;
@@ -303,6 +306,8 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
   const fmt = (v: number) => money.fmt(v, cur, { decimals: false });
   const [tab, setTab] = React.useState<Tab>("potential");
   const { boxRef, pill } = useSlidingPill<HTMLDivElement>();
+  // Rates and fees come from the data; a beginner sees them only when asking to change them.
+  const [ratesOpen, setRatesOpen] = useMoreDetails("profit-rates");
 
   // Values read from the data alone, and with what was saved for the product on top.
   const fromData = React.useMemo(() => seedFor({ ...row, plan: null }, data.defaults), [row, data.defaults]);
@@ -349,6 +354,12 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
   };
   const moneyHint = (k: MoneyKey) => hint(k, k, (v) => fmt(parseToMinor(v || "0", cur)));
   const rateHint = (k: RateKey) => hint(k, k, (v) => `${v}%`);
+  /** How many rates and fees differ from the data, typed here or saved for the product. */
+  const ownRates = FOLDED_KEYS.filter((k) => form[k] !== dataForm[k]).length;
+  const typeAdSpend = () => {
+    setRatesOpen(true);
+    requestAnimationFrame(() => document.getElementById("pt-cpa")?.focus());
+  };
 
   const stockField = (
     <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
@@ -473,46 +484,59 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                 {priceFields}
                 {unitsPerOrder}
               </Group>
-              <Group title="Rates">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Confirmed" htmlFor="pt-conf" hint={rateHint("confirmationRate")}><PctInput id="pt-conf" value={form.confirmationRate} onChange={set("confirmationRate")} /></Field>
-                  <Field label="Shipped (of confirmed)" htmlFor="pt-ship" hint={rateHint("shippingRate")}><PctInput id="pt-ship" value={form.shippingRate} onChange={set("shippingRate")} /></Field>
-                  <Field label="Delivered (of shipped)" htmlFor="pt-del" hint={rateHint("deliveryRate")}><PctInput id="pt-del" value={form.deliveryRate} onChange={set("deliveryRate")} /></Field>
-                  <Field label="Lost (of shipped)" htmlFor="pt-lost" hint={rateHint("lostRate")}><PctInput id="pt-lost" value={form.lostRate} onChange={set("lostRate")} /></Field>
-                  <Field label="Returned (of shipped)" htmlFor="pt-ret" hint={form.returnAuto ? "The rest of the shipped parcels" : undefined}>
-                    <PctInput id="pt-ret" value={form.returnAuto && projection.ok ? pctText(projection.returnRateUsed) : form.returnRate} onChange={set("returnRate")} disabled={form.returnAuto} />
-                  </Field>
+              <div className="flex flex-col items-start gap-1.5">
+                <MoreDetailsButton open={ratesOpen} onToggle={setRatesOpen} labels={["Change rates and fees", "Hide rates and fees"]} controls="pt-rates" />
+                {!ratesOpen ? (
+                  <p className="text-xs text-subtle">
+                    Rates come from your orders, fees from the product details{adsMissing ? "" : " and ad spend from the campaigns linked to it"}.
+                    {ownRates ? ` ${ownRates} of them ${ownRates === 1 ? "is" : "are"} your own number${ownRates === 1 ? "" : "s"}.` : ""}
+                  </p>
+                ) : null}
+              </div>
+              {ratesOpen ? (
+                <div id="pt-rates" className="flex flex-col gap-6">
+                  <Group title="Rates">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Confirmed" htmlFor="pt-conf" hint={rateHint("confirmationRate")}><PctInput id="pt-conf" value={form.confirmationRate} onChange={set("confirmationRate")} /></Field>
+                      <Field label="Shipped (of confirmed)" htmlFor="pt-ship" hint={rateHint("shippingRate")}><PctInput id="pt-ship" value={form.shippingRate} onChange={set("shippingRate")} /></Field>
+                      <Field label="Delivered (of shipped)" htmlFor="pt-del" hint={rateHint("deliveryRate")}><PctInput id="pt-del" value={form.deliveryRate} onChange={set("deliveryRate")} /></Field>
+                      <Field label="Lost (of shipped)" htmlFor="pt-lost" hint={rateHint("lostRate")}><PctInput id="pt-lost" value={form.lostRate} onChange={set("lostRate")} /></Field>
+                      <Field label="Returned (of shipped)" htmlFor="pt-ret" hint={form.returnAuto ? "The rest of the shipped parcels" : undefined}>
+                        <PctInput id="pt-ret" value={form.returnAuto && projection.ok ? pctText(projection.returnRateUsed) : form.returnRate} onChange={set("returnRate")} disabled={form.returnAuto} />
+                      </Field>
+                    </div>
+                    <Check checked={form.returnAuto} onChange={(v) => setEdits((x) => ({ ...x, returnAuto: v, returnRate: projection.ok ? pctText(projection.returnRateUsed) : form.returnRate }))}>Every parcel not delivered or lost comes back</Check>
+                    <p className="text-xs text-subtle">
+                      {row.sample.finished > 0 ? `Your orders in these days: ${count(row.sample.placed)} placed, ${count(row.sample.finished)} parcels finished.` : "No finished parcels for this product in these days."}
+                      {!data.minFinished || row.sample.finished >= data.minFinished ? "" : ` Rates come from your orders after ${data.minFinished} finished parcels.`}
+                    </p>
+                  </Group>
+                  <Group title="Ads and fees">
+                    <Field label="Ad spend per order placed" htmlFor="pt-cpa" hint={adsMissing ? "No campaign is linked to this product yet" : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Delivery fee per parcel" htmlFor="pt-s" hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
+                      <Field label="Return fee per parcel" htmlFor="pt-r" hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
+                      <Field label="Call center fee" htmlFor="pt-k" hint={moneyHint("callCenterFee")}><MoneyInput id="pt-k" currency={cur} value={form.callCenterFee} onChange={set("callCenterFee")} /></Field>
+                      <Field label="Paid for each order" htmlFor="pt-kb">
+                        <Select id="pt-kb" value={form.callCenterBasis} onChange={(e) => set("callCenterBasis")(e.target.value as CallCenterBasis)}>
+                          <option value="PLACED_LEAD">Placed</option>
+                          <option value="CONFIRMED_ORDER">Confirmed</option>
+                        </Select>
+                      </Field>
+                      <Field label="Packaging per parcel" htmlFor="pt-g" hint={moneyHint("packagingFee")}><MoneyInput id="pt-g" currency={cur} value={form.packagingFee} onChange={set("packagingFee")} /></Field>
+                      <Field label="Other MDM fees per delivered order" htmlFor="pt-x" hint="COD or fulfilment fee, if MDM charges one"><MoneyInput id="pt-x" currency={cur} value={form.extraFeePerDelivered} onChange={set("extraFeePerDelivered")} /></Field>
+                    </div>
+                    <Field label="Other costs for this stock" htmlFor="pt-o" hint="Transport to MDM, a designer, anything paid once"><MoneyInput id="pt-o" currency={cur} value={form.otherCosts} onChange={set("otherCosts")} /></Field>
+                  </Group>
                 </div>
-                <Check checked={form.returnAuto} onChange={(v) => setEdits((x) => ({ ...x, returnAuto: v, returnRate: projection.ok ? pctText(projection.returnRateUsed) : form.returnRate }))}>Every parcel not delivered or lost comes back</Check>
-                <p className="text-xs text-subtle">
-                  {row.sample.finished > 0 ? `Your orders in these days: ${count(row.sample.placed)} placed, ${count(row.sample.finished)} parcels finished.` : "No finished parcels for this product in these days."}
-                  {!data.minFinished || row.sample.finished >= data.minFinished ? "" : ` Rates come from your orders after ${data.minFinished} finished parcels.`}
-                </p>
-              </Group>
-              <Group title="Ads and fees">
-                <Field label="Ad spend per order placed" htmlFor="pt-cpa" hint={adsMissing ? "No campaign is linked to this product yet" : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Delivery fee per parcel" htmlFor="pt-s" hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
-                  <Field label="Return fee per parcel" htmlFor="pt-r" hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
-                  <Field label="Call center fee" htmlFor="pt-k" hint={moneyHint("callCenterFee")}><MoneyInput id="pt-k" currency={cur} value={form.callCenterFee} onChange={set("callCenterFee")} /></Field>
-                  <Field label="Paid for each order" htmlFor="pt-kb">
-                    <Select id="pt-kb" value={form.callCenterBasis} onChange={(e) => set("callCenterBasis")(e.target.value as CallCenterBasis)}>
-                      <option value="PLACED_LEAD">Placed</option>
-                      <option value="CONFIRMED_ORDER">Confirmed</option>
-                    </Select>
-                  </Field>
-                  <Field label="Packaging per parcel" htmlFor="pt-g" hint={moneyHint("packagingFee")}><MoneyInput id="pt-g" currency={cur} value={form.packagingFee} onChange={set("packagingFee")} /></Field>
-                  <Field label="Other MDM fees per delivered order" htmlFor="pt-x" hint="COD or fulfilment fee, if MDM charges one"><MoneyInput id="pt-x" currency={cur} value={form.extraFeePerDelivered} onChange={set("extraFeePerDelivered")} /></Field>
-                </div>
-                <Field label="Other costs for this stock" htmlFor="pt-o" hint="Transport to MDM, a designer, anything paid once"><MoneyInput id="pt-o" currency={cur} value={form.otherCosts} onChange={set("otherCosts")} /></Field>
-              </Group>
+              ) : null}
             </div>
 
             <div className="flex min-w-0 flex-col gap-4">
               {adsMissing ? (
                 <div className="flex flex-col gap-1.5 rounded-2xl bg-warning-soft px-4 py-3 text-sm" role="note">
                   <p className="flex items-start gap-2 font-semibold text-warning"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />No ads are linked to {row.name} yet</p>
-                  <p className="text-muted">This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>, or type an ad spend per order under Ads and fees.</p>
+                  <p className="text-muted">This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>, or <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={typeAdSpend}>type an ad spend per order</button> under Ads and fees.</p>
                 </div>
               ) : !projection.ok ? (
                 <p className="flex items-start gap-2 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{projection.reason}</p>
@@ -639,9 +663,14 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
   // Without a linked campaign (or a typed ad spend per order) there is no calculation with ads.
   const noAds = (r: (typeof rows)[number]) => !r.p.adsLinked && r.seed.sources.cpa !== "you";
   const real = (r: (typeof rows)[number]) => (r.projection.ok && !noAds(r) ? r.projection : null);
+  const [more, setMore] = useMoreDetails("profit-products");
   return (
     <Card className="min-w-0">
-      <CardHeader title="Your products" description="Each product's stock, what it earns before ads, and what it really earns with your ads, rates and fees. Pick one to change its numbers." />
+      <CardHeader
+        title="Your products"
+        description="What each product's stock earns before ads, and what it really earns after them. Pick one to see how."
+        actions={<MoreDetailsButton open={more} onToggle={setMore} className="hidden md:inline-flex" />}
+      />
       <div className="hidden px-2 pb-3 md:block">
         <Table>
           <THead>
@@ -651,8 +680,12 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
               <Th className="text-right"><Term label="Before ads" definition="Units × (sale price − cost per unit)." /></Th>
               <Th className="text-right"><Term label="Real benefit" definition="After ad spend, confirmation, delivery and return rates and every fee." /></Th>
               <Th className="text-right">Missing</Th>
-              <Th className="text-right">Per unit</Th>
-              <Th className="text-right"><Term label="Breakeven CPA" definition="The most you can pay in ads per order placed." /></Th>
+              {more ? (
+                <>
+                  <Th className="text-right">Per unit</Th>
+                  <Th className="text-right"><Term label="Breakeven CPA" definition="The most you can pay in ads per order placed." /></Th>
+                </>
+              ) : null}
             </tr>
           </THead>
           <tbody>
@@ -672,8 +705,12 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
                   <Td className="num text-right font-semibold">{fmt(r.potential.benefit)}</Td>
                   <Td className={cn("num text-right font-bold", x && x.benefit < 0 ? "text-negative" : "text-positive")} title={noAds(r) ? "Link this product's campaigns to count its ads" : r.projection.ok ? undefined : r.projection.reason}>{x ? fmt(x.benefit) : noAds(r) ? <span className="text-xs font-semibold text-subtle">Link ads</span> : "—"}</Td>
                   <Td className="num text-right text-negative">{x ? fmt(x.missing) : "—"}</Td>
-                  <Td className="num text-right">{x ? fmt(x.benefitPerUnit) : "—"}</Td>
-                  <Td className="num text-right">{x ? fmt(x.breakevenCpa) : "—"}</Td>
+                  {more ? (
+                    <>
+                      <Td className="num text-right">{x ? fmt(x.benefitPerUnit) : "—"}</Td>
+                      <Td className="num text-right">{x ? fmt(x.breakevenCpa) : "—"}</Td>
+                    </>
+                  ) : null}
                 </Tr>
               );
             })}
@@ -802,7 +839,7 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
     <>
       <PageHeader
         title="Profit tracker"
-        description="What each product's stock should earn: first at its price alone, then with your ad spend, rates and every fee, and where the difference goes."
+        description="What each product's stock earns at its price, what it really earns after ads and fees, and where the difference goes."
         actions={
           data && data.products.length > 1 ? (
             <Select aria-label="Product" value={selected?.id ?? ""} onChange={(e) => select(e.target.value)} className="w-full sm:w-56">

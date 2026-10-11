@@ -118,7 +118,7 @@ export function CampaignsView() {
     <>
       <PageHeader
         title="Ad accounts & campaigns"
-        description="Pick an ad account to see each of its campaigns with its own orders, spend and profit. A campaign's spend counts in a product's profit only once you link the campaign, or its whole ad account, to that product."
+        description="Each campaign's spend, orders and profit. Link a campaign to the product it sells so its spend counts in that product's profit."
       />
       <Card>
         <div className="grid grid-cols-2 items-center gap-2 border-b border-border p-3 sm:flex sm:flex-wrap">

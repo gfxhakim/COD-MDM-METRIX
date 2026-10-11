@@ -7,6 +7,7 @@ import Link from "next/link";
 import * as React from "react";
 import { FitMoney } from "@/components/app/fit-money";
 import { Money } from "@/components/app/format";
+import { MoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -549,7 +550,7 @@ export function MoneyView() {
     <>
       <PageHeader
         title="Money & stock"
-        description="Your MDM Express wallet, payouts, fees and stock, copied from MDM with every sync. Nothing here changes anything at MDM."
+        description="Your money and stock at MDM Express, copied with every sync."
         actions={
           canSync ? (
             <Button variant="primary" onClick={() => start.mutate({ mode: "INCREMENTAL" })} disabled={start.isPending || running} className="w-full sm:w-auto">
@@ -577,7 +578,7 @@ export function MoneyView() {
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             {data.demo ? <Badge tone="brand">Demo data</Badge> : null}
             <span>Last MDM sync {timeAgo(data.lastSyncAt)}.</span>
-            {problems.length ? <span className="text-warning">{problems.length === 1 ? "One part" : `${problems.length} parts`} couldn&apos;t be read, see below.</span> : null}
+            {problems.length ? <span className="text-warning">{problems.length === 1 ? "One part" : `${problems.length} parts`} couldn&apos;t be read: {problems.map((p) => ACCOUNT_PART_LABEL[p]).join(", ")}.</span> : null}
           </div>
 
           <section className="flex flex-col gap-3" aria-label="Wallet">
@@ -599,15 +600,17 @@ export function MoneyView() {
             )}
           </section>
 
-          <div className="grid grid-cols-1 gap-[18px] xl:grid-cols-2">
-            <Payouts data={data} />
-            <Fees data={data} timezone={timezone} />
-          </div>
           <Stock data={data} />
-          <div className="grid grid-cols-1 gap-[18px] xl:grid-cols-2">
-            <Arrivals data={data} />
-            <Prices data={data} />
-          </div>
+          <MoreDetails id="money" hint={`Payouts, money and fees per order, stock arrivals and MDM's price list.${problems.length ? " Parts MDM didn't send are marked inside." : ""}`}>
+            <div className="grid grid-cols-1 gap-[18px] xl:grid-cols-2">
+              <Payouts data={data} />
+              <Fees data={data} timezone={timezone} />
+            </div>
+            <div className="grid grid-cols-1 gap-[18px] xl:grid-cols-2">
+              <Arrivals data={data} />
+              <Prices data={data} />
+            </div>
+          </MoreDetails>
           <p className="flex items-center gap-2 text-[11px] text-subtle">
             <PackageOpen className="size-3.5" aria-hidden="true" />
             Read from your MDM account with your own API key. Amounts are as MDM reports them.
