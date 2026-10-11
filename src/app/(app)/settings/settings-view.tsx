@@ -17,6 +17,7 @@ import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
+import { DataTab } from "./data-settings";
 import { MdmTab, StatusMappingsTab } from "./mdm-settings";
 import { MetaTab } from "./meta-settings";
 import { CURRENCIES, parseToMinor, type CurrencyCode } from "@/lib/money";
@@ -346,9 +347,10 @@ function AuditTab() {
 
 export function SettingsView({ initialTab }: { initialTab: string }) {
   const tab = initialTab === "new-workspace" ? "workspace" : initialTab;
+  const canDeleteData = useCan("data.delete");
   return (
     <>
-      <PageHeader title="Settings" description="Workspace, people, economics assumptions and integrations." />
+      <PageHeader title="Settings" description="Workspace, people, economics assumptions, integrations and your data." />
       <Tabs defaultValue={tab}>
         <TabsList className="mb-6">
           <TabsTrigger value="workspace">Workspace</TabsTrigger>
@@ -358,6 +360,7 @@ export function SettingsView({ initialTab }: { initialTab: string }) {
           <TabsTrigger value="meta">Meta ads</TabsTrigger>
           <TabsTrigger value="mappings">Status mappings</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
+          {canDeleteData ? <TabsTrigger value="data">Your data</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="workspace"><WorkspaceTab /></TabsContent>
         <TabsContent value="members"><MembersTab /></TabsContent>
@@ -366,6 +369,7 @@ export function SettingsView({ initialTab }: { initialTab: string }) {
         <TabsContent value="meta"><MetaTab /></TabsContent>
         <TabsContent value="mappings"><StatusMappingsTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
+        <TabsContent value="data"><DataTab /></TabsContent>
       </Tabs>
     </>
   );
