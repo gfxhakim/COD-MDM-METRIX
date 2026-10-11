@@ -4,6 +4,8 @@ import type { Role } from "@prisma/client";
 export const PERMISSIONS = {
   "workspace.manage": ["OWNER"],
   "members.manage": ["OWNER"],
+  /** Deleting a whole kind of data (Settings > Your data), or all of it. */
+  "data.delete": ["OWNER"],
   "integrations.manage": ["OWNER", "ADMIN"],
   "catalog.write": ["OWNER", "ADMIN"],
   "expenses.write": ["OWNER", "ADMIN"],

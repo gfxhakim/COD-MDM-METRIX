@@ -9,6 +9,7 @@ import { integrationsRouter, syncRouter } from "@/server/trpc/routers/mdm";
 import { moneyRouter } from "@/server/trpc/routers/money";
 import { profitRouter } from "@/server/trpc/routers/profit";
 import { creativesRouter, reportsRouter, simulatorRouter } from "@/server/trpc/routers/economics";
+import { dataRouter } from "@/server/trpc/routers/data";
 
 export const appRouter = router({
   workspace: workspaceRouter,
@@ -28,6 +29,7 @@ export const appRouter = router({
   sync: syncRouter,
   money: moneyRouter,
   profit: profitRouter,
+  data: dataRouter,
 });
 
 export type AppRouter = typeof appRouter;

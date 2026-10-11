@@ -10,7 +10,7 @@ import { expect, test, type Page } from "@playwright/test";
  * Flow 11 signs in as a different business and probes both workspaces.
  * Flows 12–20 came later: Meta ads, campaigns, exporting orders, custom syncs,
  * MDM money and stock, the Profit tracker, repeating expenses, the Meta ads filter,
- * and the red dock with every page fitting a phone.
+ * and the red dock with every page fitting a phone. Flow 21 deletes data from Settings > Your data.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -583,7 +583,7 @@ test("20. open pages from the red dock, and every page fits a phone screen", asy
   await bar.getByRole("button", { name: "All pages" }).click();
   await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: "Expenses" }).click();
   await expect(page.getByRole("heading", { name: "Expenses", level: 1 })).toBeVisible();
-  const tabs = ["workspace", "members", "economics", "mdm", "meta", "mappings", "audit"].map((t) => `/settings?tab=${t}`);
+  const tabs = ["workspace", "members", "economics", "mdm", "meta", "mappings", "audit", "data"].map((t) => `/settings?tab=${t}`);
   const pages = ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports"];
   const fits = async (path: string, how: string) => {
     await page.goto(path);
@@ -597,4 +597,41 @@ test("20. open pages from the red dock, and every page fits a phone screen", asy
     for (const id of ["dashboard", "expenses", "expenses-filters", "money", "simulator", "orders", "creatives-filters", "products", "profit-products", "profit-rates", "syncs"]) localStorage.setItem(`more-details:${id}`, "1");
   });
   for (const path of pages) await fits(path, "with More details open");
+});
+
+test("21. delete imported files from Settings > Your data", async ({ page }) => {
+  // A business of its own, so nothing the other flows check is deleted.
+  const me = { name: "E2E Deleter", email: `e2e-delete-${stamp}@test.local`, password: "e2e-password-123", business: `E2E Delete ${stamp}` };
+  await page.goto("/signup");
+  await page.fill("#name", me.name);
+  await page.fill("#email", me.email);
+  await page.fill("#password", me.password);
+  await page.fill("#workspaceName", me.business);
+  await page.click("button:has-text('Create workspace')");
+  await page.waitForURL("/");
+  await page.goto("/imports?tab=spend");
+  await page.setInputFiles("#file-AD_SPEND", fixture("meta-spend.csv"));
+  await page.click("button:has-text('Validate & preview')");
+  await page.click("button:has-text('Import 2 spend rows')");
+  await expect(page.getByText("2 imported")).toBeVisible();
+
+  await page.goto("/settings?tab=data");
+  const data = page.getByRole("region", { name: "Your data" });
+  await expect(data.getByText("1 file: 2 ad spend rows")).toBeVisible();
+  await expect(data.getByRole("button", { name: "Delete Products and costs" })).toBeDisabled();
+  await data.getByRole("button", { name: "Delete Imported files" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete every imported file?" });
+  const confirm = dialog.getByRole("button", { name: "Delete", exact: true });
+  await expect(confirm).toBeDisabled();
+  await dialog.getByLabel("Type DELETE to confirm").fill("delete");
+  await confirm.click();
+  await expect(page.getByText("Deleted every imported file")).toBeVisible();
+  await expect(data.getByText("No imported files")).toBeVisible();
+  const res = await trpcQuery(page, "data.summary");
+  expect(JSON.parse(res.body).result.data.json.imports.files).toBe(0);
+
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto("/settings?tab=data");
+  await page.waitForLoadState("networkidle");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
 });
