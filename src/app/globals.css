@@ -410,15 +410,16 @@ tbody > tr.row-in:nth-child(n + 9) {
   box-shadow: none;
 }
 
-/* Page changes: the old page fades up and out, the new one rises into focus. The header stays put. */
+/* Page changes: the old page fades up and out, the new one rises into focus. The header stays put.
+   Kept short, so a click feels instant. */
 ::view-transition {
   pointer-events: none;
 }
 ::view-transition-old(.page) {
-  animation: page-out 180ms ease-in both;
+  animation: page-out 120ms ease-in both;
 }
 ::view-transition-new(.page) {
-  animation: rise-soft 520ms var(--ease-out) 110ms both;
+  animation: rise-soft 300ms var(--ease-out) 40ms both;
 }
 /* Everything outside the page and the header (the page background, the phone menu row) switches at once, so nothing is seen twice. */
 ::view-transition-old(root) {
@@ -443,7 +444,7 @@ tbody > tr.row-in:nth-child(n + 9) {
 /* Browsers without view transitions still get the page rising in. */
 @supports not (view-transition-name: none) {
   .page-shell {
-    animation: rise-soft 480ms var(--ease-out) backwards;
+    animation: rise-soft 300ms var(--ease-out) backwards;
   }
 }
 

@@ -103,6 +103,8 @@ export async function creativeMatrix(ctx: WorkspaceContext, input: DateRange & {
 export type DashboardInput = DateRange & { productId?: string; creativeId?: string; revenueView?: RevenueView; ads?: AdFilter };
 
 export async function dashboardReport(ctx: WorkspaceContext, input: DashboardInput) {
+  const health = getDataHealth(ctx);
+  health.catch(() => undefined);
   const facts = await loadFacts(ctx, input, input.ads);
   const view = input.revenueView ?? facts.defaults.revenueView;
   const evaluated = evaluate(facts);
@@ -168,7 +170,7 @@ export async function dashboardReport(ctx: WorkspaceContext, input: DashboardInp
       .sort((a, b) => (b.metrics.returnRate ?? 0) - (a.metrics.returnRate ?? 0) || b.metrics.returned - a.metrics.returned)
       .slice(0, 5)
       .map((r) => ({ ...summary(r), belowSample: r.metrics.finished < minShipped })),
-    health: await getDataHealth(ctx),
+    health: await health,
   };
 }
 

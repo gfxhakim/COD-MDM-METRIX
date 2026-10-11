@@ -8,15 +8,16 @@ import { tidyWilayas } from "@/server/wilayas";
 import { describeCustomSync, readCustomFilters, type CustomSyncChoices, type CustomSyncFilters } from "@/domain/customSync";
 import { normalizeProviderStatus, SHIPPED_STATES, statusKey } from "@/domain/statusMapping";
 import { wilayaName } from "@/domain/wilayas";
+import { mapLimit, readAhead } from "@/lib/concurrency";
 import { normalizeReference } from "@/lib/normalize";
 import { syncMdmAccount } from "./account";
 import { loadChoices, skippedParcels, sortOrders } from "./choices";
 import { adapterForWorkspace, adapterKind, safeMdmMessage, type AdapterFactory } from "./connection";
 import { anyShipped, customOrderPlan, customParcelsSince, matchedOrderIds, PARCEL_BATCH, pickCustomOrders, readStep, resolveCustomSync, writeStep } from "./custom";
 import { redactPayload, sha256, stableStringify } from "./redact";
-import { loadOrderSyncEnv, ordersNeedingHistory, syncUpsells, upsertMdmOrder } from "./orders";
+import { loadOrderSyncEnv, ordersNeedingHistory, prepareOrderProducts, syncUpsells, upsertMdmOrder } from "./orders";
 import { applyStatusDefaults, parcelStatusSelect, reconcileOrderStatuses, setParcelStatus, workspaceStatusOverrides } from "./statuses";
-import { hasOrderFilters, MdmError, type MdmAdapter, type MdmOrderQuery, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
+import { hasOrderFilters, MdmError, type MdmAdapter, type MdmOrderQuery, type MdmOrdersPage, type MdmPage, type MdmParcel, type MdmUtm } from "./types";
 
 const PROVIDER = "MDM_EXPRESS" as const;
 export const PAGE_SIZE = 100;
@@ -25,6 +26,13 @@ export const INCREMENTAL_OVERLAP_MS = 24 * 3_600_000;
 export const MAX_REQUEST_RETRIES = 4;
 export const MAX_JOB_ATTEMPTS = 3;
 export const STALE_AFTER_MS = 10 * 60_000;
+/** Status histories read from MDM at the same time (one request per order without its own content ID). */
+export const HISTORY_CONCURRENCY = 6;
+/**
+ * Orders and parcels saved at the same time. PostgreSQL takes several writers; SQLite (development
+ * and tests) one at a time. The parcels of one order are always saved one after another.
+ */
+export const SAVE_CONCURRENCY = process.env.DATABASE_URL?.startsWith("postgres") ? 4 : 1;
 
 export type SyncDeps = {
   adapterFactory: AdapterFactory;
@@ -228,6 +236,17 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
       await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "parcel", providerId: p.trackingId.slice(0, 200), result: "FAILED", error: "Could not save this parcel. It will be retried on the next sync." } });
     }
   };
+  // A page's parcels, a few orders at a time; each order's parcels in turn, so its status is worked out from all of them.
+  const saveParcels = async (list: MdmParcel[]) => {
+    const byOrder = new Map<string, MdmParcel[]>();
+    for (const p of list) {
+      const key = p.mdmOrderId ? `o:${p.mdmOrderId}` : p.reference ? `r:${normalizeReference(p.reference)}` : `t:${p.trackingId}`;
+      byOrder.set(key, [...(byOrder.get(key) ?? []), p]);
+    }
+    await mapLimit([...byOrder.values()], SAVE_CONCURRENCY, async (group) => {
+      for (const p of group) await saveParcel(p);
+    });
+  };
 
   try {
     // Orders first, so parcels read afterwards find the order MDM says they ship.
@@ -240,12 +259,16 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
         let plan = custom ? customOrderPlan(custom) : null;
         let at = readStep(custom ? cursor : null);
         let plainTotal: number | null = null;
+        // A regular sync asks MDM for the next page while it saves the current one.
+        let ahead: ReturnType<typeof readAhead<string | null, MdmOrdersPage>> | null = null;
         for (;;) {
           if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
           const query: MdmOrderQuery = plan ? { cursor: at.page, updatedSince: plan.updatedSince, pageSize: deps.pageSize, filters: plan.passes[at.step] } : { cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize };
-          let result;
+          let result: MdmOrdersPage;
           try {
-            result = await withRetry(() => adapter.listOrders!(query), deps);
+            result = await (ahead && !plan && ahead.key === cursor ? ahead.promise : withRetry(() => adapter.listOrders!(query), deps));
+            const next = plan ? null : result.nextCursor;
+            ahead = next ? readAhead(next, () => withRetry(() => adapter.listOrders!({ ...query, cursor: next }), deps)) : null;
           } catch (e) {
             if (custom && !custom.fallbackOrders && hasOrderFilters(query.filters) && e instanceof MdmError && e.kind === "BAD_RESPONSE") {
               // MDM refused the search filters: read the orders changed since the start day instead and pick them here.
@@ -277,36 +300,56 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
             counters.ordersMatched += picked.matched.length;
             items = picked.matched;
           }
-          const needHistory = history ? await ordersNeedingHistory(ws, items) : new Set<string>();
-          for (const [i, o] of items.entries()) {
-            let found: MdmUtm | null = null;
-            let checked = false;
-            if (history && needHistory.has(o.trackingId)) {
+          // The status histories of the page's orders without a content ID, several at a time.
+          const looked = new Map<string, MdmUtm | null>();
+          if (history) {
+            const need = await ordersNeedingHistory(ws, items);
+            let refused = false;
+            let stop: unknown = null;
+            await mapLimit(items.filter((o) => need.has(o.trackingId)), HISTORY_CONCURRENCY, async (o) => {
+              if (refused || stop) return;
               try {
-                found = await withRetry(() => adapter.orderUtm!(o.trackingId), deps);
-                checked = true;
+                looked.set(o.trackingId, await withRetry(() => adapter.orderUtm!(o.trackingId), deps));
               } catch (e) {
-                if (e instanceof MdmError && e.kind === "AUTH") {
-                  history = false;
-                  ordersNote = NO_HISTORY_ACCESS;
-                } else if (e instanceof MdmError && e.retryable) throw e;
+                if (e instanceof MdmError && e.kind === "AUTH") refused = true;
+                else if (e instanceof MdmError && e.retryable) stop ??= e;
                 // Anything else: this order keeps no content ID for now; the next sync looks again.
               }
+            });
+            if (refused) {
+              history = false;
+              ordersNote = NO_HISTORY_ACCESS;
             }
-            try {
-              const r = await upsertMdmOrder(env, job.id, o, found, checked);
-              if (r.counter === "added") counters.ordersAdded++;
-              else if (r.counter === "updated") counters.ordersUpdated++;
-              if (r.hasContent) counters.ordersWithContent++;
-              // A custom sync reads the parcels of every order it kept, changed or not.
-              if (custom && r.counter === "unchanged") await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: o.trackingId.slice(0, 200), localId: r.orderId, result: "UNCHANGED" } });
-            } catch (e) {
-              counters.failed++;
-              console.error(`[mdm] order ${o.trackingId} failed`, e instanceof Error ? e.message : e);
-              await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: o.trackingId.slice(0, 200), result: "FAILED", error: "Could not save this order. It will be retried on the next sync." } });
-            }
-            if (i % 25 === 24) await db.syncJob.update({ where: { id: job.id }, data: { heartbeatAt: deps.now() } });
+            if (stop) throw stop;
           }
+          // New products are made one at a time first; then the orders are saved a few at a time
+          // (orders naming the same store order one after another).
+          if (SAVE_CONCURRENCY > 1) await prepareOrderProducts(env, items);
+          const byStoreOrder = new Map<string, typeof items>();
+          for (const o of items) {
+            const key = o.externalId ? `e:${o.externalId}` : `t:${o.trackingId}`;
+            byStoreOrder.set(key, [...(byStoreOrder.get(key) ?? []), o]);
+          }
+          let saved = 0;
+          await mapLimit([...byStoreOrder.values()], SAVE_CONCURRENCY, async (group) => {
+            for (const o of group) {
+              const checked = looked.has(o.trackingId);
+              const found = looked.get(o.trackingId) ?? null;
+              try {
+                const r = await upsertMdmOrder(env, job.id, o, found, checked);
+                if (r.counter === "added") counters.ordersAdded++;
+                else if (r.counter === "updated") counters.ordersUpdated++;
+                if (r.hasContent) counters.ordersWithContent++;
+                // A custom sync reads the parcels of every order it kept, changed or not.
+                if (custom && r.counter === "unchanged") await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: o.trackingId.slice(0, 200), localId: r.orderId, result: "UNCHANGED" } });
+              } catch (e) {
+                counters.failed++;
+                console.error(`[mdm] order ${o.trackingId} failed`, e instanceof Error ? e.message : e);
+                await db.syncItem.create({ data: { workspaceId: ws, jobId: job.id, entityType: "order", providerId: o.trackingId.slice(0, 200), result: "FAILED", error: "Could not save this order. It will be retried on the next sync." } });
+              }
+              if (++saved % 25 === 0) await db.syncJob.update({ where: { id: job.id }, data: { heartbeatAt: deps.now() } });
+            }
+          });
           page++;
           if (plan) {
             at = result.nextCursor ? { step: at.step, page: result.nextCursor } : at.step + 1 < plan.passes.length ? { step: at.step + 1, page: null } : { step: -1, page: null };
@@ -352,7 +395,7 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
             await db.syncJob.update({ where: { id: job.id }, data: { filters: custom, cursor: null } });
             continue;
           }
-          for (const p of result!.items) if (p.mdmOrderId && wanted.has(p.mdmOrderId)) await saveParcel(p);
+          await saveParcels(result!.items.filter((p) => p.mdmOrderId && wanted.has(p.mdmOrderId)));
           page++;
           const lastBatch = !batch || (at.step + 1) * PARCEL_BATCH >= ids.length;
           at = result!.nextCursor ? { step: at.step, page: result!.nextCursor } : lastBatch ? { step: -1, page: null } : { step: at.step + 1, page: null };
@@ -375,12 +418,16 @@ export async function runSyncJob(jobId: string, partial: Partial<SyncDeps> = {})
     }
 
     if (phase !== "ACCOUNT") {
+      let ahead: ReturnType<typeof readAhead<string | null, MdmPage>> | null = null;
       for (;;) {
         if (await canceled()) return finish(job, "CANCELED", counters, "Canceled by a user");
-        const result = await withRetry(() => adapter.listParcels({ cursor, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
+        const read = (c: string | null) => withRetry(() => adapter.listParcels({ cursor: c, updatedSince: job.updatedSince, pageSize: deps.pageSize }), deps);
+        const result: MdmPage = await (ahead && ahead.key === cursor ? ahead.promise : read(cursor));
+        // The next page is on its way while this one is saved.
+        ahead = result.nextCursor ? readAhead(result.nextCursor, () => read(result.nextCursor)) : null;
         // Parcels of orders skipped by the product choices are skipped with them.
         const skip = await skippedParcels(ws, result.items);
-        for (const p of result.items) if (!p.mdmOrderId || !skip.has(p.mdmOrderId)) await saveParcel(p);
+        await saveParcels(result.items.filter((p) => !p.mdmOrderId || !skip.has(p.mdmOrderId)));
         page++;
         cursor = result.nextCursor;
         await db.syncJob.update({

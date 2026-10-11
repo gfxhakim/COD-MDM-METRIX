@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { ACCOUNT_PART_LABEL, readPartStates, type AccountPart, type PartStates } from "@/domain/mdmAccount";
 import { db } from "@/server/db";
+import { mapLimit } from "@/lib/concurrency";
 import { safeMdmMessage } from "./connection";
 import { MdmError, type MdmAccountReader, type MdmArrival, type MdmFeeLine, type MdmPayoutRecord, type MdmVariant } from "./types";
 
@@ -21,6 +22,8 @@ const MAX_BREAKDOWNS = 40;
 const MAX_STOCK_READS = 60;
 /** MDM's price list rarely changes: read about once a day. */
 const PRICES_EVERY_MS = 20 * 3_600_000;
+/** Payout breakdowns and stock counts read from MDM at the same time. */
+const READS_AT_ONCE = 4;
 
 export type AccountSyncOptions = {
   /** "FULL" re-reads every fee and payout; anything else reads what changed since the last sync. */
@@ -106,13 +109,20 @@ export async function syncMdmAccount(workspaceId: string, reader: MdmAccountRead
     return false;
   };
 
-  try {
+  // The wallet first (it says the currency), then three lanes side by side: fees, payouts and
+  // prices (in that order, as they learn the seller's ID); stock; stock value and arrivals.
+  const lanes = async () => {
     await run("wallet", async () => {
       const w = await o.retry(() => reader.wallet());
       currency = w.currency;
       await db.mdmAccount.update({ where: { workspaceId }, data: { wallet: json(w), walletAt: o.now() } });
     });
+    const settled = await Promise.allSettled([moneyLane(), stockLane(), valueLane()]);
+    const failed = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failed) throw failed.reason;
+  };
 
+  const moneyLane = async () => {
     await run("fees", async () => {
       const from = since(acc.feesSyncedAt);
       let n = 0;
@@ -132,15 +142,17 @@ export async function syncMdmAccount(workspaceId: string, reader: MdmAccountRead
       });
       // What each payout is made of: new or changed payouts first, a few per sync.
       const todo = await db.mdmPayout.findMany({ where: { workspaceId, breakdownAt: null }, orderBy: { mdmCreatedAt: "desc" }, take: MAX_BREAKDOWNS, select: { id: true, providerId: true } });
-      for (const p of todo) {
+      let stop = false;
+      await mapLimit(todo, READS_AT_ONCE, async (p) => {
+        if (stop) return;
         try {
           const b = await o.retry(() => reader.payoutBreakdown(p.providerId));
           await db.mdmPayout.update({ where: { id: p.id }, data: { breakdown: json(b), breakdownAt: o.now() } });
         } catch (e) {
           // The payouts themselves are saved; their breakdown is tried again next sync.
-          if (e instanceof MdmError && (e.kind === "AUTH" || e.retryable)) break;
+          if (e instanceof MdmError && (e.kind === "AUTH" || e.retryable)) stop = true;
         }
-      }
+      });
       if (!done) throw new PartNote(`Read ${n} payouts; MDM has more, which the next syncs will read.`);
       await db.mdmAccount.update({ where: { workspaceId }, data: { payoutsSyncedAt: o.startedAt } });
       return n;
@@ -155,8 +167,10 @@ export async function syncMdmAccount(workspaceId: string, reader: MdmAccountRead
       await db.mdmAccount.update({ where: { workspaceId }, data: { prices: json(prices), pricesAt: o.now() } });
       return prices.delivery.length;
     });
+  };
 
-    await run("stock", async () => {
+  const stockLane = () =>
+    run("stock", async () => {
       const seen = new Set<string>();
       const done = await pages(MAX_PAGES.variants, (cursor) => reader.variants({ cursor, updatedSince: null, pageSize: o.pageSize }), async (items) => {
         for (const v of items) {
@@ -167,14 +181,15 @@ export async function syncMdmAccount(workspaceId: string, reader: MdmAccountRead
       // Variants MDM no longer lists stay, marked archived.
       if (done) await db.mdmStockItem.updateMany({ where: { workspaceId, archived: false, providerId: { notIn: [...seen] } }, data: { archived: true } });
       const active = await db.mdmStockItem.findMany({ where: { workspaceId, archived: false }, orderBy: { productName: "asc" }, take: MAX_STOCK_READS, select: { id: true, providerId: true, mdmProductId: true } });
-      for (const v of active) {
+      await mapLimit(active, READS_AT_ONCE, async (v) => {
         if (await o.canceled()) throw new Canceled();
         const c = await o.retry(() => reader.stock({ productId: v.mdmProductId, id: v.providerId }));
         await db.mdmStockItem.update({ where: { id: v.id }, data: { ...c, stockAt: o.now() } });
-      }
+      });
       return active.length;
     });
 
+  const valueLane = async () => {
     await run("capital", async () => {
       const c = await o.retry(() => reader.capital(currency));
       await db.mdmAccount.update({ where: { workspaceId }, data: { capital: json(c), capitalAt: o.now() } });
@@ -188,9 +203,16 @@ export async function syncMdmAccount(workspaceId: string, reader: MdmAccountRead
       });
       return n;
     });
+  };
+
+  try {
+    await lanes();
   } catch (e) {
     if (e instanceof Canceled) return { canceled: true, parts };
     throw e;
+  } finally {
+    // The lanes saved their parts as they went, possibly out of order: save the whole picture once more.
+    await db.mdmAccount.update({ where: { workspaceId }, data: { parts: json(parts), sellerId } });
   }
   return { canceled: false, parts };
 }
