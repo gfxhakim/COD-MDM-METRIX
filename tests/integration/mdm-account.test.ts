@@ -128,8 +128,9 @@ describe("MDM money and stock", () => {
   it("then read only what changed, and a part MDM refuses or fails never stops the others", async () => {
     acc.wallet = { ...acc.wallet, ready: 0, paid: 1840000 };
     acc.payouts[1] = { ...acc.payouts[1], status: "confirmed", confirmed: true, updatedAt: at("2026-09-21T10:00:00Z") };
+    // Both variants' stock is read at the same time: enough failures for every try of both.
     const server = () => new MdmError("MDM server error (502)", "SERVER");
-    const { done, adapter } = await sync(t, acc, { accountFailures: { payouts: [new MdmError("MDM refused access", "AUTH")], stock: [server(), server(), server(), server(), server()] } });
+    const { done, adapter } = await sync(t, acc, { accountFailures: { payouts: [new MdmError("MDM refused access", "AUTH")], stock: Array.from({ length: 10 }, server) } });
     expect(done.status).toBe("SUCCEEDED");
     // Fees changed since a day before the last sync started; the price list isn't due again yet.
     expect(adapter.accountCalls).toContain(`fees:${new Date(firstStart.getTime() - 24 * 3_600_000).toISOString()}`);

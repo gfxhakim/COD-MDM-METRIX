@@ -199,6 +199,30 @@ describe("Meta sync problems", () => {
     await runDueMetaSyncs(new Date(NOW.getTime() + 10 * 60_000), deps);
     expect(adapter.calls.length).toBe(n);
   });
+
+  it("reads ad accounts side by side and saves every row once", async () => {
+    const t = await connected("MetaSideBySide");
+    const accounts = ["act_501", "act_502", "act_503"].map((id) => ({ ...DZD_ACCOUNT, id, name: id }));
+    const rows = Object.fromEntries(accounts.map((a, i) => [a.id, [row(`12000000000060${i}`, 10000 * (i + 1)), row(`12000000000061${i}`, 1000, { date: "2026-09-26" })]]));
+    const mock = createMockMetaAdapter({ token: TOKEN, accounts, rows });
+    let running = 0;
+    let most = 0;
+    const adapter: MetaAdapter = {
+      ...mock,
+      async dailyAdSpend(q, signal) {
+        running++;
+        most = Math.max(most, running);
+        await new Promise((r) => setTimeout(r, 10));
+        running--;
+        return mock.dailyAdSpend(q, signal);
+      },
+    };
+    const result = await runMetaSync(t.ws.id, {}, { adapterFactory: async () => adapter, sleep: noSleep, now: () => NOW });
+    expect(result).toMatchObject({ ran: true, ok: true, accounts: 3, added: 6, error: null });
+    expect(most).toBeGreaterThan(1);
+    expect(await db.adSpend.count({ where: { workspaceId: t.ws.id } })).toBe(6);
+    expect(await db.creative.count({ where: { workspaceId: t.ws.id } })).toBe(6);
+  });
 });
 
 describe("Several Business Managers", () => {

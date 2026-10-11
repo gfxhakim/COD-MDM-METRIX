@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
+import { createTRPCClient, httpBatchStreamLink, TRPCClientError } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import { useState } from "react";
 import superjson from "superjson";
@@ -28,7 +28,9 @@ export function Providers({ workspaceId, children }: { workspaceId: string | nul
   const [trpcClient] = useState(() =>
     createTRPCClient<AppRouter>({
       links: [
-        httpBatchLink({
+        // Queries asked for together go in one request, and each answer arrives as soon as it is
+        // ready: a slow report doesn't hold back the quick numbers next to it.
+        httpBatchStreamLink({
           url: "/api/trpc",
           transformer: superjson,
           headers: () => (workspaceId ? { "x-workspace-id": workspaceId } : {}),

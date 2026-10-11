@@ -142,6 +142,11 @@ async function resolveLines(env: OrderSyncEnv, o: MdmOrder): Promise<Line[]> {
   return lines;
 }
 
+/** Links or makes the products a page of orders needs, one at a time, so the orders can then be saved side by side. */
+export async function prepareOrderProducts(env: OrderSyncEnv, orders: MdmOrder[]) {
+  for (const o of orders) await resolveLines(env, o);
+}
+
 const lineSig = (lines: Omit<Line, "mdmVariantId">[]) => JSON.stringify(lines.map((l) => JSON.stringify([l.productId, l.sku, l.productName, l.quantity, l.unitPrice, l.mdmProductId])).sort());
 
 function platformOf(source: string | null): AdPlatform {
@@ -161,14 +166,22 @@ async function ensureCreative(env: OrderSyncEnv, key: string, utm: MdmUtm, lines
   const products = [...new Set(lines.map((l) => l.productId).filter((p): p is string => !!p))];
   const platform = platformOf(utm.source);
   const external = utm.content!.trim().slice(0, 200);
-  const c = await db.creative.upsert({
-    where: { workspaceId_platform_externalCreativeId: { workspaceId: env.workspaceId, platform, externalCreativeId: external } },
-    create: { workspaceId: env.workspaceId, platform, externalCreativeId: external, normalizedKey: key, campaignName: utm.campaign, productId: products.length === 1 ? products[0] : null },
-    update: {},
-    select: { id: true },
-  });
-  env.creatives.set(key, c.id);
-  return c.id;
+  const where = { workspaceId_platform_externalCreativeId: { workspaceId: env.workspaceId, platform, externalCreativeId: external } };
+  let id: string;
+  try {
+    id = (await db.creative.upsert({
+      where,
+      create: { workspaceId: env.workspaceId, platform, externalCreativeId: external, normalizedKey: key, campaignName: utm.campaign, productId: products.length === 1 ? products[0] : null },
+      update: {},
+      select: { id: true },
+    })).id;
+  } catch (e) {
+    // Two orders of the same new ad saved at the same moment: the other one made it.
+    if ((e as { code?: string }).code !== "P2002") throw e;
+    id = (await db.creative.findUniqueOrThrow({ where, select: { id: true } })).id;
+  }
+  env.creatives.set(key, id);
+  return id;
 }
 
 const orderInclude = { attribution: true, lines: true } as const satisfies Prisma.OrderInclude;

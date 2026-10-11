@@ -4,6 +4,7 @@ import { InputError } from "@/server/errors";
 import { rateLimit } from "@/server/rateLimit";
 import { assertCan, type WorkspaceContext } from "@/server/tenancy";
 import { parseExchangeRates } from "@/domain/settings";
+import { createLock, mapLimit } from "@/lib/concurrency";
 import { convertMinor } from "@/lib/money";
 import { normalizeCreativeKey } from "@/lib/normalize";
 import { sha256 } from "@/server/mdm/redact";
@@ -27,6 +28,9 @@ export const REFRESH_DAYS = 3;
 const CHUNK_DAYS = 30;
 const LEASE_MS = 20 * 60_000;
 const MAX_RETRIES = 3;
+/** Ad accounts read side by side, and 30-day pieces of one account read side by side. */
+const ACCOUNTS_AT_ONCE = 3;
+const CHUNKS_AT_ONCE = 2;
 
 export type MetaSyncDeps = { adapterFactory: MetaAdapterFactory; sleep: (ms: number) => Promise<void>; now: () => Date };
 const defaultDeps: MetaSyncDeps = { adapterFactory: metaAdapterForToken, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: () => new Date() };
@@ -182,17 +186,21 @@ export type MetaSyncResult =
   | { ran: false; reason: "not_connected" | "running" }
   | { ran: true; ok: boolean; accounts: number; added: number; updated: number; unchanged: number; superseded: number; failed: { account: string; message: string }[]; error: string | null };
 
-async function syncAccount(adapter: MetaAdapter, env: Env, acc: AdAccount, full: boolean, deps: MetaSyncDeps, counts: Counts) {
+/**
+ * One account's days, a few 30-day pieces at a time. Meta takes a while to answer each piece,
+ * so they are asked for side by side; the rows are saved one page at a time through `write`.
+ */
+async function syncAccount(adapter: MetaAdapter, env: Env, acc: AdAccount, full: boolean, deps: MetaSyncDeps, counts: Counts, write: ReturnType<typeof createLock>) {
   const { since, until } = syncWindow(acc, deps.now(), full);
-  for (const c of chunks(since, until)) {
+  await mapLimit(chunks(since, until), CHUNKS_AT_ONCE, async (c) => {
     let cursor: string | null = null;
     for (let page = 0; page < 1000; page++) {
       const res = await withRetry(() => adapter.dailyAdSpend({ accountId: acc.externalId, since: c.since, until: c.until, cursor, currency: acc.currency ?? env.currency }), deps);
-      await writeRows(env, acc.externalId, res.rows, counts);
+      await write(() => writeRows(env, acc.externalId, res.rows, counts));
       cursor = res.next;
       if (!cursor) break;
     }
-  }
+  });
   return { since, until };
 }
 
@@ -224,6 +232,7 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
   let from = null as string | null;
   let until = null as string | null;
   const reject = (t: MetaToken, message: string) => {
+    if (rejected.has(t.id)) return;
     rejected.set(t.id, message);
     failed.push({ account: t.label, message });
   };
@@ -255,12 +264,14 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
     accounts = await db.adAccount.findMany({ where: { workspaceId, platform: "META", enabled: true, lastSeenAt: { gte: started }, tokenId: { in: [...adapters.keys()] } }, orderBy: { externalId: "asc" } });
     const env = await loadEnv(workspaceId);
     const campaignLists = new Map<string, MetaCampaign[]>();
-    for (const acc of accounts) {
+    // Accounts are read side by side; their rows are written one page at a time.
+    const write = createLock();
+    await mapLimit(accounts, ACCOUNTS_AT_ONCE, async (acc) => {
       const token = tokens.find((t) => t.id === acc.tokenId)!;
-      if (rejected.has(token.id)) continue;
+      if (rejected.has(token.id)) return;
       try {
         const adapter = adapters.get(token.id)!;
-        const w = await syncAccount(adapter, env, acc, !!opts.full, deps, counts);
+        const w = await syncAccount(adapter, env, acc, !!opts.full, deps, counts, write);
         from = !from || w.since < from ? w.since : from;
         until = !until || w.until > until ? w.until : until;
         await db.adAccount.update({ where: { id: acc.id }, data: { lastSyncedAt: started, lastError: null } });
@@ -277,7 +288,7 @@ export async function runMetaSync(workspaceId: string, opts: { full?: boolean; t
         if (e instanceof MetaError && e.kind === "AUTH") reject(token, message);
         else failed.push({ account: acc.name ?? acc.externalId, message });
       }
-    }
+    });
     if (from && until) superseded = await supersedeCsvSpend(workspaceId, { from: dayDate(addDays(from, -1)), to: dayDate(addDays(until, 1)) }, started);
     // Orders whose content ID arrived before Meta created its creative.
     await relinkAttribution({ workspaceId });

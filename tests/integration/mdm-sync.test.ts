@@ -549,7 +549,35 @@ describe("MDM orders", () => {
     const limited = await sync(d, { fixtures: [], credential: SECRET, orders, orderHistory: { "ORD-E2": withContent("120000000000013") }, historyFailures: { "ORD-E2": [new MdmError("slow down", "RATE_LIMIT", 10)], "ORD-E3": [new MdmError("forbidden", "AUTH")] } });
     expect(limited.done).toMatchObject({ status: "SUCCEEDED", ordersAddedCount: 3, ordersWithContentCount: 1 });
     expect(limited.done.ordersNote).toContain("can't read order history");
-    // After the history refusal, no more history reads in this sync.
-    expect(limited.adapter.historyCalls).toEqual(["ORD-E2", "ORD-E2", "ORD-E3"]);
+    // A page's histories are read side by side; after the refusal, no more history reads in this sync.
+    expect([...limited.adapter.historyCalls].sort()).toEqual(["ORD-E2", "ORD-E2", "ORD-E3"]);
+  });
+
+  it("reads a page's status histories side by side, and orders of one new ad share one creative", async () => {
+    const d = await makeTenant("OrdersF");
+    await d.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    await connect(d);
+    const ids = Array.from({ length: 8 }, (_, i) => `ORD-F${i}`);
+    const mock = createMockAdapter({ fixtures: ids.map((id, i) => parcel(`P-F${i}`, { mdmOrderId: id })), credential: SECRET, orders: ids.map((id) => mdmOrder(id, { utm: { source: "facebook", medium: "paid", campaign: null, content: null } })), orderHistory: Object.fromEntries(ids.map((id) => [id, withContent("120000000000077")])) });
+    let running = 0;
+    let most = 0;
+    const adapter = {
+      ...mock,
+      async orderUtm(id: string) {
+        running++;
+        most = Math.max(most, running);
+        await new Promise((r) => setTimeout(r, 15));
+        running--;
+        return mock.orderUtm!(id);
+      },
+    };
+    const { job } = await startSync(d.ctx, { mode: "FULL" });
+    const done = await runSyncJob(job.id, { adapterFactory: async () => ({ adapter, connection: null }), sleep: noSleep, pageSize: 4 });
+    expect(done).toMatchObject({ status: "SUCCEEDED", ordersAddedCount: 8, ordersWithContentCount: 8, addedCount: 8, unmatchedCount: 0 });
+    expect(most).toBeGreaterThan(1);
+    const creatives = await db.creative.findMany({ where: { workspaceId: d.ws.id }, select: { id: true, externalCreativeId: true } });
+    expect(creatives).toEqual([{ id: expect.any(String), externalCreativeId: "120000000000077" }]);
+    expect(await db.attribution.count({ where: { workspaceId: d.ws.id, creativeId: creatives[0].id } })).toBe(8);
+    expect(await db.parcel.count({ where: { workspaceId: d.ws.id, orderId: { not: null } } })).toBe(8);
   });
 });
