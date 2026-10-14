@@ -27,6 +27,7 @@ export type ParcelFact = {
   dispatched: boolean;
 };
 
+/** `quantity` is the pieces the line sends, its offer's free pieces included (see `loadFacts`). */
 export type LineFact = { productId: string | null; quantity: number };
 
 export type OrderFact = {

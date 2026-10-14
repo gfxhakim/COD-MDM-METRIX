@@ -99,6 +99,7 @@ describe("profit tracker: real orders", () => {
 
 describe("profit tracker: starting values", () => {
   const product: ProductData = {
+    piecesPerOrder: 1,
     cost: { salePrice: 290000, sourcingCost: 110000, forwardShippingFee: 45000, rtoFee: 20000, callCenterFee: 9000, packagingFee: 2000 },
     stock: { read: true, available: 80, incoming: 20, received: 300, sellingPrice: 300000, purchasePrice: 100000 },
     observed: { enough: true, confirmationRate: 0.7, shippingRate: 0.9, deliveryRate: 0.65, lostRate: 0.01, unitsPerOrder: 1.2, cpa: 61000, avgShippingFee: 48000, avgReturnFee: 21000 },
@@ -127,6 +128,12 @@ describe("profit tracker: starting values", () => {
     expect(s.units).toBe(100);
     expect(s.inputs).toMatchObject({ deliveryRate: 0.5, returnRate: 0.45, salePrice: 310000, cpa: 61000 });
     expect(s.sources).toMatchObject({ deliveryRate: "you", returnRate: "you", salePrice: "you" });
+  });
+
+  it("splits an offer's price across its pieces", () => {
+    const s = seedFor({ ...product, piecesPerOrder: 2 }, defaults);
+    expect(s.inputs).toMatchObject({ salePrice: 145000, unitCost: 110000, unitsPerOrder: 2 });
+    expect(s.sources).toMatchObject({ salePrice: "product", unitsPerOrder: "product" });
   });
 
   it("keeps rates read from orders between 0 and 100%", () => {

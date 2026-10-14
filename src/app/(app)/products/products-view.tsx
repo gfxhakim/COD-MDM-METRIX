@@ -8,6 +8,7 @@ import { useMoney } from "@/components/app/currency";
 import { CurrencyAmountInput, OriginalAmount, parseCurrencyAmount, rateInput, type CurrencyAmount, type Rates } from "@/components/app/currency-amount";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
 import { MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
+import { OfferPicker } from "@/components/app/offer-picker";
 import { PageHeader } from "@/components/app/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,8 +27,8 @@ import { useCan } from "@/components/app/use-can";
 import { AdLinksPicker, type AdLinks } from "./ad-links";
 
 const COST_FIELDS = [
-  { key: "salePrice", label: "Sale price", hint: "COD amount collected per unit" },
-  { key: "sourcingCost", label: "Sourcing cost (COGS)", hint: "Per delivered unit. Pick the currency you pay your supplier in." },
+  { key: "salePrice", label: "Sale price", hint: "What the customer pays for one order, every piece of your offer included, without delivery" },
+  { key: "sourcingCost", label: "Sourcing cost (COGS)", hint: "Per piece. Pick the currency you pay your supplier in." },
   { key: "forwardShippingFee", label: "Forward shipping fee", hint: "Per shipped parcel" },
   { key: "rtoFee", label: "RTO fee", hint: "Per returned parcel" },
   { key: "callCenterFee", label: "Call-center fee", hint: "Per call basis unit" },
@@ -75,6 +76,8 @@ export type ProductRow = {
   sku: string;
   currency: string;
   active: boolean;
+  /** Pieces one order sends: the product's offer. */
+  piecesPerOrder: number;
   versionCount: number;
   linkedCampaigns: number;
   linkedAdAccounts: number;
@@ -90,6 +93,7 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
   const [name, setName] = React.useState(product?.name ?? "");
   const [sku, setSku] = React.useState(product?.sku ?? "");
   const [active, setActive] = React.useState(product?.active ?? true);
+  const [pieces, setPieces] = React.useState(product?.piecesPerOrder ?? 1);
   const [cost, setCost] = React.useState<CostForm>(() => emptyCost(currency));
   const [links, setLinks] = React.useState<AdLinks | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -107,8 +111,8 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
     e.preventDefault();
     setError(null);
     try {
-      if (product) update.mutate({ id: product.id, name, sku, active, links: links ?? undefined });
-      else create.mutate({ name, sku, active, cost: parseCost(cost, currency), links: links ?? undefined });
+      if (product) update.mutate({ id: product.id, name, sku, active, piecesPerOrder: pieces, links: links ?? undefined });
+      else create.mutate({ name, sku, active, piecesPerOrder: pieces, cost: parseCost(cost, currency), links: links ?? undefined });
     } catch (err) {
       setError((err as Error).message);
     }
@@ -125,6 +129,9 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
           <label className="flex items-center gap-2 text-sm text-muted">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-[#e1182c]" /> Active
           </label>
+          <Field label="Offer" htmlFor="poffer" hint="How many pieces one order sends. Its sale price is for the whole order, and each piece's cost counts.">
+            <OfferPicker id="poffer" value={pieces} onChange={setPieces} />
+          </Field>
           {!product ? <CostFields value={cost} onChange={setCost} currency={currency} rates={rates} /> : null}
           <section className="flex flex-col gap-2 border-t border-border pt-4">
             <h3 className="text-sm font-medium">Ads for this product</h3>

@@ -180,6 +180,8 @@ export async function observedForSimulator(ctx: WorkspaceContext, input: DateRan
   const evaluated = evaluate(facts).filter((o) => !input.productId || o.productId === input.productId);
   const m = computeMetrics(sumTotals(evaluated.map((o) => o.totals)), sumSpend(facts, (s) => !input.productId || s.productId === input.productId), 0, "DELIVERED");
   const cost = input.productId ? facts.resolveCost(input.productId, new Date()) : null;
+  // The simulator's product cost is per order: with an offer, every piece it sends.
+  const pieces = facts.products.find((p) => p.id === input.productId)?.piecesPerOrder ?? 1;
   const d = facts.defaults;
   return {
     currency: facts.currency,
@@ -195,7 +197,7 @@ export async function observedForSimulator(ctx: WorkspaceContext, input: DateRan
     currentCpa: { placed: m.placedCpa, confirmed: m.cpco, delivered: m.cpdo },
     costs: {
       salePrice: cost?.salePrice ?? null,
-      sourcingCost: cost?.sourcingCost ?? null,
+      sourcingCost: cost ? cost.sourcingCost * Math.max(1, pieces) : null,
       outboundShipping: cost?.forwardShippingFee ?? d.forwardShippingFee,
       rtoFee: cost?.rtoFee ?? d.rtoFee,
       callCenterCost: cost?.callCenterFee ?? d.callCenterFee,

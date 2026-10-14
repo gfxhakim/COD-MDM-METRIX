@@ -307,6 +307,8 @@ export const roundRate = (v: number) => Math.round(v * 1000) / 1000;
 export type FieldSource = "you" | "orders" | "product" | "mdm" | "default";
 
 export type ProductData = {
+  /** Pieces one order sends (the product's offer). The cost's sale price is for the whole order. */
+  piecesPerOrder: number;
   cost: { salePrice: number; sourcingCost: number; forwardShippingFee: number; rtoFee: number; callCenterFee: number; packagingFee: number } | null;
   stock: { read: boolean; available: number; incoming: number; received: number; sellingPrice: number | null; purchasePrice: number | null };
   observed: {
@@ -373,15 +375,17 @@ export function seedFor(p: ProductData, d: Defaults): Seed {
     : null;
   if (o.returnRate !== undefined) sources.returnRate = "you";
   const stockSource = p.plan?.stockSource ?? (p.stock.read ? "MDM_AVAILABLE" : "TYPED");
+  // The product's sale price is for one whole order: with an offer, each piece sells for its share.
+  const pieces = Math.max(1, p.piecesPerOrder);
   return {
     stockSource,
     units: stockUnitsFor(stockSource, p.stock, p.plan?.stockUnits ?? null),
     includeFees: o.includeFees ?? false,
     sources,
     inputs: {
-      salePrice: pick("salePrice", [["you", o.salePrice], ["product", p.cost?.salePrice], ["mdm", p.stock.sellingPrice], ["default", 0]]),
+      salePrice: pick("salePrice", [["you", o.salePrice], ["product", p.cost ? Math.round(p.cost.salePrice / pieces) : null], ["mdm", p.stock.sellingPrice], ["default", 0]]),
       unitCost: pick("unitCost", [["you", o.unitCost], ["product", p.cost?.sourcingCost], ["mdm", p.stock.purchasePrice], ["default", 0]]),
-      unitsPerOrder: pick("unitsPerOrder", [["you", o.unitsPerOrder], ["orders", p.observed.unitsPerOrder], ["default", 1]]),
+      unitsPerOrder: pick("unitsPerOrder", [["you", o.unitsPerOrder], ["product", pieces > 1 ? pieces : null], ["orders", p.observed.unitsPerOrder], ["default", 1]]),
       confirmationRate: pick("confirmationRate", [["you", o.confirmationRate], ["orders", seen?.confirmationRate], ["default", FALLBACK_RATES.confirmationRate]]),
       shippingRate: pick("shippingRate", [["you", o.shippingRate], ["orders", seen?.shippingRate], ["default", FALLBACK_RATES.shippingRate]]),
       deliveryRate: pick("deliveryRate", [["you", o.deliveryRate], ["orders", seen?.deliveryRate], ["default", FALLBACK_RATES.deliveryRate]]),

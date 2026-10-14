@@ -340,7 +340,7 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(card.getByText(/^From \d+ \w+/)).toHaveCount(0);
   });
 
-  test("17. see what a product's stock earns before ads, with ads and fees, and save its numbers", async ({ page }) => {
+  test("17. see what a delivered order really earns with its offer and linked campaigns, and what the stock earns", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link").nth(1)).toHaveAccessibleName(/Profit tracker/);
     await page.goto("/profit");
@@ -355,7 +355,28 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByText("comes from ads with no known campaign")).toBeVisible();
     await expect(page.locator("tr", { hasText: "LED Night Lamp" })).not.toContainText("No ads linked");
     await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
-    const card = page.getByRole("region", { name: "Posture Corrector Pro" });
+    // One delivered order, step by step, with the product's offer counted.
+    const order = page.getByRole("region", { name: "Posture Corrector Pro", exact: true });
+    await expect(order.getByText("Profit per delivered order").first()).toBeVisible();
+    await expect(order.getByText("Product: 1 ×")).toBeVisible();
+    await order.getByLabel("Offer", { exact: true }).selectOption("2");
+    await expect(page.getByText("Posture Corrector Pro: Buy 1, get 1 free")).toBeVisible();
+    await expect(order.getByText("Product: 2 ×")).toBeVisible();
+    await order.getByLabel("Offer", { exact: true }).selectOption("1");
+    await expect(page.getByText("Posture Corrector Pro: No offer")).toBeVisible();
+    await expect(order.getByText("Product: 1 ×")).toBeVisible();
+    // Every campaign linked to the product, added together.
+    await expect(page.getByText("All linked campaigns").first()).toBeVisible();
+    // Other numbers can be tried without saving them.
+    await order.getByRole("button", { name: "Try other numbers" }).click();
+    await order.getByLabel("Delivery rate", { exact: true }).fill("0");
+    await expect(order.getByRole("alert")).toContainText("no order is ever delivered");
+    await order.getByRole("button", { name: "Back to my data" }).click();
+    await expect(order.getByRole("alert")).toHaveCount(0);
+
+    // The stock calculation is folded under More details.
+    await page.getByRole("button", { name: "More details" }).click();
+    const card = page.getByRole("region", { name: "Stock of Posture Corrector Pro" });
     // The MDM stock read by the sync counts for the product with the same name: 142 + 71 units,
     // at 3900 − 1050 DZD each.
     await expect(card.getByLabel("Units", { exact: true })).toHaveValue("213");
@@ -594,7 +615,7 @@ test("20. open pages from the red dock, and every page fits a phone screen", asy
   for (const path of [...pages, ...tabs]) await fits(path, "folded");
   // Again with every "More details" open, as this browser remembers it.
   await page.evaluate(() => {
-    for (const id of ["dashboard", "expenses", "expenses-filters", "money", "simulator", "orders", "creatives-filters", "products", "profit-products", "profit-rates", "syncs"]) localStorage.setItem(`more-details:${id}`, "1");
+    for (const id of ["dashboard", "expenses", "expenses-filters", "money", "simulator", "orders", "creatives-filters", "products", "profit-stock", "profit-try", "profit-rates", "syncs"]) localStorage.setItem(`more-details:${id}`, "1");
   });
   for (const path of pages) await fits(path, "with More details open");
 });
