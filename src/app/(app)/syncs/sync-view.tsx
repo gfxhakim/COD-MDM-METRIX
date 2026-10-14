@@ -149,7 +149,7 @@ function LinkDialog({ trackingId, reference, onClose }: { trackingId: string; re
                     <Td className="font-medium">{o.orderNumber}</Td>
                     <Td className="text-xs text-muted">{formatDateTime(o.placedAt)}</Td>
                     <Td className="text-xs text-muted">{o.wilaya ?? "—"}</Td>
-                    <Td className="text-right"><Button size="sm" variant="outline" disabled={link.isPending} onClick={() => link.mutate({ orderId: o.id, trackingId })}>Link</Button></Td>
+                    <Td className="text-end"><Button size="sm" variant="outline" disabled={link.isPending} onClick={() => link.mutate({ orderId: o.id, trackingId })}>Link</Button></Td>
                   </Tr>
                 ))}
               </tbody>
@@ -181,14 +181,14 @@ function UnmatchedQueue() {
       ) : (
         <div className="overflow-x-auto">
           <Table>
-            <THead><tr><Th>Tracking ID</Th><Th>MDM reference</Th><Th>Status</Th><Th className="text-right">COD</Th><Th>Wilaya</Th><Th>Why</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
+            <THead><tr><Th>Tracking ID</Th><Th>MDM reference</Th><Th>Status</Th><Th className="text-end">COD</Th><Th>Wilaya</Th><Th>Why</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
             <tbody>
               {q.data.map((r) => (
                 <Tr key={r.id}>
-                  <Td className="font-mono text-xs">{r.externalId}{r.parcel?.isDemoFixture ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}</Td>
+                  <Td className="font-mono text-xs">{r.externalId}{r.parcel?.isDemoFixture ? <Badge tone="info" className="ms-1.5">demo</Badge> : null}</Td>
                   <Td>{r.reference ?? "—"}</Td>
                   <Td>{r.parcel ? <ParcelStatusBadge status={r.parcel.normalizedStatus} /> : "—"}</Td>
-                  <Td className="text-right">{r.parcel ? <Money value={r.parcel.codAmount} currency={r.parcel.currency} /> : "—"}</Td>
+                  <Td className="text-end">{r.parcel ? <Money value={r.parcel.codAmount} currency={r.parcel.currency} /> : "—"}</Td>
                   <Td className="text-xs text-muted">{r.parcel?.wilaya ?? "—"}</Td>
                   <Td className="min-w-60 max-w-80 whitespace-normal text-xs text-muted">{r.reason}</Td>
                   <Td>
@@ -349,22 +349,22 @@ export function SyncView() {
             ) : (
               <div className="overflow-x-auto">
                 <Table>
-                  <THead><tr><Th>Started</Th><Th>Type</Th><Th>Status</Th><Th className="text-right">New orders</Th><Th className="text-right">Parcels added</Th><Th className="text-right">Updated</Th><Th className="text-right">Unchanged</Th><Th className="text-right">Failed</Th><Th className="text-right">Unmatched</Th><Th>Duration</Th></tr></THead>
+                  <THead><tr><Th>Started</Th><Th>Type</Th><Th>Status</Th><Th className="text-end">New orders</Th><Th className="text-end">Parcels added</Th><Th className="text-end">Updated</Th><Th className="text-end">Unchanged</Th><Th className="text-end">Failed</Th><Th className="text-end">Unmatched</Th><Th>Duration</Th></tr></THead>
                   <tbody>
                     {jobs.data.map((j) => (
                       <Tr key={j.id} className="cursor-pointer" onClick={() => setViewing(j.id)}>
                         <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(j.createdAt)}</Td>
                         <Td className="text-xs">
-                          {MODE_LABEL[j.mode] ?? j.mode} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ml-1.5">demo</Badge> : null}
+                          {MODE_LABEL[j.mode] ?? j.mode} · {j.trigger.toLowerCase()}{j.adapter === "mock" ? <Badge tone="info" className="ms-1.5">demo</Badge> : null}
                           {j.mode === "CUSTOM" ? <span className="block max-w-64 truncate text-[11px] text-muted" title={choicesOf(j) ?? undefined}>{choicesOf(j)}</span> : null}
                         </Td>
                         <Td><Badge tone={JOB_TONE[j.status]}>{JOB_LABEL[j.status]}</Badge></Td>
-                        <Td className="num text-right">{j.ordersAddedCount}</Td>
-                        <Td className="num text-right">{j.addedCount}</Td>
-                        <Td className="num text-right">{j.updatedCount}</Td>
-                        <Td className="num text-right text-muted">{j.unchangedCount}</Td>
-                        <Td className={`num text-right ${j.failedCount ? "text-negative" : "text-muted"}`}>{j.failedCount}</Td>
-                        <Td className={`num text-right ${j.unmatchedCount ? "text-warning" : "text-muted"}`}>{j.unmatchedCount}</Td>
+                        <Td className="num text-end">{j.ordersAddedCount}</Td>
+                        <Td className="num text-end">{j.addedCount}</Td>
+                        <Td className="num text-end">{j.updatedCount}</Td>
+                        <Td className="num text-end text-muted">{j.unchangedCount}</Td>
+                        <Td className={`num text-end ${j.failedCount ? "text-negative" : "text-muted"}`}>{j.failedCount}</Td>
+                        <Td className={`num text-end ${j.unmatchedCount ? "text-warning" : "text-muted"}`}>{j.unmatchedCount}</Td>
                         <Td className="text-xs text-muted">{duration(j.startedAt, j.finishedAt)}</Td>
                       </Tr>
                     ))}

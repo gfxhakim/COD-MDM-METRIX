@@ -191,11 +191,11 @@ function ConfirmDelete({ target, keysSaved, onClose }: { target: Target; keysSav
         <div className="flex flex-col gap-4 text-sm">
           <div>
             <p className="font-semibold text-negative">Deleted</p>
-            <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-muted">{d.goes.map((g) => <li key={g}>{g}</li>)}</ul>
+            <ul className="mt-1 flex list-disc flex-col gap-1 ps-5 text-muted">{d.goes.map((g) => <li key={g}>{g}</li>)}</ul>
           </div>
           <div>
             <p className="font-semibold">Kept</p>
-            <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-muted">{d.stays.map((g) => <li key={g}>{g}</li>)}</ul>
+            <ul className="mt-1 flex list-disc flex-col gap-1 ps-5 text-muted">{d.stays.map((g) => <li key={g}>{g}</li>)}</ul>
           </div>
           {canStop ? (
             <label className="flex items-start gap-2 rounded-2xl bg-surface-2 p-3">

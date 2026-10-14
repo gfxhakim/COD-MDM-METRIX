@@ -166,8 +166,8 @@ function Panel({ initial, onApply, onClose }: { initial: AdFilter | undefined; o
             <Section title={`Campaigns${pickedCampaigns.length ? ` · ${pickedCampaigns.length} picked` : ""}`} aside={pickedCampaigns.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setDraft({ ...draft, campaignIds: [] })}>Clear</button> : null}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
-                  <Input aria-label="Search campaigns" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns" className="pl-9" />
+                  <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
+                  <Input aria-label="Search campaigns" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns" className="ps-9" />
                 </div>
                 <Chip active={runningOnly} onClick={() => setRunningOnly((v) => !v)}>Running only</Chip>
               </div>

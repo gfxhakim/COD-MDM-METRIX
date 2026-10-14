@@ -338,7 +338,7 @@ function Bars({ rows, total, currency, empty }: { rows: { key: string; label: st
             <span className="min-w-0 truncate font-semibold">{r.label}</span>
             <span className="num shrink-0 font-semibold">
               {money.fmt(r.amount, currency, { decimals: false })}
-              <span className="ml-1.5 text-xs font-normal text-muted">{total > 0 ? `${Math.round((r.amount / total) * 100)}%` : ""}</span>
+              <span className="ms-1.5 text-xs font-normal text-muted">{total > 0 ? `${Math.round((r.amount / total) * 100)}%` : ""}</span>
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-[#f1eeee]">
@@ -385,7 +385,7 @@ function RepeatingCard({ rows, currency, canWrite, today, onAdd, onEdit, periodL
                 </p>
               </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
-                <div className="text-left sm:text-right">
+                <div className="text-start sm:text-end">
                   <p className="num text-[15px] font-extrabold">{money.fmt(r.inPeriod, currency, { decimals: false })}</p>
                   <p className="text-[11px] text-subtle">{periodLabel} · ≈ <span className="num">{money.fmt(r.perMonth, currency, { decimals: false })}</span>/month</p>
                 </div>
@@ -479,8 +479,8 @@ export function ExpensesView() {
 
       <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <div className="relative col-span-2 sm:w-56">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
-          <Input aria-label="Search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search expenses" className="pl-9" />
+          <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
+          <Input aria-label="Search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search expenses" className="ps-9" />
         </div>
         <Select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className="col-span-2 w-full sm:w-48">
           <option value="">All categories</option>
@@ -505,7 +505,7 @@ export function ExpensesView() {
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4">
         <section className="relative col-span-2 flex min-w-0 flex-col gap-3 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)] sm:col-span-3 xl:col-span-1">
-          <span className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
+          <span className="pointer-events-none absolute -end-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
           <span className="relative text-[15px] font-semibold">Expenses · {periodLabel.toLowerCase()}</span>
           <div className="relative min-w-0">{s ? <FitMoney value={whole(s.total, currency)} currency={currency} max={34} codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" /> : <Skeleton className="h-9 w-40 bg-white/25" />}</div>
           <span className="relative text-xs text-white/85">{s ? <>{money.fmt(s.total - s.repeating, currency, { decimals: false })} once · {money.fmt(s.repeating, currency, { decimals: false })} repeating</> : " "}</span>
@@ -542,7 +542,7 @@ export function ExpensesView() {
               <>
                 <div className="hidden md:block">
                   <Table>
-                    <THead><tr><Th>Date</Th><Th>Category</Th><Th>Description</Th><Th>For</Th><Th className="text-right">Amount</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
+                    <THead><tr><Th>Date</Th><Th>Category</Th><Th>Description</Th><Th>For</Th><Th className="text-end">Amount</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
                     <tbody>
                       {list.data.map((e) => (
                         <Tr key={e.id}>
@@ -550,7 +550,7 @@ export function ExpensesView() {
                           <Td className="whitespace-nowrap">{categoryName(e)}<span className="block text-[11px] text-subtle">{e.costType === "FIXED" ? "Fixed" : "Variable"}</span></Td>
                           <Td className="max-w-56 truncate text-muted">{e.description ?? "—"}</Td>
                           <Td>{e.allocation === "GLOBAL" ? <Badge tone="warning">Whole business</Badge> : <Badge tone="info">{e.product?.name ?? "Product"}</Badge>}</Td>
-                          <Td className="num whitespace-nowrap text-right">{money.fmt(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
+                          <Td className="num whitespace-nowrap text-end">{money.fmt(e.amount, e.currency)}<OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} /></Td>
                           <Td>
                             {canWrite ? (
                               <div className="flex justify-end gap-0.5">
@@ -577,7 +577,7 @@ export function ExpensesView() {
                       </div>
                       <OriginalAmount amount={e.originalAmount} currency={e.originalCurrency} rate={e.fxRate} />
                       {canWrite ? (
-                        <div className="-ml-2 flex gap-0.5">
+                        <div className="-ms-2 flex gap-0.5">
                           <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "expense", row: e })}><Pencil /> Edit</Button>
                           <Button size="sm" variant="ghost" onClick={() => confirm("Delete this expense?") && del.mutate({ id: e.id })}><Trash2 /> Delete</Button>
                         </div>
@@ -607,13 +607,13 @@ export function ExpensesView() {
             <CardBody className="p-0">
               {!s ? <Skeleton className="m-4 h-32" /> : s.months.length === 0 ? <p className="px-5 pb-5 text-sm text-muted">No expenses in these days.</p> : (
                 <Table>
-                  <THead><tr><Th>Month</Th><Th className="text-right">Repeating</Th><Th className="text-right">Total</Th></tr></THead>
+                  <THead><tr><Th>Month</Th><Th className="text-end">Repeating</Th><Th className="text-end">Total</Th></tr></THead>
                   <tbody>
                     {s.months.map((m) => (
                       <Tr key={m.month}>
                         <Td className="whitespace-nowrap text-xs">{monthLabel(m.month)}</Td>
-                        <Td className="num whitespace-nowrap text-right text-muted">{money.fmt(m.repeating, currency, { decimals: false })}</Td>
-                        <Td className="num whitespace-nowrap text-right font-semibold">{money.fmt(m.total, currency, { decimals: false })}</Td>
+                        <Td className="num whitespace-nowrap text-end text-muted">{money.fmt(m.repeating, currency, { decimals: false })}</Td>
+                        <Td className="num whitespace-nowrap text-end font-semibold">{money.fmt(m.total, currency, { decimals: false })}</Td>
                       </Tr>
                     ))}
                   </tbody>

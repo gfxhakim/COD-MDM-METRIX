@@ -54,13 +54,13 @@ type Metrics = { adSpend: number; placed: number; delivered: number; deliveryRat
 function MetricCells({ m, currency }: { m: Metrics; currency: string }) {
   return (
     <>
-      <Td className="text-right"><Money value={m.adSpend} currency={currency} /></Td>
-      <Td className="num text-right">{m.placed}</Td>
-      <Td className="num text-right">{m.delivered}</Td>
-      <Td className="text-right"><Rate value={m.deliveryRate} /></Td>
-      <Td className="text-right"><Money value={m.placedCpa} currency={currency} /></Td>
-      <Td className="text-right"><Money value={m.trueNetProfit} currency={currency} signed /></Td>
-      <Td className="text-right"><Ratio value={m.truePoas} /></Td>
+      <Td className="text-end"><Money value={m.adSpend} currency={currency} /></Td>
+      <Td className="num text-end">{m.placed}</Td>
+      <Td className="num text-end">{m.delivered}</Td>
+      <Td className="text-end"><Rate value={m.deliveryRate} /></Td>
+      <Td className="text-end"><Money value={m.placedCpa} currency={currency} /></Td>
+      <Td className="text-end"><Money value={m.trueNetProfit} currency={currency} signed /></Td>
+      <Td className="text-end"><Ratio value={m.truePoas} /></Td>
     </>
   );
 }
@@ -176,13 +176,13 @@ export function CampaignsView() {
                 <Th>Campaign</Th>
                 {phone ? null : <>
                 <Th><Term label="Product" definition="The product this campaign's spend and ads count for. A campaign's own link comes first, then its ad account's default, then the product of its ads." /></Th>
-                <Th className="text-right">Spend</Th>
-                <Th className="text-right">Orders</Th>
-                <Th className="text-right">Delivered</Th>
-                <Th className="text-right"><Term label="Delivery" definition={DEF.deliveryRate} /></Th>
-                <Th className="text-right"><Term label="CPA" definition={DEF.placedCpa} /></Th>
-                <Th className="text-right"><Term label="Net profit" definition={DEF.trueNetProfit} /></Th>
-                <Th className="text-right"><Term label="POAS" definition={DEF.truePoas} /></Th>
+                <Th className="text-end">Spend</Th>
+                <Th className="text-end">Orders</Th>
+                <Th className="text-end">Delivered</Th>
+                <Th className="text-end"><Term label="Delivery" definition={DEF.deliveryRate} /></Th>
+                <Th className="text-end"><Term label="CPA" definition={DEF.placedCpa} /></Th>
+                <Th className="text-end"><Term label="Net profit" definition={DEF.trueNetProfit} /></Th>
+                <Th className="text-end"><Term label="POAS" definition={DEF.truePoas} /></Th>
                 <Th><Term label="Verdict" definition={DEF.verdict} /></Th>
                 </>}
               </tr>
@@ -244,7 +244,7 @@ export function CampaignsView() {
                     {expanded
                       ? c.ads.map((a) => (
                           <Tr key={`${c.key}:${a.key}`} className="bg-surface-2/30 text-xs">
-                            <Td className={cn(phone ? "pl-10 whitespace-normal" : "pl-12")}>
+                            <Td className={cn(phone ? "ps-10 whitespace-normal" : "ps-12")}>
                               <span className="flex flex-col"><span className="font-mono">{a.externalCreativeId}</span><span className="max-w-64 truncate text-[11px] text-subtle">{a.name ?? "Unnamed ad"}</span>
                                 {phone ? (
                                   <span className="num mt-0.5 flex flex-wrap items-center gap-x-1 text-[11px] text-muted">

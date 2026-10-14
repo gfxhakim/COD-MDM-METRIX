@@ -33,7 +33,7 @@ export function ImportsView({ tab }: { tab: string }) {
           {TABS.map(([t, kind]) => (
             <TabsTrigger key={t} value={t}>
               {KIND_META[kind].label}
-              {kind === "BANK" && pendingCount ? <span className="num ml-1.5 rounded bg-warning-soft px-1 text-[11px] text-warning">{pendingCount}</span> : null}
+              {kind === "BANK" && pendingCount ? <span className="num ms-1.5 rounded bg-warning-soft px-1 text-[11px] text-warning">{pendingCount}</span> : null}
             </TabsTrigger>
           ))}
         </TabsList>

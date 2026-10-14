@@ -1,14 +1,15 @@
 /** Quick date ranges shared by the pickers (export, custom sync). Days are YYYY-MM-DD in the workspace's time zone. */
+import { englishT, msg, type TFunction } from "@/i18n/core";
 
 export const RANGES = [
-  { key: "today", label: "Today" },
-  { key: "yesterday", label: "Yesterday" },
-  { key: "7d", label: "Last 7 days" },
-  { key: "30d", label: "Last 30 days" },
-  { key: "month", label: "This month" },
-  { key: "lastMonth", label: "Last month" },
-  { key: "all", label: "All dates" },
-  { key: "custom", label: "Custom" },
+  { key: "today", label: msg("Today") },
+  { key: "yesterday", label: msg("Yesterday") },
+  { key: "7d", label: msg("Last 7 days") },
+  { key: "30d", label: msg("Last 30 days") },
+  { key: "month", label: msg("This month") },
+  { key: "lastMonth", label: msg("Last month") },
+  { key: "all", label: msg("All dates") },
+  { key: "custom", label: msg("Custom") },
 ] as const;
 export type RangeKey = (typeof RANGES)[number]["key"];
 
@@ -39,7 +40,7 @@ export function rangeDays(key: RangeKey, today: string, custom: { from: string; 
   }
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [msg("Jan"), msg("Feb"), msg("Mar"), msg("Apr"), msg("May"), msg("Jun"), msg("Jul"), msg("Aug"), msg("Sep"), msg("Oct"), msg("Nov"), msg("Dec")];
 
-/** "2026-09-01" → "1 Sep 2026", the same in every browser. */
-export const shortDay = (day: string) => `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1] ?? ""} ${day.slice(0, 4)}`;
+/** "2026-09-01" → "1 Sep 2026", the same in every browser. `t` gives the month in the picked language. */
+export const shortDay = (day: string, t: TFunction = englishT) => `${Number(day.slice(8, 10))} ${t(MONTHS[Number(day.slice(5, 7)) - 1] ?? "")} ${day.slice(0, 4)}`;

@@ -171,7 +171,7 @@ function AdChain({ adCostPerOrder, input, fmt }: { adCostPerOrder: number; input
   );
   const step = (text: string) => (
     <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-brand-strong">
-      <ArrowRight className="size-3.5 rtl:rotate-180" aria-hidden="true" />
+      <ArrowRight className="size-3.5" aria-hidden="true" />
       {text}
     </span>
   );

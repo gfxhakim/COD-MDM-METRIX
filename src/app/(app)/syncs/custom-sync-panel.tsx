@@ -73,7 +73,7 @@ function MultiPick({ label, all, picked, onChange, placeholder, show = (v) => v 
         {picked.length ? (
           <div className="flex flex-wrap gap-1.5">
             {picked.map((v) => (
-              <span key={v} className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft py-1 pl-3 pr-1 text-xs font-medium text-brand-strong animate-rise">
+              <span key={v} className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft py-1 ps-3 pe-1 text-xs font-medium text-brand-strong animate-rise">
                 <span className="truncate">{v}</span>
                 <button type="button" aria-label={`Remove ${v}`} className="rounded-full p-0.5 hover:bg-brand/15" onClick={() => onChange(picked.filter((p) => p !== v))}><X className="size-3.5" /></button>
               </span>
@@ -201,7 +201,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
                   <li key={g.key}>
                     <div className="flex items-center gap-3 px-3 py-2.5">
                       <Check3 state={groupState(g)} label={g.label} onChange={toggleGroup.bind(null, g)} />
-                      <button type="button" disabled={!g.statuses.length} aria-expanded={open} onClick={() => setOpenGroups((p) => (open ? p.filter((k) => k !== g.key) : [...p, g.key]))} className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default">
+                      <button type="button" disabled={!g.statuses.length} aria-expanded={open} onClick={() => setOpenGroups((p) => (open ? p.filter((k) => k !== g.key) : [...p, g.key]))} className="flex min-w-0 flex-1 items-center gap-2 text-start disabled:cursor-default">
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-medium">{g.label}</span>
                           <span className="block truncate text-[11px] text-subtle">{g.hint}</span>
@@ -214,7 +214,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
                       <ul className="animate-rise bg-surface-2 py-1">
                         {g.statuses.map((st) => (
                           <li key={st.key}>
-                            <label className="flex cursor-pointer items-center gap-3 py-1.5 pl-10 pr-9 text-sm">
+                            <label className="flex cursor-pointer items-center gap-3 py-1.5 ps-10 pe-9 text-sm">
                               <input type="checkbox" className="size-4 accent-[#e1182c]" checked={statusOn(g.key, st.key)} onChange={() => toggleStatus(g, st.key)} />
                               <span className="flex-1">{st.label}</span>
                             </label>

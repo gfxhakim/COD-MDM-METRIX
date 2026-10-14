@@ -8,8 +8,8 @@ import { minorToMajor } from "@/lib/money";
 export function MoneyInput({ id, value, onChange, currency = "DZD", ...rest }: { id: string; value: string; onChange: (v: string) => void; currency?: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
   return (
     <div className="relative">
-      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} className="num pr-12" {...rest} />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">{currency}</span>
+      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} className="num pe-12" {...rest} />
+      <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">{currency}</span>
     </div>
   );
 }

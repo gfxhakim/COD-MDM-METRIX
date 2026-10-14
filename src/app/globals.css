@@ -208,28 +208,41 @@ p {
   }
 }
 
+/* "left" and "right" are the start and end sides: in Arabic (right to left) they swap. */
+:root {
+  --flip: 1;
+}
+[dir="rtl"] {
+  --flip: -1;
+}
+
 @keyframes slide-in-right {
   from {
-    transform: translateX(100%);
+    transform: translateX(calc(100% * var(--flip)));
   }
 }
 
 @keyframes slide-out-right {
   to {
-    transform: translateX(100%);
+    transform: translateX(calc(100% * var(--flip)));
   }
 }
 
 @keyframes slide-in-left {
   from {
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% * var(--flip)));
   }
 }
 
 @keyframes slide-out-left {
   to {
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% * var(--flip)));
   }
+}
+
+/* Arrows that point forward or back turn around in Arabic. */
+[dir="rtl"] :is(.lucide-chevron-right, .lucide-chevron-left, .lucide-arrow-right, .lucide-arrow-left, .lucide-arrow-up-right, .lucide-undo-2) {
+  transform: scaleX(-1);
 }
 
 @keyframes toast-in {
@@ -288,7 +301,8 @@ p {
 }
 
 @utility animate-grow-x {
-  transform-origin: left;
+  /* Bars grow from the start side: the left, or the right in Arabic. */
+  transform-origin: calc(50% - 50% * var(--flip)) 50%;
   animation: grow-x 900ms var(--ease-out) backwards;
 }
 

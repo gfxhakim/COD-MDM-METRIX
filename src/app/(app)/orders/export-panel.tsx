@@ -269,7 +269,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
                 <span>From the page filters:</span>
                 {carried.map((c) => (
-                  <span key={c.key} className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft py-1 pl-3 pr-1 font-medium text-brand-strong">
+                  <span key={c.key} className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft py-1 ps-3 pe-1 font-medium text-brand-strong">
                     <span className="truncate">{c.label}</span>
                     <button type="button" aria-label={`Remove ${c.label}`} className="rounded-full p-0.5 hover:bg-brand/15" onClick={() => setCarry((p) => ({ ...p, [c.key]: undefined }))}><X className="size-3.5" /></button>
                   </span>
@@ -300,7 +300,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
                     <li key={g.key}>
                       <div className="flex items-center gap-3 px-3 py-2.5">
                         <Check3 state={state} label={g.label} disabled={!g.count} onChange={toggleGroup.bind(null, g)} />
-                        <button type="button" disabled={!g.statuses.length} aria-expanded={open} onClick={() => setOpenGroups((p) => (open ? p.filter((k) => k !== g.key) : [...p, g.key]))} className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default">
+                        <button type="button" disabled={!g.statuses.length} aria-expanded={open} onClick={() => setOpenGroups((p) => (open ? p.filter((k) => k !== g.key) : [...p, g.key]))} className="flex min-w-0 flex-1 items-center gap-2 text-start disabled:cursor-default">
                           <span className="min-w-0 flex-1">
                             <span className={cn("block text-sm font-medium", !g.count && "text-subtle")}>{g.label}</span>
                             <span className="block truncate text-[11px] text-subtle">{g.hint}</span>
@@ -313,7 +313,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
                         <ul className="animate-rise bg-surface-2 py-1">
                           {g.statuses.map((st) => (
                             <li key={st.key}>
-                              <label className="flex cursor-pointer items-center gap-3 py-1.5 pl-10 pr-9 text-sm">
+                              <label className="flex cursor-pointer items-center gap-3 py-1.5 ps-10 pe-9 text-sm">
                                 <input type="checkbox" className="size-4 accent-[#e1182c]" checked={statusOn(g.key, st.key)} onChange={() => toggleStatus(g, st.key)} />
                                 <span className="flex-1">{st.label}</span>
                                 <span className="num text-xs text-muted">{st.count.toLocaleString("en-US")}</span>
@@ -338,7 +338,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
                   aria-pressed={s.format === f.key}
                   onClick={() => set("format", f.key)}
                   className={cn(
-                    "press flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors sm:flex-col sm:items-start sm:gap-2",
+                    "press flex items-center gap-3 rounded-2xl border p-3 text-start transition-colors sm:flex-col sm:items-start sm:gap-2",
                     s.format === f.key ? "border-brand bg-brand-soft/60 ring-2 ring-brand/15" : "border-border hover:bg-surface-2",
                   )}
                 >
@@ -442,12 +442,12 @@ export function PrintSheet({ data, title, onClose }: { data: PrintData; title: s
         </header>
         <table className="print-table w-full border-collapse text-[11px]">
           <thead>
-            <tr>{data.headers.map((h, i) => <th key={i} className={cn("border-b border-border-strong bg-surface-2 px-2 py-1.5 font-semibold", data.align[i] === "right" ? "text-right" : "text-left")}>{h}</th>)}</tr>
+            <tr>{data.headers.map((h, i) => <th key={i} className={cn("border-b border-border-strong bg-surface-2 px-2 py-1.5 font-semibold", data.align[i] === "right" ? "text-end" : "text-start")}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {data.rows.map((r, i) => (
               <tr key={i} className="even:bg-surface-2/60">
-                {r.map((v, j) => <td key={j} className={cn("border-b border-border px-2 py-1 align-top", data.align[j] === "right" && "num text-right whitespace-nowrap")}>{v}</td>)}
+                {r.map((v, j) => <td key={j} className={cn("border-b border-border px-2 py-1 align-top", data.align[j] === "right" && "num text-end whitespace-nowrap")}>{v}</td>)}
               </tr>
             ))}
           </tbody>
@@ -457,12 +457,12 @@ export function PrintSheet({ data, title, onClose }: { data: PrintData; title: s
             <h2 className="mb-2 text-sm font-bold">Totals by status</h2>
             <table className="print-table border-collapse text-[11px]">
               <thead>
-                <tr>{data.totals.headers.map((h, i) => <th key={i} className={cn("border-b border-border-strong bg-surface-2 px-2 py-1.5 font-semibold", i >= 2 ? "text-right" : "text-left")}>{h}</th>)}</tr>
+                <tr>{data.totals.headers.map((h, i) => <th key={i} className={cn("border-b border-border-strong bg-surface-2 px-2 py-1.5 font-semibold", i >= 2 ? "text-end" : "text-start")}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {data.totals.rows.map((r, i) => (
                   <tr key={i} className={cn(i === data.totals!.rows.length - 1 && "font-bold")}>
-                    {r.map((v, j) => <td key={j} className={cn("border-b border-border px-2 py-1", j >= 2 && "num text-right")}>{v}</td>)}
+                    {r.map((v, j) => <td key={j} className={cn("border-b border-border px-2 py-1", j >= 2 && "num text-end")}>{v}</td>)}
                   </tr>
                 ))}
               </tbody>

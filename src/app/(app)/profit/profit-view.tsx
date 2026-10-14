@@ -178,8 +178,8 @@ const SOURCE_TEXT: Record<FieldSource, string> = {
 function PctInput({ id, value, onChange, disabled }: { id: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
   return (
     <div className="relative">
-      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="num pr-8" />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span>
+      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="num pe-8" />
+      <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span>
     </div>
   );
 }
@@ -313,7 +313,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canEdit ? <Button variant="ghost" className="-ml-3 sm:ml-0" onClick={onEditDetails}><Pencil /> {noCost ? "Add price and costs" : "Edit product details"}</Button> : null}
+          {canEdit ? <Button variant="ghost" className="-ms-3 sm:ms-0" onClick={onEditDetails}><Pencil /> {noCost ? "Add price and costs" : "Edit product details"}</Button> : null}
         </div>
       </div>
 
@@ -551,7 +551,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 
       {canSave && tab !== "actual" ? (
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/70 bg-surface-2/60 px-5 py-3">
-          <span className="mr-auto text-xs text-subtle">{changed ? "Not saved yet. Saving keeps these numbers for this product." : row.plan ? "These numbers are saved for this product." : "Using your data. Change any number to try it."}</span>
+          <span className="me-auto text-xs text-subtle">{changed ? "Not saved yet. Saving keeps these numbers for this product." : row.plan ? "These numbers are saved for this product." : "Using your data. Change any number to try it."}</span>
           {row.plan || changed ? (
             <Button variant="ghost" disabled={save.isPending} onClick={() => (row.plan ? save.mutate({ productId: row.id, plan: null }) : setEdits({}))}><RotateCcw /> Back to my data</Button>
           ) : null}
@@ -559,7 +559,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
         </div>
       ) : !canSave && changed && tab !== "actual" ? (
         <div className="flex items-center justify-end gap-2 border-t border-border/70 px-5 py-3">
-          <span className="mr-auto text-xs text-subtle">Only for you, not saved.</span>
+          <span className="me-auto text-xs text-subtle">Only for you, not saved.</span>
           <Button variant="ghost" onClick={() => setEdits({})}><RotateCcw /> Back to the saved numbers</Button>
         </div>
       ) : null}

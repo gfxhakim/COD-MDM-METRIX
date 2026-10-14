@@ -65,7 +65,7 @@ export function CurrencyAmountInput({ id, value, onChange, workspaceCurrency, ra
           <label htmlFor={`${id}-rate`}>1 {value.currency} =</label>
           <Input id={`${id}-rate`} inputMode="decimal" className="num h-8 w-24" value={value.rate} onChange={(e) => onChange({ ...value, rate: e.target.value.replace(/[^\d.]/g, "") })} placeholder="e.g. 250" required disabled={disabled} />
           <span>{workspaceCurrency}</span>
-          {converted ? <span className="num ml-auto text-fg">= {converted}</span> : null}
+          {converted ? <span className="num ms-auto text-fg">= {converted}</span> : null}
         </div>
       ) : null}
     </div>

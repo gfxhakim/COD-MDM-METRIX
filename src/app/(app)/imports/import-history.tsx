@@ -89,18 +89,18 @@ export function ImportHistory({ kind }: { kind: Kind }) {
       ) : (
         <div className="overflow-x-auto">
           <Table>
-            <THead><tr><Th>When</Th><Th>File</Th><Th>Status</Th><Th className="text-right">Rows</Th><Th className="text-right">Imported</Th>{kind === "AD_SPEND" ? <Th className="text-right">Updated</Th> : null}<Th className="text-right">Duplicates</Th><Th className="text-right">Errors</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
+            <THead><tr><Th>When</Th><Th>File</Th><Th>Status</Th><Th className="text-end">Rows</Th><Th className="text-end">Imported</Th>{kind === "AD_SPEND" ? <Th className="text-end">Updated</Th> : null}<Th className="text-end">Duplicates</Th><Th className="text-end">Errors</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
             <tbody>
               {list.data.map((b) => (
                 <Tr key={b.id}>
                   <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(b.createdAt)}</Td>
-                  <Td className="max-w-56 truncate" title={b.fileName}>{b.fileName}{b.source && kind === "ORDERS" ? <span className="ml-1 text-xs text-muted">· {b.source.toLowerCase()}</span> : null}</Td>
+                  <Td className="max-w-56 truncate" title={b.fileName}>{b.fileName}{b.source && kind === "ORDERS" ? <span className="ms-1 text-xs text-muted">· {b.source.toLowerCase()}</span> : null}</Td>
                   <Td><Badge tone={STATUS[b.status].tone}>{STATUS[b.status].label}</Badge></Td>
-                  <Td className="num text-right">{b.totalRows}</Td>
-                  <Td className="num text-right">{b.importedRows}</Td>
-                  {kind === "AD_SPEND" ? <Td className="num text-right">{b.updatedRows}</Td> : null}
-                  <Td className="num text-right text-muted">{b.duplicateRows}</Td>
-                  <Td className={`num text-right ${b.errorRows ? "text-negative" : "text-muted"}`}>{b.errorRows}</Td>
+                  <Td className="num text-end">{b.totalRows}</Td>
+                  <Td className="num text-end">{b.importedRows}</Td>
+                  {kind === "AD_SPEND" ? <Td className="num text-end">{b.updatedRows}</Td> : null}
+                  <Td className="num text-end text-muted">{b.duplicateRows}</Td>
+                  <Td className={`num text-end ${b.errorRows ? "text-negative" : "text-muted"}`}>{b.errorRows}</Td>
                   <Td>
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" aria-label="View details" onClick={() => setViewing(b.id)}><Eye /></Button>

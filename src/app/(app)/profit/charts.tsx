@@ -54,13 +54,13 @@ export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitP
               onMouseEnter={() => setActive(p.key)}
               onFocus={() => setActive(p.key)}
               onBlur={() => setActive(null)}
-              className={cn("animate-grow-x h-full origin-left outline-none transition-opacity duration-200", active && active !== p.key && "opacity-45", i === 0 && "rounded-s-[14px]", i === shown.length - 1 && "rounded-e-[14px]")}
+              className={cn("animate-grow-x h-full outline-none transition-opacity duration-200", active && active !== p.key && "opacity-45", i === 0 && "rounded-s-[14px]", i === shown.length - 1 && "rounded-e-[14px]")}
               style={{ width: `${pct(p.amount)}%`, background: p.key === "profit" ? "linear-gradient(180deg,#14a453,#0b6a35)" : p.color, animationDelay: `${120 + i * 70}ms` }}
             />
           ))}
         </div>
         {total > price && price > 0 ? (
-          <span className="absolute inset-y-[-6px] w-0.5 rounded-full bg-ink" style={{ left: `${pct(price)}%` }} aria-hidden="true">
+          <span className="absolute inset-y-[-6px] w-0.5 rounded-full bg-ink" style={{ insetInlineStart: `${pct(price)}%` }} aria-hidden="true">
             <span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-fg">Price</span>
           </span>
         ) : null}
@@ -72,7 +72,7 @@ export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitP
           }
           const p = shown.find((x) => x.key === active)!;
           return (
-            <Tip className="bottom-[calc(100%+8px)] -translate-x-1/2" style={{ left: `${Math.min(85, Math.max(15, pct(start + p.amount / 2)))}%` }}>
+            <Tip className="bottom-[calc(100%+8px)] -translate-x-1/2" style={{ insetInlineStart: `${Math.min(85, Math.max(15, pct(start + p.amount / 2)))}%` }}>
               <b>{p.label}</b>: {fmt(p.amount)} · {formatPercent(price > 0 ? p.amount / price : null, 0)} of the price
             </Tip>
           );
@@ -204,7 +204,7 @@ export function ProfitByDay({ days, from, to, fmt, tick }: { days: ProfitDay[]; 
             })}
           </div>
           {active !== null && buckets[active] ? (
-            <Tip className="top-1 -translate-x-1/2" style={{ left: `${Math.min(80, Math.max(20, ((active + 0.5) / buckets.length) * 100))}%` }}>
+            <Tip className="top-1 -translate-x-1/2" style={{ insetInlineStart: `${Math.min(80, Math.max(20, ((active + 0.5) / buckets.length) * 100))}%` }}>
               <b className="block text-[12px]">{buckets[active].long}</b>
               <span className={cn("num block font-bold", buckets[active].profit < 0 ? "text-[#ff9aa3]" : "text-[#7be3a6]")}>Profit {fmt(buckets[active].profit)}</span>
               <span className="block text-white/80">{buckets[active].placed} placed · {buckets[active].delivered} delivered{buckets[active].inTransit ? ` · ${buckets[active].inTransit} on the road` : ""}</span>
@@ -265,7 +265,7 @@ export function CampaignBars({ rows, limit, fmt }: { rows: CampaignBar[]; limit:
               >
                 <span className="flex min-w-0">
                   <span
-                    className={cn("animate-grow-x h-3.5 origin-left rounded-e-full rounded-s-[4px] transition-opacity duration-200", over ? "bg-[linear-gradient(90deg,#3a3335,#141012)]" : "bg-brand-bar glow-soft", active && active !== r.id && "opacity-45")}
+                    className={cn("animate-grow-x h-3.5 rounded-e-full rounded-s-[4px] transition-opacity duration-200", over ? "bg-[linear-gradient(90deg,#3a3335,#141012)]" : "bg-brand-bar glow-soft", active && active !== r.id && "opacity-45")}
                     style={{ width: `${Math.max(1.5, x(r.value))}%`, animationDelay: `${120 + i * 60}ms` }}
                   />
                 </span>
@@ -299,7 +299,7 @@ export function OrderFunnel({ steps }: { steps: FunnelStep[] }) {
         <li key={s.label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
           <span className="text-[12px] text-muted">{s.label}</span>
           <span className="flex min-w-0 items-center gap-2">
-            <span className="animate-grow-x h-6 origin-left rounded-e-[8px] rounded-s-[4px] bg-brand-bar" style={{ width: `${Math.max(1.5, (s.value / max) * 100)}%`, opacity: 1 - i * 0.14, animationDelay: `${120 + i * 80}ms` }} aria-hidden="true" />
+            <span className="animate-grow-x h-6 rounded-e-[8px] rounded-s-[4px] bg-brand-bar" style={{ width: `${Math.max(1.5, (s.value / max) * 100)}%`, opacity: 1 - i * 0.14, animationDelay: `${120 + i * 80}ms` }} aria-hidden="true" />
             <span className="num shrink-0 whitespace-nowrap text-[13px] font-bold">{s.value.toLocaleString("en-US")}</span>
             {s.rate !== null && i > 0 ? <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand-strong">{formatPercent(s.rate, 0)}{s.rateLabel ? ` ${s.rateLabel}` : ""}</span> : null}
           </span>

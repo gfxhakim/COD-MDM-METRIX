@@ -12,7 +12,7 @@ export function THead(props: React.HTMLAttributes<HTMLTableSectionElement>) {
   return <thead className="sticky top-0 z-10 bg-surface" {...props} />;
 }
 export function Th({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th scope="col" className={cn("whitespace-nowrap border-b border-border px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle", className)} {...props} />;
+  return <th scope="col" className={cn("whitespace-nowrap border-b border-border px-3 py-3 text-start text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle", className)} {...props} />;
 }
 export function Td({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return <td className={cn("whitespace-nowrap border-b border-border/60 px-3 py-2.5 text-fg", className)} {...props} />;

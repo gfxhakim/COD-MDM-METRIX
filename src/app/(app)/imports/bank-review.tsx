@@ -113,7 +113,7 @@ export function BankReview() {
       <Tabs value={status} onValueChange={(v) => { setStatus(v as Status); setSelected(new Set()); }}>
         <TabsList className="px-3">
           {(["PENDING", "CATEGORIZED", "EXCLUDED"] as const).map((s) => (
-            <TabsTrigger key={s} value={s}>{s === "PENDING" ? "To review" : s === "CATEGORIZED" ? "Categorized" : "Excluded"} <span className="num ml-1 text-xs text-muted">{counts?.[s]?.count ?? 0}</span></TabsTrigger>
+            <TabsTrigger key={s} value={s}>{s === "PENDING" ? "To review" : s === "CATEGORIZED" ? "Categorized" : "Excluded"} <span className="num ms-1 text-xs text-muted">{counts?.[s]?.count ?? 0}</span></TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
@@ -127,7 +127,7 @@ export function BankReview() {
                 {canWrite && status === "PENDING" ? (
                   <Th className="w-8"><input type="checkbox" aria-label="Select all" checked={selected.size === rows.length} onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></Th>
                 ) : null}
-                <Th>Date</Th><Th>Description</Th><Th>Reference</Th><Th className="text-right">Amount</Th>{status === "CATEGORIZED" ? <Th>Category</Th> : null}<Th><span className="sr-only">Actions</span></Th>
+                <Th>Date</Th><Th>Description</Th><Th>Reference</Th><Th className="text-end">Amount</Th>{status === "CATEGORIZED" ? <Th>Category</Th> : null}<Th><span className="sr-only">Actions</span></Th>
               </tr>
             </THead>
             <tbody>
@@ -137,7 +137,7 @@ export function BankReview() {
                   <Td className="whitespace-nowrap text-xs text-muted">{formatDate(r.date)}</Td>
                   <Td className="max-w-72 truncate">{r.description ?? "—"}</Td>
                   <Td className="text-xs text-muted">{r.reference ?? "—"}</Td>
-                  <Td className="text-right"><Money value={r.amount} currency={r.currency} signed /></Td>
+                  <Td className="text-end"><Money value={r.amount} currency={r.currency} signed /></Td>
                   {status === "CATEGORIZED" ? <Td>{r.expense ? <Badge tone="info">{categoryLabel(r.expense.category)}</Badge> : "—"}</Td> : null}
                   <Td>
                     {canWrite ? (

@@ -68,7 +68,7 @@ function WalletCard({ label, def, value, currency, sub, hero }: { label: string;
         hero ? "bg-brand-hero shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)]" : "bg-surface shadow-card",
       )}
     >
-      {hero ? <span className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" /> : null}
+      {hero ? <span className="pointer-events-none absolute -end-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" /> : null}
       <span className={cn("relative text-[15px] font-semibold", !hero && "text-muted")}>
         <Term label={label} definition={def} iconClassName={hero ? "text-white/70 hover:text-white" : undefined} />
       </span>
@@ -130,7 +130,7 @@ function WalletDetails({ wallet }: { wallet: Wallet }) {
         <Card className="fade-in hidden md:block">
           <Table>
             <THead>
-              <tr><Th>Part</Th><Th className="text-right">On hold</Th><Th className="text-right">Ready</Th><Th className="text-right">Paid</Th></tr>
+              <tr><Th>Part</Th><Th className="text-end">On hold</Th><Th className="text-end">Ready</Th><Th className="text-end">Paid</Th></tr>
             </THead>
             <tbody>
               {rows.map((r) => {
@@ -138,9 +138,9 @@ function WalletDetails({ wallet }: { wallet: Wallet }) {
                 return (
                   <Tr key={r.key}>
                     <Td className="whitespace-normal font-medium">{r.label}</Td>
-                    <Td className="text-right"><Money value={d.onHold ?? null} currency={wallet.currency} /></Td>
-                    <Td className="text-right"><Money value={d.ready ?? null} currency={wallet.currency} /></Td>
-                    <Td className="text-right"><Money value={d.paid ?? null} currency={wallet.currency} /></Td>
+                    <Td className="text-end"><Money value={d.onHold ?? null} currency={wallet.currency} /></Td>
+                    <Td className="text-end"><Money value={d.ready ?? null} currency={wallet.currency} /></Td>
+                    <Td className="text-end"><Money value={d.paid ?? null} currency={wallet.currency} /></Td>
                   </Tr>
                 );
               })}
@@ -174,7 +174,7 @@ function Payouts({ data }: { data: Overview }) {
               const parts = p.breakdown ? [...p.breakdown.items.map((i) => ({ ...i, tax: false })), ...p.breakdown.taxes.map((t) => ({ ...t, tax: true }))] : [];
               return (
                 <li key={p.id} className="row-in overflow-hidden rounded-2xl bg-surface-2">
-                  <button type="button" onClick={() => setOpen(isOpen ? null : p.id)} aria-expanded={isOpen} className="press flex w-full min-w-0 items-center gap-3 px-3 py-3 text-left hover:bg-surface-3">
+                  <button type="button" onClick={() => setOpen(isOpen ? null : p.id)} aria-expanded={isOpen} className="press flex w-full min-w-0 items-center gap-3 px-3 py-3 text-start hover:bg-surface-3">
                     {isOpen ? <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden="true" /> : <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden="true" />}
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">{formatDate(p.date)} <PayoutStatus status={p.status} confirmed={p.confirmed} /></span>
@@ -246,25 +246,25 @@ function Fees({ data, timezone }: { data: Overview; timezone: string }) {
               <>
                 <Table>
                   <THead>
-                    <tr><Th>Line</Th><Th className="hidden text-right sm:table-cell">Lines</Th><Th className="text-right">Amount</Th><Th className="hidden text-right sm:table-cell">Paid out</Th><Th className="text-right">With MDM</Th></tr>
+                    <tr><Th>Line</Th><Th className="hidden text-end sm:table-cell">Lines</Th><Th className="text-end">Amount</Th><Th className="hidden text-end sm:table-cell">Paid out</Th><Th className="text-end">With MDM</Th></tr>
                   </THead>
                   <tbody>
                     {rows.map((r) => (
                       <Tr key={`${r.type}-${r.subType}-${r.currency}`}>
                         <Td className="whitespace-normal font-medium">{mdmWords(r.type)}{r.subType ? <span className="text-muted"> · {mdmWords(r.subType)}</span> : null}<span className="block text-[11px] font-normal text-subtle sm:hidden">{count(r.lines)} lines</span></Td>
-                        <Td className="num hidden text-right sm:table-cell">{count(r.lines)}</Td>
-                        <Td className="text-right font-semibold"><Money value={r.amount} currency={r.currency} signed /></Td>
-                        <Td className="hidden text-right sm:table-cell"><Money value={r.paidOut} currency={r.currency} /></Td>
-                        <Td className="text-right"><Money value={r.waiting} currency={r.currency} /></Td>
+                        <Td className="num hidden text-end sm:table-cell">{count(r.lines)}</Td>
+                        <Td className="text-end font-semibold"><Money value={r.amount} currency={r.currency} signed /></Td>
+                        <Td className="hidden text-end sm:table-cell"><Money value={r.paidOut} currency={r.currency} /></Td>
+                        <Td className="text-end"><Money value={r.waiting} currency={r.currency} /></Td>
                       </Tr>
                     ))}
                     {oneCurrency && rows.length > 1 ? (
                       <tr className="font-bold">
                         <Td>Total</Td>
-                        <Td className="num hidden text-right sm:table-cell">{count(fees.data!.lines)}</Td>
-                        <Td className="text-right"><Money value={total.amount} currency={cur} signed /></Td>
-                        <Td className="hidden text-right sm:table-cell"><Money value={total.paidOut} currency={cur} /></Td>
-                        <Td className="text-right"><Money value={total.waiting} currency={cur} /></Td>
+                        <Td className="num hidden text-end sm:table-cell">{count(fees.data!.lines)}</Td>
+                        <Td className="text-end"><Money value={total.amount} currency={cur} signed /></Td>
+                        <Td className="hidden text-end sm:table-cell"><Money value={total.paidOut} currency={cur} /></Td>
+                        <Td className="text-end"><Money value={total.waiting} currency={cur} /></Td>
                       </tr>
                     ) : null}
                   </tbody>
@@ -345,7 +345,7 @@ function Stock({ data }: { data: Overview }) {
             <THead>
               <tr>
                 <Th>Product</Th>
-                {STOCK_COLUMNS.map((c) => <Th key={c.key} className="text-right">{c.label}</Th>)}
+                {STOCK_COLUMNS.map((c) => <Th key={c.key} className="text-end">{c.label}</Th>)}
               </tr>
             </THead>
             <tbody>
@@ -361,7 +361,7 @@ function Stock({ data }: { data: Overview }) {
                     </span>
                   </Td>
                   {STOCK_COLUMNS.map((c) => (
-                    <Td key={c.key} className={cn("num text-right", c.key === "available" && "font-bold", c.key === "lost" && s.lost > 0 && "text-negative")}>{s.stockAt ? count(s[c.key]) : "—"}</Td>
+                    <Td key={c.key} className={cn("num text-end", c.key === "available" && "font-bold", c.key === "lost" && s.lost > 0 && "text-negative")}>{s.stockAt ? count(s[c.key]) : "—"}</Td>
                   ))}
                 </Tr>
               ))}
@@ -470,28 +470,28 @@ function Prices({ data }: { data: Overview }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle">Delivery, per wilaya</span>
                   <label className="relative w-full sm:w-56">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
-                    <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a wilaya" aria-label="Find a wilaya" className="pl-9" />
+                    <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
+                    <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a wilaya" aria-label="Find a wilaya" className="ps-9" />
                   </label>
                 </div>
                 <ul className="flex flex-col gap-2 md:hidden">
                   {shown.map((d) => (
-                    <MiniStats key={`${d.code}-${d.wilaya}`} title={<>{d.code ? <span className="num mr-1.5 text-subtle">{d.code}</span> : null}{d.wilaya}</>} items={[{ label: "Home", value: <Money value={d.home} currency={p.currency} /> }, { label: "Stop desk", value: <Money value={d.stopDesk} currency={p.currency} /> }, { label: "Return", value: <Money value={d.return} currency={p.currency} /> }]} />
+                    <MiniStats key={`${d.code}-${d.wilaya}`} title={<>{d.code ? <span className="num me-1.5 text-subtle">{d.code}</span> : null}{d.wilaya}</>} items={[{ label: "Home", value: <Money value={d.home} currency={p.currency} /> }, { label: "Stop desk", value: <Money value={d.stopDesk} currency={p.currency} /> }, { label: "Return", value: <Money value={d.return} currency={p.currency} /> }]} />
                   ))}
                 </ul>
                 <div className="hidden md:block">
                 <Table>
                   <THead>
-                    <tr><Th>Wilaya</Th><Th className="text-right">Home</Th><Th className="text-right">Stop desk</Th><Th className="text-right">Return</Th><Th className="text-right">Exchange</Th></tr>
+                    <tr><Th>Wilaya</Th><Th className="text-end">Home</Th><Th className="text-end">Stop desk</Th><Th className="text-end">Return</Th><Th className="text-end">Exchange</Th></tr>
                   </THead>
                   <tbody>
                     {shown.map((d) => (
                       <Tr key={`${d.code}-${d.wilaya}`}>
-                        <Td className="font-medium">{d.code ? <span className="num mr-1.5 text-subtle">{d.code}</span> : null}{d.wilaya}</Td>
-                        <Td className="text-right"><Money value={d.home} currency={p.currency} /></Td>
-                        <Td className="text-right"><Money value={d.stopDesk} currency={p.currency} /></Td>
-                        <Td className="text-right"><Money value={d.return} currency={p.currency} /></Td>
-                        <Td className="text-right"><Money value={d.exchange} currency={p.currency} /></Td>
+                        <Td className="font-medium">{d.code ? <span className="num me-1.5 text-subtle">{d.code}</span> : null}{d.wilaya}</Td>
+                        <Td className="text-end"><Money value={d.home} currency={p.currency} /></Td>
+                        <Td className="text-end"><Money value={d.stopDesk} currency={p.currency} /></Td>
+                        <Td className="text-end"><Money value={d.return} currency={p.currency} /></Td>
+                        <Td className="text-end"><Money value={d.exchange} currency={p.currency} /></Td>
                       </Tr>
                     ))}
                   </tbody>

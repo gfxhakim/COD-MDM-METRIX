@@ -103,7 +103,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                       <option value="CANCELED">Canceled</option>
                     </Select>
                   </Field>
-                  <Button variant="danger" size="sm" className="ml-auto" onClick={() => confirm("Delete this order? Linked parcels are kept and become unmatched.") && del.mutate({ id: o.id })}><Trash2 /> Delete order</Button>
+                  <Button variant="danger" size="sm" className="ms-auto" onClick={() => confirm("Delete this order? Linked parcels are kept and become unmatched.") && del.mutate({ id: o.id })}><Trash2 /> Delete order</Button>
                 </div>
               ) : null}
             </Section>
@@ -143,17 +143,17 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                         <Badge>provider: {p.providerStatus ?? "—"}</Badge>
                         {p.isDemoFixture ? <Badge tone="warning">demo fixture</Badge> : null}
                         {canMatch ? (
-                          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => confirm("Unlink this parcel? It will move to the unmatched review queue.") && unlink.mutate({ parcelId: p.id })}><Unlink /> Unlink</Button>
+                          <Button size="sm" variant="ghost" className="ms-auto" onClick={() => confirm("Unlink this parcel? It will move to the unmatched review queue.") && unlink.mutate({ parcelId: p.id })}><Unlink /> Unlink</Button>
                         ) : null}
                       </div>
                       <p className="mt-2 text-xs text-muted">
                         Match: {humanize(p.matchMethod)} · confidence {Math.round(p.matchConfidence * 100)}% · COD <span className="num">{money.fmt(p.codAmount, p.currency)}</span> · last update {formatDateTime(p.lastProviderUpdateAt)}
                       </p>
                       {p.providerReference ? <p className="mt-1 text-xs text-muted">Provider reference: <code className="rounded bg-surface-3 px-1 font-mono">{p.providerReference}</code></p> : null}
-                      <ol className="mt-3 border-l border-border-strong pl-4">
+                      <ol className="mt-3 border-s border-border-strong ps-4">
                         {p.events.map((e) => (
                           <li key={e.id} className="relative pb-2 text-xs">
-                            <span className="absolute -left-[21px] top-1 size-2.5 rounded-full border-2 border-surface-2 bg-border-strong" />
+                            <span className="absolute -start-[21px] top-1 size-2.5 rounded-full border-2 border-surface-2 bg-border-strong" />
                             <span className="text-muted">{formatDateTime(e.occurredAt)}</span> · <span className="font-mono">{e.providerStatus}</span> → <ParcelStatusBadge status={e.normalizedStatus} />
                           </li>
                         ))}

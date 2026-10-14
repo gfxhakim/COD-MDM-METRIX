@@ -257,7 +257,7 @@ function MdmProducts({ products, canWrite }: { products: ProductRow[]; canWrite:
         <THead>
           <tr>
             <Th>In MDM</Th>
-            <Th className="text-right">Units ordered</Th>
+            <Th className="text-end">Units ordered</Th>
             <Th>Counts as</Th>
           </tr>
         </THead>
@@ -270,7 +270,7 @@ function MdmProducts({ products, canWrite }: { products: ProductRow[]; canWrite:
                   <span className="font-mono text-[11px] text-subtle">{m.id}</span>
                 </span>
               </Td>
-              <Td className="num text-right">{m.units.toLocaleString("en-US")}</Td>
+              <Td className="num text-end">{m.units.toLocaleString("en-US")}</Td>
               <Td>
                 {canWrite ? (
                   <Select aria-label={`Product for ${m.name ?? m.id}`} value={m.productId} disabled={move.isPending} onChange={(e) => move.mutate({ mdmProductId: m.id, productId: e.target.value })} className="w-full sm:w-56">
@@ -405,14 +405,14 @@ export function ProductsView() {
               <tr>
                 <Th>Product</Th>
                 {more ? <Th>SKU</Th> : null}
-                <Th className="text-right">Sale price</Th>
-                <Th className="text-right"><Term label="Sourcing" definition="Cost of goods per delivered unit (COGS)." /></Th>
+                <Th className="text-end">Sale price</Th>
+                <Th className="text-end"><Term label="Sourcing" definition="Cost of goods per delivered unit (COGS)." /></Th>
                 {more ? (
                   <>
-                    <Th className="text-right">Shipping</Th>
-                    <Th className="text-right"><Term label="RTO fee" definition="Fee charged by the carrier for each parcel returned to origin." /></Th>
-                    <Th className="text-right">Call center</Th>
-                    <Th className="text-right">Packaging</Th>
+                    <Th className="text-end">Shipping</Th>
+                    <Th className="text-end"><Term label="RTO fee" definition="Fee charged by the carrier for each parcel returned to origin." /></Th>
+                    <Th className="text-end">Call center</Th>
+                    <Th className="text-end">Packaging</Th>
                   </>
                 ) : null}
                 <Th><Term label="Ads" definition="Campaigns and whole ad accounts linked to this product. Edit the product to change them, or link campaigns on the Campaigns page." /></Th>
@@ -427,7 +427,7 @@ export function ProductsView() {
                   <Td>{nameBlock(p)}</Td>
                   {more ? <Td className="font-mono text-xs text-muted">{p.sku}</Td> : null}
                   {(more ? (["salePrice", "sourcingCost", "forwardShippingFee", "rtoFee", "callCenterFee", "packagingFee"] as const) : (["salePrice", "sourcingCost"] as const)).map((k) => (
-                    <Td key={k} className="num text-right">
+                    <Td key={k} className="num text-end">
                       {p.currentCost ? money.fmt(p.currentCost[k], p.currency) : "—"}
                       {k === "sourcingCost" && p.currentCost ? <OriginalAmount amount={p.currentCost.sourcingCostOriginal} currency={p.currentCost.sourcingCurrency} rate={p.currentCost.sourcingFxRate} /> : null}
                     </Td>

@@ -59,8 +59,8 @@ function fromInput(i: SimulatorInput, currency: string): Form {
 function PctInput({ id, value, onChange, disabled }: { id: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
   return (
     <div className="relative">
-      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="num pr-8" />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span>
+      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="num pe-8" />
+      <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span>
     </div>
   );
 }
@@ -221,8 +221,8 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                       <table className="w-full border-separate border-spacing-0.5 text-xs">
                         <thead>
                           <tr>
-                            <th scope="col" className="px-2 py-1 text-left font-medium text-subtle">D \ CPA</th>
-                            {result.sensitivity.cpas.map((c) => <th key={c} scope="col" className="num px-2 py-1 text-right font-medium text-subtle">{fmt(c)}</th>)}
+                            <th scope="col" className="px-2 py-1 text-start font-medium text-subtle">D \ CPA</th>
+                            {result.sensitivity.cpas.map((c) => <th key={c} scope="col" className="num px-2 py-1 text-end font-medium text-subtle">{fmt(c)}</th>)}
                           </tr>
                         </thead>
                         <tbody>
@@ -231,9 +231,9 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                             const scale = Math.max(...result.sensitivity.profit.flat().map(Math.abs));
                             return (
                               <tr key={d}>
-                                <th scope="row" className={cn("num px-2 py-1 text-left font-medium", isCurrent ? "text-brand-strong" : "text-muted")}>{formatPercent(d, 0)}{isCurrent ? " ●" : ""}</th>
+                                <th scope="row" className={cn("num px-2 py-1 text-start font-medium", isCurrent ? "text-brand-strong" : "text-muted")}>{formatPercent(d, 0)}{isCurrent ? " ●" : ""}</th>
                                 {result.sensitivity.profit[i].map((v, j) => (
-                                  <td key={j} className={cn("num rounded px-2 py-1.5 text-right", v < 0 ? "text-negative" : "text-fg")} style={cellStyle(v, scale)}>{fmt(v)}</td>
+                                  <td key={j} className={cn("num rounded px-2 py-1.5 text-end", v < 0 ? "text-negative" : "text-fg")} style={cellStyle(v, scale)}>{fmt(v)}</td>
                                 ))}
                               </tr>
                             );
@@ -258,7 +258,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                   <ul className="divide-y divide-border rounded-lg border border-border">
                     {scenarios.data.map((s) => (
                       <li key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                        <button className="flex-1 text-left hover:text-brand-strong" onClick={() => setForm(fromInput(s.inputs as SimulatorInput, currency))}>{s.name}</button>
+                        <button className="flex-1 text-start hover:text-brand-strong" onClick={() => setForm(fromInput(s.inputs as SimulatorInput, currency))}>{s.name}</button>
                         {s.product ? <Badge>{s.product.name}</Badge> : null}
                         <span className="text-xs text-subtle">{formatDate(s.createdAt)}</span>
                         {canSave ? <Button size="icon" variant="ghost" aria-label={`Delete ${s.name}`} onClick={() => del.mutate({ id: s.id })}><Trash2 /></Button> : null}

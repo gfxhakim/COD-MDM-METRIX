@@ -30,7 +30,7 @@ export function DialogContent({
         className={cn(
           "fixed z-50 flex flex-col border border-border bg-surface shadow-2xl focus:outline-none",
           side === "right"
-            ? "inset-y-0 right-0 h-full w-full max-w-2xl border-y-0 border-r-0 data-[state=open]:animate-[slide-in-right_420ms_var(--ease-out)_backwards] data-[state=closed]:animate-[slide-out-right_220ms_ease-in_both] sm:rounded-l-[28px]"
+            ? "inset-y-0 end-0 h-full w-full max-w-2xl border-y-0 border-e-0 data-[state=open]:animate-[slide-in-right_420ms_var(--ease-out)_backwards] data-[state=closed]:animate-[slide-out-right_220ms_ease-in_both] sm:rounded-s-[28px]"
             : "left-1/2 top-1/2 max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[22px] data-[state=open]:animate-[zoom-in_280ms_var(--ease-out)_backwards] data-[state=closed]:animate-[zoom-out_160ms_ease-in_both]",
           className,
         )}

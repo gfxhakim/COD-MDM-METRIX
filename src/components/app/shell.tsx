@@ -11,6 +11,7 @@ import { isActive, NAV, navItem, type NavItem } from "@/components/app/nav";
 import { CurrencyPicker, CurrencyProvider } from "@/components/app/currency";
 import { DataFreshness } from "@/components/app/data-freshness";
 import { Badge } from "@/components/ui/badge";
+import { LanguageSwitch } from "@/i18n/language-switch";
 import { Dock, DockIcon, DockItem, DockLabel } from "@/components/ui/dock";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +50,7 @@ function usePopover() {
   return { open, setOpen, ref };
 }
 
-const menuPop = "animate-pop absolute right-0 top-full z-50 mt-2 rounded-2xl border border-border bg-surface shadow-xl";
+const menuPop = "animate-pop absolute end-0 top-full z-50 mt-2 rounded-2xl border border-border bg-surface shadow-xl";
 
 /** A page's icon on its red tile: white on red for the page that is open. */
 function NavIcon({ item, active, className }: { item: NavItem; active: boolean; className?: string }) {
@@ -94,7 +95,7 @@ function DockNav() {
   const pathname = usePathname();
   const { size, magnification, distance } = useDockSize();
   return (
-    <aside className="sticky top-0 z-40 hidden h-dvh w-24 shrink-0 flex-col items-start gap-4 py-4 pl-4 lg:flex">
+    <aside className="sticky top-0 z-40 hidden h-dvh w-24 shrink-0 flex-col items-start gap-4 py-4 ps-4 lg:flex">
       <Link href="/" aria-label="COD Flow dashboard" className="press grid h-11 shrink-0 place-items-center rounded-full" style={{ width: size + 24 }}><Logo compact /></Link>
       <nav aria-label="Main" className="flex min-h-0 flex-1 items-center">
         <Dock orientation="vertical" aria-label="Pages" size={size} magnification={magnification} distance={distance} panelHeight={size + 24} className="gap-2.5 rounded-[28px] bg-surface px-3 shadow-card">
@@ -104,7 +105,7 @@ function DockNav() {
               <DockItem key={item.href} href={item.href} active={active} aria-label={item.label} className={cn("nav-link aspect-square rounded-full transition-[background-color,box-shadow] duration-300", active ? "bg-brand glow" : "bg-brand-soft hover:bg-[#ffd6da]")}>
                 <DockLabel className="rounded-full border-0 bg-ink px-3 py-1 text-xs font-semibold text-white shadow-[0_8px_20px_rgb(20_16_18/0.25)]">{item.label}</DockLabel>
                 <DockIcon><NavIcon item={item} active={active} className="h-full w-full" /></DockIcon>
-                {active ? <span className="bg-brand glow-soft absolute -left-2.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full" aria-hidden="true" /> : null}
+                {active ? <span className="bg-brand glow-soft absolute -start-2.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full" aria-hidden="true" /> : null}
               </DockItem>
             );
           })}
@@ -135,7 +136,7 @@ function WorkspaceList({ current, workspaces, onDone }: { current: ShellWorkspac
               }
             })
           }
-          className={cn("flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2", w.id === current.id && "font-semibold text-brand-strong")}
+          className={cn("flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-sm transition-colors hover:bg-surface-2", w.id === current.id && "font-semibold text-brand-strong")}
         >
           <span className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-3 text-[11px] font-bold text-fg">{initials(w.name)}</span>
           <span className="min-w-0 flex-1 truncate">{w.name}</span>
@@ -158,10 +159,10 @@ function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; w
         aria-expanded={open}
         aria-label={`Account and workspace: ${current.name}`}
         onClick={() => setOpen((o) => !o)}
-        className="press flex items-center gap-2.5 rounded-full bg-surface p-1 shadow-card hover:shadow-md min-[1400px]:pr-3"
+        className="press flex items-center gap-2.5 rounded-full bg-surface p-1 shadow-card hover:shadow-md min-[1400px]:pe-3"
       >
         <span className="bg-brand-hero grid size-9 shrink-0 place-items-center rounded-full text-sm font-extrabold">{initials(user.name)}</span>
-        <span className="hidden min-w-0 flex-col text-left leading-tight min-[1400px]:flex">
+        <span className="hidden min-w-0 flex-col text-start leading-tight min-[1400px]:flex">
           <span className="max-w-36 truncate text-sm font-bold">{user.name}</span>
           <span className="max-w-36 truncate text-[11px] text-muted">{current.name}</span>
         </span>
@@ -179,7 +180,7 @@ function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; w
             <Link role="menuitem" href="/settings?tab=new-workspace" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Plus className="size-4" /> New workspace</Link>
             <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Settings className="size-4" /> Settings</Link>
             <form action={logoutAction}>
-              <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-negative hover:bg-negative-soft"><LogOut className="size-4" /> Sign out</button>
+              <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-sm text-negative hover:bg-negative-soft"><LogOut className="size-4" /> Sign out</button>
             </form>
           </div>
         </div>
@@ -205,7 +206,7 @@ function Drawer({ current, workspaces, user, onClose: close }: { current: ShellW
   return (
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
       <div className={cn("absolute inset-0 bg-ink/40 backdrop-blur-[2px]", closing ? "animate-[fade-out_200ms_ease-in_both]" : "animate-fade")} onClick={onClose} />
-      <aside className={cn("absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col gap-4 overflow-y-auto rounded-r-[28px] bg-surface p-4 shadow-2xl", closing ? "animate-[slide-out-left_200ms_ease-in_both]" : "animate-[slide-in-left_420ms_var(--ease-out)_backwards]")}>
+      <aside className={cn("absolute inset-y-0 start-0 flex w-[min(20rem,88vw)] flex-col gap-4 overflow-y-auto rounded-e-[28px] bg-surface p-4 shadow-2xl", closing ? "animate-[slide-out-left_200ms_ease-in_both]" : "animate-[slide-in-left_420ms_var(--ease-out)_backwards]")}>
         <div className="flex items-center justify-between">
           <Logo />
           <button type="button" className="press grid size-10 place-items-center rounded-full bg-surface-3 text-fg hover:rotate-90" onClick={onClose} aria-label="Close menu"><X className="size-5" /></button>
@@ -269,7 +270,7 @@ export function AppShell({ current, workspaces, user, children }: { current: She
     <CurrencyProvider workspaceId={current.id}>
     <ShellCtx.Provider value={shell}>
     <div className="flex min-h-screen flex-col">
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">Skip to content</a>
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">Skip to content</a>
       <div className="flex flex-1">
         <DockNav />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -281,10 +282,10 @@ export function AppShell({ current, workspaces, user, children }: { current: She
           <header style={{ viewTransitionName: "site-header" }} className="z-30 bg-bg/80 backdrop-blur-md md:sticky md:top-0">
             <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
               <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-surface text-brand shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="size-5" strokeWidth={2.2} /></button>
-              <Link href="/" aria-label="COD Flow dashboard" className="press mr-1 shrink-0 rounded-full lg:hidden"><Logo /></Link>
+              <Link href="/" aria-label="COD Flow dashboard" className="press me-1 shrink-0 rounded-full lg:hidden"><Logo /></Link>
               {/* One copy for every screen size: its own row on phones, beside the account button from md up. */}
-              <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ml-auto md:w-auto md:overflow-visible"><CurrencyPicker /><DataFreshness /></div>
-              <div className="ml-auto flex items-center gap-2 md:ml-0">
+              <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ms-auto md:w-auto md:overflow-visible"><LanguageSwitch /><CurrencyPicker /><DataFreshness /></div>
+              <div className="ms-auto flex items-center gap-2 md:ms-0">
                 <AccountMenu current={current} workspaces={workspaces} user={user} />
               </div>
             </div>

@@ -260,7 +260,7 @@ function DockLabel({ children, className, ...rest }: DockLabelProps) {
           transition={{ duration: 0.2 }}
           className={cn(
             'pointer-events-none absolute w-fit whitespace-pre rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs text-neutral-700 dark:border-neutral-900 dark:bg-neutral-800 dark:text-white',
-            vertical ? 'left-full top-1/2' : '-top-6 left-1/2',
+            vertical ? 'start-full top-1/2' : '-top-6 left-1/2',
             className
           )}
           role='tooltip'

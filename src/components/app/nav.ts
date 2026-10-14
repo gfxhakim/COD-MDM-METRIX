@@ -1,22 +1,23 @@
 import { Calculator, Clapperboard, HandCoins, Import, LayoutDashboard, Package, Receipt, RefreshCw, Settings, ShoppingCart, Target, Wallet } from "lucide-react";
+import { msg } from "@/i18n/core";
 
 /**
  * The menu, in the order the owner asked for. Each page has its own red icon and its own way of
  * moving when the pointer is on it (`motion` names a nav-* keyframe in globals.css).
  */
 export const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, motion: "bars" },
-  { href: "/profit", label: "Profit tracker", icon: HandCoins, motion: "jingle" },
-  { href: "/expenses", label: "Expenses", icon: Receipt, motion: "wiggle" },
-  { href: "/products", label: "Products", icon: Package, motion: "hop" },
-  { href: "/orders", label: "Orders & parcels", icon: ShoppingCart, motion: "roll" },
-  { href: "/creatives", label: "Creatives", icon: Clapperboard, motion: "snap" },
-  { href: "/campaigns", label: "Campaigns", icon: Target, motion: "pulse" },
-  { href: "/money", label: "Money & stock", icon: Wallet, motion: "fly" },
-  { href: "/syncs", label: "MDM sync", icon: RefreshCw, motion: "spin" },
-  { href: "/simulator", label: "Breakeven CPA", icon: Calculator, motion: "tilt" },
-  { href: "/imports", label: "Imports", icon: Import, motion: "drop" },
-  { href: "/settings", label: "Settings", icon: Settings, motion: "spin" },
+  { href: "/", label: msg("Dashboard"), icon: LayoutDashboard, motion: "bars" },
+  { href: "/profit", label: msg("Profit tracker"), icon: HandCoins, motion: "jingle" },
+  { href: "/expenses", label: msg("Expenses"), icon: Receipt, motion: "wiggle" },
+  { href: "/products", label: msg("Products"), icon: Package, motion: "hop" },
+  { href: "/orders", label: msg("Orders & parcels"), icon: ShoppingCart, motion: "roll" },
+  { href: "/creatives", label: msg("Creatives"), icon: Clapperboard, motion: "snap" },
+  { href: "/campaigns", label: msg("Campaigns"), icon: Target, motion: "pulse" },
+  { href: "/money", label: msg("Money & stock"), icon: Wallet, motion: "fly" },
+  { href: "/syncs", label: msg("MDM sync"), icon: RefreshCw, motion: "spin" },
+  { href: "/simulator", label: msg("Breakeven CPA"), icon: Calculator, motion: "tilt" },
+  { href: "/imports", label: msg("Imports"), icon: Import, motion: "drop" },
+  { href: "/settings", label: msg("Settings"), icon: Settings, motion: "spin" },
 ] as const;
 
 export type NavItem = (typeof NAV)[number];

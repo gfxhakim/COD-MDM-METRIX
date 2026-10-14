@@ -92,7 +92,7 @@ export function UnmatchedSpend({ currency }: { currency: string }) {
       />
       <div className="overflow-x-auto">
         <Table>
-          <THead><tr><Th>Creative / ad ID</Th><Th>Ad</Th><Th>Campaign</Th><Th>Dates</Th><Th className="text-right">Rows</Th><Th className="text-right">Spend</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
+          <THead><tr><Th>Creative / ad ID</Th><Th>Ad</Th><Th>Campaign</Th><Th>Dates</Th><Th className="text-end">Rows</Th><Th className="text-end">Spend</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
           <tbody>
             {groups.map((g) => (
               <Tr key={g.externalCreativeId ?? "none"}>
@@ -100,8 +100,8 @@ export function UnmatchedSpend({ currency }: { currency: string }) {
                 <Td className="max-w-48 truncate">{g.adName ?? "—"}</Td>
                 <Td className="max-w-48 truncate text-muted">{g.campaignName ?? "—"}</Td>
                 <Td className="whitespace-nowrap text-xs text-muted">{formatDate(g.from)} – {formatDate(g.to)}</Td>
-                <Td className="num text-right">{g.rows}</Td>
-                <Td className="text-right"><Money value={g.spend} currency={currency} /></Td>
+                <Td className="num text-end">{g.rows}</Td>
+                <Td className="text-end"><Money value={g.spend} currency={currency} /></Td>
                 <Td>
                   {canWrite && g.externalCreativeId ? (
                     <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => setResolving(g as Group & { externalCreativeId: string })}><Link2 /> Match</Button></div>

@@ -76,7 +76,7 @@ export function AdLinksPicker({ productId, value, onChange, products }: { produc
               <div key={acct || "none"} className="flex flex-col gap-1.5">
                 <span className="text-[11px] font-medium text-muted">{accountLabel(acct)}</span>
                 {[...list].sort((x, y) => Number(y.running) - Number(x.running)).map((c) => (
-                  <label key={c.id} className="flex items-start gap-2 pl-1 text-sm">
+                  <label key={c.id} className="flex items-start gap-2 ps-1 text-sm">
                     <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#e1182c]" checked={current.campaignIds.includes(c.id)} onChange={(e) => onChange({ ...current, campaignIds: toggle(current.campaignIds, c.id, e.target.checked) })} />
                     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="break-words">{c.name ?? c.externalId}</span>

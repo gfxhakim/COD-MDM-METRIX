@@ -7,6 +7,7 @@ import { db } from "@/server/db";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
 import { createSession, destroySession, getSessionUser, setActiveWorkspaceCookie } from "@/server/auth/session";
 import { createWorkspace } from "@/server/repositories/workspaces";
+import { syncLocaleAtSignIn } from "@/i18n/server";
 import { rateLimit, RateLimitError } from "@/server/rateLimit";
 
 export type AuthState = { error?: string } | undefined;
@@ -31,6 +32,7 @@ export async function loginAction(_: AuthState, form: FormData): Promise<AuthSta
   // Same message for unknown email and wrong password to avoid account enumeration.
   if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) return { error: "Email or password is incorrect." };
   await createSession(user.id);
+  await syncLocaleAtSignIn(user);
   redirect("/");
 }
 
@@ -60,6 +62,7 @@ export async function signupAction(_: AuthState, form: FormData): Promise<AuthSt
   });
   await createSession(workspace.user.id);
   await setActiveWorkspaceCookie(workspace.ws.id);
+  await syncLocaleAtSignIn(workspace.user);
   redirect("/");
 }
 

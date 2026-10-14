@@ -161,10 +161,10 @@ export function CreativesView() {
           </Select>
             </>
           ) : null}
-          <div className="relative col-span-2 justify-self-end sm:ml-auto">
+          <div className="relative col-span-2 justify-self-end sm:ms-auto">
             <Button variant="ghost" size="sm" aria-expanded={showColumns} onClick={() => setShowColumns((s) => !s)}><Columns3 /> Columns</Button>
             {showColumns ? (
-              <div className="absolute right-0 top-full z-20 mt-1 grid w-56 gap-1 rounded-lg border border-border-strong bg-surface-2 p-2 shadow-xl">
+              <div className="absolute end-0 top-full z-20 mt-1 grid w-56 gap-1 rounded-lg border border-border-strong bg-surface-2 p-2 shadow-xl">
                 {MATRIX_COLUMNS.filter((c) => c.key !== "creative").map((c) => (
                   <label key={c.key} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-3">
                     <input type="checkbox" className="size-4 accent-[#e1182c]" checked={!hidden.includes(c.key)} onChange={() => toggleColumn(c.key)} /> {c.label}
@@ -183,7 +183,7 @@ export function CreativesView() {
                 {columns.map((c) => {
                   const active = sort.key === c.key;
                   return (
-                    <Th key={c.key} aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className={c.kind === "text" ? undefined : "text-right"}>
+                    <Th key={c.key} aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className={c.kind === "text" ? undefined : "text-end"}>
                       <span className="inline-flex items-center gap-1">
                         <button type="button" className="inline-flex items-center gap-1 uppercase hover:text-fg" onClick={() => setSort({ key: c.key, dir: active && sort.dir === "desc" ? "asc" : "desc" })}>
                           {c.label}
@@ -199,7 +199,7 @@ export function CreativesView() {
             <tbody>
               {rows.creatives.map((r) => (
                 <Tr key={r.key}>
-                  {columns.map((c) => <Td key={c.key} className={c.kind === "text" ? undefined : "text-right"}><Cell row={r} col={c} currency={cur} /></Td>)}
+                  {columns.map((c) => <Td key={c.key} className={c.kind === "text" ? undefined : "text-end"}><Cell row={r} col={c} currency={cur} /></Td>)}
                 </Tr>
               ))}
               {rows.creatives.length === 0 ? (
@@ -207,7 +207,7 @@ export function CreativesView() {
               ) : null}
               {rows.buckets.map((r) => (
                 <Tr key={r.key} className={cn("bg-surface-2/40", r === rows.buckets[0] && "border-t-2 border-border-strong")}>
-                  {columns.map((c) => <Td key={c.key} className={c.kind === "text" ? undefined : "text-right"}><Cell row={r} col={c} currency={cur} /></Td>)}
+                  {columns.map((c) => <Td key={c.key} className={c.kind === "text" ? undefined : "text-end"}><Cell row={r} col={c} currency={cur} /></Td>)}
                 </Tr>
               ))}
             </tbody>

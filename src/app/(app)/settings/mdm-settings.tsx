@@ -64,7 +64,7 @@ export function MdmTab() {
         <CardBody className="flex flex-col gap-5 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
             <div><p className="text-xs text-muted">Status</p><Badge tone={STATUS_TONE[c.status]} className="mt-1">{STATUS_LABEL[c.status]}</Badge></div>
-            <div><p className="text-xs text-muted">API key</p><p className="mt-1 font-mono text-xs">{c.maskedLabel ?? "None saved"}{c.credentialUpdatedAt ? <span className="ml-2 font-sans text-muted">updated {timeAgo(c.credentialUpdatedAt)}</span> : null}</p></div>
+            <div><p className="text-xs text-muted">API key</p><p className="mt-1 font-mono text-xs">{c.maskedLabel ?? "None saved"}{c.credentialUpdatedAt ? <span className="ms-2 font-sans text-muted">updated {timeAgo(c.credentialUpdatedAt)}</span> : null}</p></div>
             <div><p className="text-xs text-muted">Last connection test</p><p className="mt-1">{c.lastTestedAt ? formatDateTime(c.lastTestedAt) : "Never"}</p></div>
             <div><p className="text-xs text-muted">Last successful sync</p><p className="mt-1">{c.lastSuccessfulSyncAt ? formatDateTime(c.lastSuccessfulSyncAt) : "Never"}</p></div>
           </div>
@@ -182,14 +182,14 @@ export function StatusMappingsTab() {
           <CardHeader title="Unknown MDM statuses" description="Parcels with these statuses count as UNKNOWN: never delivered or returned. Map each one once and existing parcels update immediately." />
           {!unknown.data ? <Loading /> : !unknown.data.length ? <p className="p-4 text-sm text-muted">No unknown statuses.</p> : (
             <Table>
-              <THead><tr><Th>MDM status</Th><Th className="text-right">Parcels</Th><Th>Map to</Th><Th><span className="sr-only">Save</span></Th></tr></THead>
+              <THead><tr><Th>MDM status</Th><Th className="text-end">Parcels</Th><Th>Map to</Th><Th><span className="sr-only">Save</span></Th></tr></THead>
               <tbody>
                 {unknown.data.map((u) => {
                   const key = u.providerStatus ?? "";
                   return (
                     <Tr key={key}>
                       <Td className="font-mono text-xs">{u.providerStatus ?? "(empty)"}</Td>
-                      <Td className="num text-right">{u.parcels}</Td>
+                      <Td className="num text-end">{u.parcels}</Td>
                       <Td>
                         <Select aria-label={`Map ${key}`} disabled={!canEdit || !u.providerStatus} value={picked[key] ?? ""} onChange={(e) => setPicked({ ...picked, [key]: e.target.value as NormalizedStatus })} className="w-36">
                           <option value="">Choose…</option>

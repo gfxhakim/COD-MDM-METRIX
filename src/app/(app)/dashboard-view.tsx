@@ -219,7 +219,7 @@ function HealthRow({ icon, label, value, href, tone }: { icon: React.ReactNode; 
     <Link href={href} className="press group flex items-center gap-3 rounded-2xl px-2 py-2 text-sm hover:bg-surface-2">
       <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 text-muted [&_svg]:size-4", tone === "negative" && "bg-negative-soft text-negative", tone === "warning" && "bg-warning-soft text-warning")}>{icon}</span>
       <span className="min-w-0 flex-1 text-muted">{label}</span>
-      <span className={cn("num text-right font-semibold", tone === "negative" && "text-negative", tone === "warning" && "text-warning")}>{value}</span>
+      <span className={cn("num text-end font-semibold", tone === "negative" && "text-negative", tone === "warning" && "text-warning")}>{value}</span>
       <ArrowUpRight className="size-3.5 shrink-0 text-subtle transition-[color,translate] duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand-strong" aria-hidden="true" />
     </Link>
   );
@@ -247,8 +247,8 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
       ) : (
         <>
           <div className="mt-2 flex min-h-44 flex-1 gap-2">
-            <div className="relative w-8 shrink-0 text-right text-[10px] text-subtle" aria-hidden="true">
-              {[1, 2 / 3, 1 / 3, 0].map((f) => <span key={f} className="absolute right-0 -translate-y-1/2" style={{ top: `${(1 - f) * 100}%` }}>{compact(top * f)}</span>)}
+            <div className="relative w-8 shrink-0 text-end text-[10px] text-subtle" aria-hidden="true">
+              {[1, 2 / 3, 1 / 3, 0].map((f) => <span key={f} className="absolute end-0 -translate-y-1/2" style={{ top: `${(1 - f) * 100}%` }}>{compact(top * f)}</span>)}
             </div>
             <div className="relative min-h-44 min-w-0 flex-1" onMouseLeave={() => setActive(null)}>
               {[0, 1 / 3, 2 / 3].map((f) => <div key={f} className="absolute inset-x-0 border-t border-[#f1eeee]" style={{ top: `${f * 100}%` }} aria-hidden="true" />)}
@@ -281,7 +281,7 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
               </div>
             </div>
           </div>
-          <div className="flex gap-[3%] pl-10 text-center text-[10px] text-muted" aria-hidden="true">
+          <div className="flex gap-[3%] ps-10 text-center text-[10px] text-muted" aria-hidden="true">
             {buckets.map((b, i) => (
               <span key={b.label + i} className={cn("min-w-0 flex-1 whitespace-nowrap", i === best && "font-bold text-brand-strong", buckets.length > 5 && (buckets.length - 1 - i) % 2 === 1 && i !== best && "invisible")}>{b.label}</span>
             ))}
@@ -297,7 +297,7 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
       )}
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-[#f1eeee] pt-3">
         <span className="text-xs text-muted"><Term label="Ad spend" definition={DEF.adSpend} /></span>
-        <span className="num text-right text-sm font-bold">{fmt(spend)}</span>
+        <span className="num text-end text-sm font-bold">{fmt(spend)}</span>
       </div>
     </Panel>
   );
@@ -461,7 +461,7 @@ export function DashboardView() {
             </div>
             <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("press relative grid size-10 shrink-0 place-items-center rounded-full shadow-card", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label="More filters" title="More filters: days, product, ad and revenue basis">
               <SlidersHorizontal className="size-4" aria-hidden="true" />
-              {from || to || productId || creativeId || view ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
+              {from || to || productId || creativeId || view ? <span className="absolute end-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
             </button>
           </div>
         </div>
@@ -504,7 +504,7 @@ export function DashboardView() {
         ) : (
           <>
             <section className="bg-brand-hero shine relative flex min-w-0 flex-col gap-5 overflow-hidden rounded-[22px] p-5 md:col-span-2 xl:col-span-1 shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)]">
-              <span className="pointer-events-none absolute -right-12 -top-16 size-48 rounded-full border-[22px] border-white/10" aria-hidden="true" />
+              <span className="pointer-events-none absolute -end-12 -top-16 size-48 rounded-full border-[22px] border-white/10" aria-hidden="true" />
               <div className="relative flex items-center justify-between gap-3">
                 <span className="text-[15px] font-semibold"><Term label="True net profit" definition={DEF.trueNetProfit} iconClassName="text-white/70 hover:text-white" /></span>
                 <CornerLink href="/creatives" label="Open profit by ad" onRed />
@@ -538,10 +538,10 @@ export function DashboardView() {
                   <CornerLink href="/creatives" label="Open all ads" />
                 </div>
                 <div className="relative flex flex-1 flex-col pt-[22px]">
-                  <div className="absolute left-10 right-0 top-0 h-16 rounded-[22px] bg-[#efeced]" aria-hidden="true" />
-                  <div className="absolute left-5 right-0 top-[11px] h-16 rounded-[22px] bg-[#e2dddf]" aria-hidden="true" />
+                  <div className="absolute start-10 end-0 top-0 h-16 rounded-[22px] bg-[#efeced]" aria-hidden="true" />
+                  <div className="absolute start-5 end-0 top-[11px] h-16 rounded-[22px] bg-[#e2dddf]" aria-hidden="true" />
                   <div className="relative flex flex-1 flex-col gap-3.5 overflow-hidden rounded-[22px] bg-ink p-5 text-white shadow-[0_18px_40px_rgb(20_16_18/0.28)]">
-                    <span className="pointer-events-none absolute -bottom-24 -right-16 size-56 rounded-full bg-[radial-gradient(circle,rgb(255_40_60/0.55),rgb(255_40_60/0)_70%)]" aria-hidden="true" />
+                    <span className="pointer-events-none absolute -bottom-24 -end-16 size-56 rounded-full bg-[radial-gradient(circle,rgb(255_40_60/0.55),rgb(255_40_60/0)_70%)]" aria-hidden="true" />
                     {best ? (
                       <>
                         <div className="relative flex items-start justify-between gap-2">
@@ -632,8 +632,8 @@ export function DashboardView() {
                   <div role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 pb-2 text-xs text-muted sm:grid-cols-[minmax(0,1fr)_104px_56px_112px]">
                     <span role="columnheader">Name</span>
                     <span role="columnheader" className="hidden sm:block">Verdict</span>
-                    <span role="columnheader" className="hidden text-right sm:block">POAS</span>
-                    <span role="columnheader" className="text-right">Profit, {shownCode}</span>
+                    <span role="columnheader" className="hidden text-end sm:block">POAS</span>
+                    <span role="columnheader" className="text-end">Profit, {shownCode}</span>
                   </div>
                   {r.topCreatives.map((c, i) => {
                     const label = c.name || `Ad ${c.externalCreativeId}`;
@@ -647,7 +647,7 @@ export function DashboardView() {
                           </span>
                         </span>
                         <span role="cell" className="hidden sm:block"><VerdictSignal verdict={c.verdict} /></span>
-                        <span role="cell" className="hidden text-right font-semibold sm:block"><Ratio value={c.truePoas} /></span>
+                        <span role="cell" className="hidden text-end font-semibold sm:block"><Ratio value={c.truePoas} /></span>
                         <span role="cell" className="flex min-w-0 justify-end">
                           <span className={cn("num max-w-full truncate rounded-full px-2.5 py-1 text-xs font-bold", c.trueNetProfit < 0 ? "bg-ink text-white" : i === 0 ? "bg-brand glow-soft" : "bg-brand-soft text-brand-deep")}>{bare(c.trueNetProfit, true)}</span>
                         </span>
@@ -716,12 +716,12 @@ export function DashboardView() {
                   ].map(([label, v, def]) => (
                     <div key={label as string} className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
                       <dt className="text-muted"><Term label={label as string} definition={def as string} /></dt>
-                      <dd className={cn("num text-right", (v as number) < 0 ? "text-fg" : "text-positive")}>{fmt(v as number)}</dd>
+                      <dd className={cn("num text-end", (v as number) < 0 ? "text-fg" : "text-positive")}>{fmt(v as number)}</dd>
                     </div>
                   ))}
                   <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-brand-soft px-2 py-2 font-bold">
                     <dt>True net profit</dt>
-                    <dd className={cn("num text-right", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
+                    <dd className={cn("num text-end", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3 px-2 pt-2 text-xs text-muted">
                     <dt><Term label="Cost per delivered order" definition={DEF.cpdo} /></dt>
@@ -735,13 +735,13 @@ export function DashboardView() {
             <CardHeader title="Worst RTO ads" description="Cheap orders that come back cost twice." />
             {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title="No shipped parcels yet" /> : (
               <Table>
-                <THead><tr><Th>Ad</Th><Th className="text-right">RTO</Th><Th className="text-right">Returned</Th></tr></THead>
+                <THead><tr><Th>Ad</Th><Th className="text-end">RTO</Th><Th className="text-end">Returned</Th></tr></THead>
                 <tbody>
                   {r.worstRtoCreatives.map((c) => (
                     <Tr key={c.key}>
-                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ml-1" title="Fewer shipped parcels than the BAD TRAFFIC threshold">small n</Badge> : null}</Td>
-                      <Td className="text-right"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
-                      <Td className="num text-right text-muted">{c.returned}/{c.shipped}</Td>
+                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ms-1" title="Fewer shipped parcels than the BAD TRAFFIC threshold">small n</Badge> : null}</Td>
+                      <Td className="text-end"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
+                      <Td className="num text-end text-muted">{c.returned}/{c.shipped}</Td>
                     </Tr>
                   ))}
                 </tbody>
@@ -770,17 +770,17 @@ export function DashboardView() {
           <CardHeader title="By wilaya" description="Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya." />
           {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title="No wilaya data" /> : (
             <Table>
-              <THead><tr><Th>Wilaya</Th><Th className="text-right">Placed</Th><Th className="text-right">Shipped</Th><Th className="text-right">Delivery rate</Th><Th className="text-right">RTO rate</Th><Th className="text-right">Delivered revenue</Th><Th className="text-right">Contribution before ads</Th></tr></THead>
+              <THead><tr><Th>Wilaya</Th><Th className="text-end">Placed</Th><Th className="text-end">Shipped</Th><Th className="text-end">Delivery rate</Th><Th className="text-end">RTO rate</Th><Th className="text-end">Delivered revenue</Th><Th className="text-end">Contribution before ads</Th></tr></THead>
               <tbody>
                 {r.wilayas.map((w) => (
                   <Tr key={w.wilaya}>
                     <Td>{w.wilaya}</Td>
-                    <Td className="num text-right">{w.placed}</Td>
-                    <Td className="num text-right">{w.shipped}</Td>
-                    <Td className="text-right"><Rate value={w.deliveryRate} /></Td>
-                    <Td className="text-right"><Rate value={w.returnRate} className={(w.returnRate ?? 0) > 0.3 ? "text-negative" : undefined} /></Td>
-                    <Td className="text-right"><Money value={w.deliveredRevenue} currency={cur} /></Td>
-                    <Td className="text-right"><Money value={w.contributionBeforeAds} currency={cur} signed /></Td>
+                    <Td className="num text-end">{w.placed}</Td>
+                    <Td className="num text-end">{w.shipped}</Td>
+                    <Td className="text-end"><Rate value={w.deliveryRate} /></Td>
+                    <Td className="text-end"><Rate value={w.returnRate} className={(w.returnRate ?? 0) > 0.3 ? "text-negative" : undefined} /></Td>
+                    <Td className="text-end"><Money value={w.deliveredRevenue} currency={cur} /></Td>
+                    <Td className="text-end"><Money value={w.contributionBeforeAds} currency={cur} signed /></Td>
                   </Tr>
                 ))}
               </tbody>

@@ -97,9 +97,9 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
       <Card>
         <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]">
           <div className="relative col-span-2">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
+            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
             <label htmlFor="order-search" className="sr-only">Search orders</label>
-            <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="ps-9" />
           </div>
           <AdsFilter className="col-span-2 sm:col-span-1" />
           <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full">
@@ -139,7 +139,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           <ul aria-label="Orders" className="flex flex-col divide-y divide-border">
             {orders.data.items.map((o) => (
               <li key={o.id}>
-                <button type="button" onClick={() => setOpenId(o.id)} className="flex w-full flex-col gap-1.5 px-4 py-3 text-left transition-colors active:bg-surface-2">
+                <button type="button" onClick={() => setOpenId(o.id)} className="flex w-full flex-col gap-1.5 px-4 py-3 text-start transition-colors active:bg-surface-2">
                   <span className="flex items-center justify-between gap-3">
                     <span className="font-mono text-xs font-semibold text-fg">{o.orderNumber}</span>
                     <span className="num text-sm font-bold">{money.fmt(o.codAmount, o.currency)}</span>
@@ -165,7 +165,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
             <THead>
               <tr>
                 <Th>Order</Th><Th>Customer</Th>{more ? <Th>Source</Th> : null}<Th>Product</Th>{more ? <Th>Creative</Th> : null}<Th>Placed</Th><Th>Wilaya</Th><Th>Order status</Th>
-                {more ? <><Th className="text-right">Parcels</Th><Th>Tracking</Th><Th>MDM status</Th></> : null}<Th>Parcel</Th><Th className="text-right">COD</Th>{more ? <Th>Last MDM update</Th> : null}
+                {more ? <><Th className="text-end">Parcels</Th><Th>Tracking</Th><Th>MDM status</Th></> : null}<Th>Parcel</Th><Th className="text-end">COD</Th>{more ? <Th>Last MDM update</Th> : null}
               </tr>
             </THead>
             <tbody>
@@ -202,13 +202,13 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   <Td><OrderStatusBadge status={o.status} /></Td>
                   {more ? (
                     <>
-                      <Td className="num text-right">{o.parcelCount}</Td>
+                      <Td className="num text-end">{o.parcelCount}</Td>
                       <Td className="font-mono text-xs text-muted">{o.trackingId ?? "—"}</Td>
                       <Td className="font-mono text-xs text-muted">{o.providerStatus ?? "—"}</Td>
                     </>
                   ) : null}
                   <Td><ParcelStatusBadge status={o.normalizedStatus} /></Td>
-                  <Td className="num text-right">{money.fmt(o.codAmount, o.currency)}</Td>
+                  <Td className="num text-end">{money.fmt(o.codAmount, o.currency)}</Td>
                   {more ? <Td className="text-xs text-muted">{o.lastProviderUpdateAt ? timeAgo(o.lastProviderUpdateAt) : "—"}</Td> : null}
                 </Tr>
               ))}

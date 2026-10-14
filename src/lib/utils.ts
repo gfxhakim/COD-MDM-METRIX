@@ -1,28 +1,31 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { englishT, type TFunction } from "@/i18n/core";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(d: Date | string | null | undefined, opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" }) {
+/** `locale` is an Intl locale: components get it from useT().date (src/i18n/client.tsx). */
+export function formatDate(d: Date | string | null | undefined, opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" }, locale = "en-GB") {
   if (!d) return "—";
-  return new Intl.DateTimeFormat("en-GB", opts).format(typeof d === "string" ? new Date(d) : d);
+  return new Intl.DateTimeFormat(locale, opts).format(typeof d === "string" ? new Date(d) : d);
 }
 
 export function formatDateTime(d: Date | string | null | undefined) {
   return formatDate(d, { dateStyle: "medium", timeStyle: "short" });
 }
 
-export function timeAgo(d: Date | string | null | undefined): string {
-  if (!d) return "never";
+/** `t` translates the words (src/i18n); English without it. */
+export function timeAgo(d: Date | string | null | undefined, t: TFunction = englishT): string {
+  if (!d) return t("never");
   const ms = Date.now() - new Date(d).getTime();
   const m = Math.round(ms / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
+  if (m < 1) return t("just now");
+  if (m < 60) return t("{n} min ago", { n: m });
   const h = Math.round(m / 60);
-  if (h < 48) return `${h} h ago`;
-  return `${Math.round(h / 24)} days ago`;
+  if (h < 48) return t("{n} h ago", { n: h });
+  return t("{n} days ago", { n: Math.round(h / 24) });
 }
 
 export function toDateInput(d: Date | string | null | undefined): string {

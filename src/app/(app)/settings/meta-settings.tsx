@@ -80,7 +80,7 @@ export function MetaTab() {
       {form.mode !== "rename" ? (
         <details className="text-xs text-muted" open={!c.tokens.length}>
           <summary className="cursor-pointer font-medium text-fg">How to get a read-only token</summary>
-          <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5">{SETUP_STEPS.map((t) => <li key={t}>{t}</li>)}</ol>
+          <ol className="mt-2 flex list-decimal flex-col gap-1 ps-5">{SETUP_STEPS.map((t) => <li key={t}>{t}</li>)}</ol>
           <p className="mt-2">Meta sometimes renames these menus; the permission you need is always ads_read. Using several Business Managers? Repeat these steps in each one and add each token here.</p>
         </details>
       ) : null}
