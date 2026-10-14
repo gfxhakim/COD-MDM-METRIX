@@ -20,8 +20,8 @@ export function LanguageSwitch({ className }: { className?: string }) {
   const pick = (next: Locale) => {
     if (next === locale || pending) return;
     // Turn the page at once; the server sends the texts in the new language right after.
-    document.documentElement.lang = next;
-    document.documentElement.dir = dirOf(next);
+    document.documentElement.setAttribute("lang", next);
+    document.documentElement.setAttribute("dir", dirOf(next));
     start(async () => {
       await setLocaleAction(next);
       router.refresh();
