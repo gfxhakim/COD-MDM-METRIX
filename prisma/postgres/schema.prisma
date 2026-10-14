@@ -481,16 +481,19 @@ model UnmatchedRecord {
 // ─────────────────────── Commerce & fulfillment ───────────────────────
 
 model Product {
-  id          String   @id @default(uuid())
-  workspaceId String
-  name        String
-  sku         String
-  currency    String   @default("DZD")
-  active      Boolean  @default(true)
+  id             String   @id @default(uuid())
+  workspaceId    String
+  name           String
+  sku            String
+  currency       String   @default("DZD")
+  active         Boolean  @default(true)
   /// Created by the MDM sync for a product MDM sent with an order. Its costs are entered by hand.
-  fromMdm     Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  fromMdm        Boolean  @default(false)
+  /// Pieces sent in one order: 1 without an offer, 2 for "buy 1, get 1 free" (src/domain/offers.ts).
+  /// The cost versions' sale price is the price of one whole order.
+  piecesPerOrder Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   workspace         Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   mdmLinks          MdmProductLink[]

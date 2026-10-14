@@ -154,7 +154,7 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
             <CardBody className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Sale price P" htmlFor="P"><MoneyInput id="P" currency={currency} value={f.salePrice} onChange={set("salePrice")} /></Field>
-                <Field label="Sourcing cost C" htmlFor="C"><MoneyInput id="C" currency={currency} value={f.sourcingCost} onChange={set("sourcingCost")} /></Field>
+                <Field label="Sourcing cost C" htmlFor="C" hint="For one order: every piece it sends, free ones included"><MoneyInput id="C" currency={currency} value={f.sourcingCost} onChange={set("sourcingCost")} /></Field>
                 <Field label="Outbound shipping S" htmlFor="S"><MoneyInput id="S" currency={currency} value={f.outboundShipping} onChange={set("outboundShipping")} /></Field>
                 <Field label="RTO fee R" htmlFor="R"><MoneyInput id="R" currency={currency} value={f.rtoFee} onChange={set("rtoFee")} /></Field>
                 <Field label="Call-center cost K" htmlFor="K"><MoneyInput id="K" currency={currency} value={f.callCenterCost} onChange={set("callCenterCost")} /></Field>

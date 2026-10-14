@@ -44,6 +44,8 @@ export async function listProducts(ctx: WorkspaceContext, input: { includeInacti
     sku: p.sku,
     currency: p.currency,
     active: p.active,
+    /** Pieces one order sends: the product's offer. */
+    piecesPerOrder: p.piecesPerOrder,
     createdAt: p.createdAt,
     currentCost: selectCostVersion(p.costVersions, now),
     versionCount: p.costVersions.length,
@@ -106,7 +108,7 @@ export async function getProduct(ctx: WorkspaceContext, id: string) {
 
 export async function createProduct(
   ctx: WorkspaceContext,
-  input: { name: string; sku: string; active?: boolean; cost: CostInput; effectiveFrom?: Date },
+  input: { name: string; sku: string; active?: boolean; piecesPerOrder?: number; cost: CostInput; effectiveFrom?: Date },
 ) {
   assertCan(ctx, "catalog.write");
   const product = await db.$transaction(async (tx) => {
@@ -118,6 +120,7 @@ export async function createProduct(
         sku: input.sku,
         currency: ctx.currency,
         active: input.active ?? true,
+        piecesPerOrder: input.piecesPerOrder ?? 1,
         costVersions: {
           create: {
             workspaceId: ctx.workspaceId,
@@ -136,15 +139,15 @@ export async function createProduct(
   return product;
 }
 
-export async function updateProduct(ctx: WorkspaceContext, input: { id: string; name?: string; sku?: string; active?: boolean }) {
+export async function updateProduct(ctx: WorkspaceContext, input: { id: string; name?: string; sku?: string; active?: boolean; piecesPerOrder?: number }) {
   assertCan(ctx, "catalog.write");
   const existing = await db.product.findFirst({ where: { id: input.id, workspaceId: ctx.workspaceId } });
   if (!existing) throw new NotFoundError("Product not found");
   const p = await db.product.update({
     where: { id: existing.id },
-    data: { name: input.name, sku: input.sku, active: input.active },
+    data: { name: input.name, sku: input.sku, active: input.active, piecesPerOrder: input.piecesPerOrder },
   });
-  await audit(ctx, "product.updated", { type: "Product", id: p.id }, { name: input.name, sku: input.sku, active: input.active });
+  await audit(ctx, "product.updated", { type: "Product", id: p.id }, { name: input.name, sku: input.sku, active: input.active, piecesPerOrder: input.piecesPerOrder });
   return p;
 }
 

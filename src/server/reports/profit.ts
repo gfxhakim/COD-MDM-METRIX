@@ -1,17 +1,40 @@
 import type { Prisma } from "@prisma/client";
 import type { AdFilter } from "@/domain/adFilter";
 import { selectCostVersion } from "@/domain/costVersions";
-import { allocateOverhead, computeMetrics, sumTotals } from "@/domain/economics";
+import { allocateOverhead, computeMetrics, sumTotals, type Metrics, type Totals } from "@/domain/economics";
 import { profitPlanSchema, type Defaults, type ProductData, type ProfitPlan } from "@/domain/profitTracker";
-import { dayRange } from "@/lib/zonedDays";
+import { dayRange, zoneOffsetMs } from "@/lib/zonedDays";
 import { audit } from "@/server/audit";
 import { db } from "@/server/db";
-import { ensureCampaigns } from "@/server/repositories/campaigns";
+import { ensureCampaigns, RUNNING_STATUSES } from "@/server/repositories/campaigns";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 import { evaluate, groupTotals } from "./economics";
 import { loadFacts } from "./facts";
 
 const NONE = "__none__";
+
+/** The counts and rates the Profit tracker shows for a group of orders and the spend on them. */
+function funnel(m: Metrics) {
+  return {
+    spend: m.adSpend,
+    placed: m.placed,
+    confirmed: m.confirmed,
+    shipped: m.shipped,
+    delivered: m.delivered,
+    returned: m.returned,
+    lost: m.lost,
+    inTransit: m.inTransit,
+    finished: m.finished,
+    confirmationRate: m.confirmationRate,
+    // An order split into several parcels can put shipped over confirmed: the rate stops at 100%.
+    shippingRate: m.shippingRate === null ? null : Math.min(1, m.shippingRate),
+    deliveryRate: m.deliveryRate,
+    lostRate: m.finished > 0 ? m.lost / m.finished : null,
+    /** Ad spend per order placed. */
+    adCostPerOrder: m.placedCpa,
+  };
+}
+export type Funnel = ReturnType<typeof funnel>;
 
 function readPlan(row: { stockSource: string; stockUnits: number | null; overrides: Prisma.JsonValue } | null): ProfitPlan | null {
   if (!row) return null;
@@ -35,7 +58,7 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
     loadFacts(ctx, dayRange(input, ws.timezone), input.ads),
     db.product.findMany({
       where: { workspaceId },
-      select: { id: true, name: true, sku: true, active: true, fromMdm: true, costVersions: true, profitPlan: { select: { stockSource: true, stockUnits: true, overrides: true, updatedAt: true } } },
+      select: { id: true, name: true, sku: true, active: true, fromMdm: true, piecesPerOrder: true, costVersions: true, profitPlan: { select: { stockSource: true, stockUnits: true, overrides: true, updatedAt: true } } },
       orderBy: [{ active: "desc" }, { name: "asc" }],
     }),
     db.mdmStockItem.findMany({
@@ -77,6 +100,54 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
   // Products with ads someone linked to them (a campaign, an ad account, or spend counted for them).
   // The calculation with ads only reads a cost per order from those; the others wait for a link or a typed one.
   const adsLinked = new Set<string>([...linkedCampaigns.map((c) => c.productId!), ...linkedAccounts.map((a) => a.defaultProductId!), ...[...spendByProduct.keys()].filter((k) => k !== NONE)]);
+
+  // ── Each product's campaigns: its orders by the campaign of their ad, and the spend of each ──
+  // A campaign counts for a product through its own link or its ad account's; the product's
+  // orders whose ad is in none of them are kept apart.
+  const campaignOfCreative = new Map(facts.creatives.map((c) => [c.id, c.campaignId]));
+  const linkedTo = new Map<string, string>(facts.campaigns.filter((c) => c.productId).map((c) => [c.externalId, c.productId!]));
+  const pairKey = (productId: string, campaign: string | null) => `${productId}|${campaign && linkedTo.get(campaign) === productId ? campaign : NONE}`;
+  const totalsByCampaign = groupTotals(
+    evaluated.filter((o) => o.productId),
+    (o) => pairKey(o.productId!, o.creativeId ? campaignOfCreative.get(o.creativeId) ?? null : null),
+  );
+  const spendByCampaign = new Map<string, number>();
+  for (const sp of facts.spend) {
+    if (!sp.productId) continue;
+    const k = pairKey(sp.productId, sp.campaignId ?? (sp.creativeId ? campaignOfCreative.get(sp.creativeId) ?? null : null));
+    spendByCampaign.set(k, (spendByCampaign.get(k) ?? 0) + sp.spend);
+  }
+  const campaignsOf = (productId: string) =>
+    facts.campaigns
+      .filter((c) => c.productId === productId)
+      .map((c) => {
+        const k = `${productId}|${c.externalId}`;
+        const f = funnel(computeMetrics(totalsByCampaign.get(k) ?? sumTotals([]), spendByCampaign.get(k) ?? 0, 0, "DELIVERED"));
+        return { id: c.id, name: c.name ?? c.externalId, status: c.status, running: c.status !== null && RUNNING_STATUSES.has(c.status), source: c.productSource, ...f };
+      })
+      .filter((c) => c.spend > 0 || c.placed > 0 || c.running)
+      .sort((a, b) => b.spend - a.spend || b.placed - a.placed || a.name.localeCompare(b.name));
+
+  // ── Each product's days, in the workspace's time zone: orders by the day they were placed ──
+  const dayOf = (d: Date) => new Date(d.getTime() + zoneOffsetMs(d, ws.timezone)).toISOString().slice(0, 10);
+  type Day = { date: string; totals: Totals[]; adSpend: number };
+  const daysByProduct = new Map<string, Map<string, Day>>();
+  const day = (productId: string, date: string) => {
+    let byDay = daysByProduct.get(productId);
+    if (!byDay) daysByProduct.set(productId, (byDay = new Map()));
+    return byDay.get(date) ?? byDay.set(date, { date, totals: [], adSpend: 0 }).get(date)!;
+  };
+  for (const o of evaluated) if (o.productId) day(o.productId, dayOf(o.placedAt)).totals.push(o.totals);
+  // Ad days are stored as the day itself (midnight UTC).
+  for (const sp of facts.spend) if (sp.productId) day(sp.productId, sp.date.toISOString().slice(0, 10)).adSpend += sp.spend;
+  const daysOf = (productId: string) =>
+    [...(daysByProduct.get(productId)?.values() ?? [])]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => {
+        const t = sumTotals(d.totals);
+        const costs = t.cogs + t.outboundShipping + t.rtoCost + t.callCenterCost + t.packagingCost;
+        return { date: d.date, placed: t.placed, delivered: t.delivered, returned: t.returned, inTransit: t.inTransit, revenue: t.deliveredRevenue, costs, adSpend: d.adSpend, profit: t.deliveredRevenue - costs - d.adSpend };
+      });
 
   const groups = [...totalsByProduct].map(([k, t]) => ({ key: k, productId: k, deliveredOrders: t.deliveredOrders, deliveredRevenue: t.deliveredRevenue }));
   const { allocated } = allocateOverhead(groups, facts.expenses, facts.defaults.overheadPolicy);
@@ -130,6 +201,7 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
       const st = stockOf.get(p.id);
       const per = (amount: number, n: number) => (n > 0 ? Math.round(amount / n) : null);
       const data: ProductData = {
+        piecesPerOrder: p.piecesPerOrder,
         cost: v ? { salePrice: v.salePrice, sourcingCost: v.sourcingCost, forwardShippingFee: v.forwardShippingFee, rtoFee: v.rtoFee, callCenterFee: v.callCenterFee, packagingFee: v.packagingFee } : null,
         stock: st ? { read: st.read, available: st.available, incoming: st.incoming, received: st.received, sellingPrice: st.sellingPrice, purchasePrice: st.purchasePrice } : { read: false, available: 0, incoming: 0, received: 0, sellingPrice: null, purchasePrice: null },
         observed: {
@@ -154,6 +226,12 @@ export async function profitTracker(ctx: WorkspaceContext, input: { from?: strin
         adsLinked: adsLinked.has(p.id),
         ...data,
         stockDetail: st ? { inDelivery: st.inDelivery, returning: st.returning, at: st.at, names: st.names } : null,
+        /** Every order of the product and its ad spend, then the same per linked campaign. */
+        funnel: funnel(m),
+        campaigns: campaignsOf(p.id),
+        /** The product's orders whose ad is in none of its linked campaigns (or that have no ad). */
+        otherOrders: funnel(computeMetrics(totalsByCampaign.get(`${p.id}|${NONE}`) ?? sumTotals([]), spendByCampaign.get(`${p.id}|${NONE}`) ?? 0, 0, "DELIVERED")),
+        days: daysOf(p.id),
         planUpdatedAt: p.profitPlan?.updatedAt ?? null,
         sample: { placed: m.placed, confirmed: m.confirmed, shipped: m.shipped, finished: m.finished, delivered: m.delivered, returned: m.returned, lost: m.lost, inTransit: m.inTransit, returnRate: m.returnRate },
         actual: {

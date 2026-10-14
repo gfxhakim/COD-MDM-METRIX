@@ -7,9 +7,8 @@ import Link from "next/link";
 import * as React from "react";
 import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
 import { useMoney } from "@/components/app/currency";
-import { FitText, FitMoney } from "@/components/app/fit-money";
 import { MoneyInput, minorToInput } from "@/components/app/money-input";
-import { MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
+import { MoreDetails, MoreDetailsButton, useMoreDetails } from "@/components/app/more-details";
 import { PageHeader } from "@/components/app/page-header";
 import { useCan } from "@/components/app/use-can";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +26,6 @@ import {
   actualBreakdown,
   feesPerOrder,
   GAP_LABEL,
-  productSummary,
   roundRate,
   seedFor,
   STOCK_SOURCE_LABEL,
@@ -44,11 +42,14 @@ import {
   type StockSource,
 } from "@/domain/profitTracker";
 import { RANGES, rangeDays, todayIn, type RangeKey } from "@/lib/dateRanges";
-import { currencyExponent, parseToMinor } from "@/lib/money";
+import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
+import { offerLabel } from "@/domain/offers";
 import { cn, formatPercent, timeAgo } from "@/lib/utils";
 import type { AppRouter } from "@/server/trpc/root";
 import { CostVersionDialog } from "../products/products-view";
+import { OrderProfitView, productLine } from "./order-view";
+import { Bridge, Hero, Stat } from "./parts";
 
 type Tracker = inferRouterOutputs<AppRouter>["profit"]["tracker"];
 type Row = Tracker["products"][number];
@@ -169,7 +170,7 @@ const samePlan = (a: ProfitPlan | null, b: ProfitPlan | null) => {
 const SOURCE_TEXT: Record<FieldSource, string> = {
   you: "Saved by you",
   orders: "From your orders",
-  product: "From product details",
+  product: "From product details and your offer",
   mdm: "From MDM stock",
   default: "Default, no data yet",
 };
@@ -198,93 +199,6 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
       <legend className="mb-1 text-xs font-bold uppercase tracking-[0.08em] text-subtle">{title}</legend>
       {children}
     </fieldset>
-  );
-}
-
-function Stat({ label, def, children, sub, tone }: { label: string; def?: string; children: React.ReactNode; sub?: React.ReactNode; tone?: "good" | "bad" }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-2xl bg-surface-2 p-3.5">
-      <span className="text-xs text-muted">{def ? <Term label={label} definition={def} /> : label}</span>
-      <span className={cn("num min-w-0 text-lg font-extrabold leading-tight", tone === "good" && "text-positive", tone === "bad" && "text-negative")}>
-        {/* Amounts shrink to fit a narrow phone tile instead of being cut. */}
-        {typeof children === "string" ? <FitText max={18} min={12}>{children}</FitText> : children}
-      </span>
-      {sub ? <span className="text-[11px] text-subtle">{sub}</span> : null}
-    </div>
-  );
-}
-
-function Hero({ label, def, value, currency, sub }: { label: string; def: string; value: number; currency: string; sub: React.ReactNode }) {
-  return (
-    <section className="relative flex min-w-0 flex-col gap-4 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)]">
-      <span className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
-      <span className="relative text-[15px] font-semibold"><Term label={label} definition={def} iconClassName="text-white/70 hover:text-white" /></span>
-      <div className="relative min-w-0">
-        <FitMoney value={Math.round(value / 10 ** currencyExponent(currency)) * 10 ** currencyExponent(currency)} currency={currency} max={38} signed codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" />
-      </div>
-      <span className="relative text-xs text-white/85">{sub}</span>
-    </section>
-  );
-}
-
-type Step = { label: string; amount: number; kind: "start" | "cost" | "gain" | "end"; note?: string };
-
-/** Where each bar starts and ends: totals stand on zero, costs and gains hang from the running total. */
-function bridgeSpans(steps: Step[]) {
-  return steps.reduce<{ run: number; spans: (Step & { a: number; b: number })[] }>(
-    (acc, s) => {
-      if (s.kind === "start" || s.kind === "end") return { run: s.amount, spans: [...acc.spans, { ...s, a: 0, b: s.amount }] };
-      const b = s.kind === "cost" ? acc.run - s.amount : acc.run + s.amount;
-      return { run: b, spans: [...acc.spans, { ...s, a: acc.run, b }] };
-    },
-    { run: 0, spans: [] },
-  ).spans;
-}
-
-/**
- * A bridge from one total to another: each cost is a bar hanging from the running total, so the
- * bars line up end to end. Every amount is also written out, so the bars are never the only clue.
- */
-function Bridge({ steps, currency, label }: { steps: Step[]; currency: string; label: string }) {
-  const money = useMoney();
-  const spans = bridgeSpans(steps);
-  const lo = Math.min(0, ...spans.flatMap((s) => [s.a, s.b]));
-  const hi = Math.max(0, ...spans.flatMap((s) => [s.a, s.b]));
-  const width = hi - lo || 1;
-  const pos = (v: number) => ((v - lo) / width) * 100;
-  return (
-    <ol aria-label={label} className="flex flex-col gap-2.5">
-      {spans.map((s) => {
-        const left = pos(Math.min(s.a, s.b));
-        const w = Math.max(0.6, pos(Math.max(s.a, s.b)) - left);
-        const total = s.kind === "start" || s.kind === "end";
-        return (
-          <li key={s.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_7.5rem]">
-            <span className={cn("min-w-0 text-[13px] leading-snug", total ? "font-bold text-fg" : "text-muted")}>
-              {s.label}
-              {s.note ? <span className="block text-[11px] text-subtle">{s.note}</span> : null}
-            </span>
-            <span className={cn("num whitespace-nowrap text-right text-[13px] sm:order-3", total ? "font-extrabold" : "font-semibold", s.kind === "cost" && "text-negative", s.kind === "gain" && "text-positive", total && s.amount < 0 && "text-negative")}>
-              {s.kind === "cost" || (total && s.amount < 0) ? "−" : s.kind === "gain" ? "+" : ""}
-              {money.fmt(Math.abs(s.amount), currency, { decimals: false })}
-            </span>
-            <span className="relative col-span-2 h-3.5 sm:order-2 sm:col-span-1" aria-hidden="true">
-              {lo < 0 ? <span className="absolute inset-y-[-3px] w-px bg-border-strong" style={{ left: `${pos(0)}%` }} /> : null}
-              <span
-                className={cn(
-                  "animate-grow-x absolute inset-y-0 rounded-full",
-                  s.kind === "start" && "bg-[linear-gradient(90deg,#ff4254,#c8102e)]",
-                  s.kind === "end" && (s.amount >= 0 ? "bg-positive" : "bg-negative"),
-                  s.kind === "cost" && "bg-[#f3a3ac]",
-                  s.kind === "gain" && "bg-positive/45",
-                )}
-                style={{ left: `${left}%`, width: `${w}%` }}
-              />
-            </span>
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 
@@ -375,12 +289,12 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
   );
   const priceFields = (
     <div className="grid grid-cols-2 gap-3">
-      <Field label="Sale price per unit" htmlFor="pt-price" hint={moneyHint("salePrice")}><MoneyInput id="pt-price" currency={cur} value={form.salePrice} onChange={set("salePrice")} /></Field>
-      <Field label="Cost per unit" htmlFor="pt-cost" hint={moneyHint("unitCost")}><MoneyInput id="pt-cost" currency={cur} value={form.unitCost} onChange={set("unitCost")} /></Field>
+      <Field label="Sale price per piece" htmlFor="pt-price" hint={row.piecesPerOrder > 1 && form.salePrice === dataForm.salePrice ? `Your offer: the order price ÷ ${row.piecesPerOrder} pieces` : moneyHint("salePrice")}><MoneyInput id="pt-price" currency={cur} value={form.salePrice} onChange={set("salePrice")} /></Field>
+      <Field label="Cost per piece" htmlFor="pt-cost" hint={moneyHint("unitCost")}><MoneyInput id="pt-cost" currency={cur} value={form.unitCost} onChange={set("unitCost")} /></Field>
     </div>
   );
   const unitsPerOrder = (
-    <Field label="Units per order" htmlFor="pt-upo" hint={hint("unitsPerOrder", "unitsPerOrder", (v) => v)}>
+    <Field label="Pieces per order" htmlFor="pt-upo" hint={hint("unitsPerOrder", "unitsPerOrder", (v) => v)}>
       <Input id="pt-upo" inputMode="decimal" className="num" value={form.unitsPerOrder} onChange={(e) => set("unitsPerOrder")(e.target.value)} />
     </Field>
   );
@@ -390,7 +304,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
     <Card role="region" aria-labelledby="pt-name" className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
         <div className="min-w-0">
-          <h2 id="pt-name" className="text-[20px] font-extrabold tracking-[-0.02em]">{row.name}</h2>
+          <h2 id="pt-name" className="text-[20px] font-extrabold tracking-[-0.02em]">Stock of {row.name}</h2>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
             {row.fromMdm ? <Badge tone="brand">From MDM</Badge> : null}
             {noCost ? <Badge tone="warning">No price or cost in product details</Badge> : null}
@@ -659,80 +573,52 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
   const money = useMoney();
   const cur = data.currency;
   const fmt = (v: number) => money.fmt(v, cur, { decimals: false });
-  const rows = data.products.map((p) => ({ p, ...productSummary(p, data.defaults) }));
-  // Without a linked campaign (or a typed ad spend per order) there is no calculation with ads.
-  const noAds = (r: (typeof rows)[number]) => !r.p.adsLinked && r.seed.sources.cpa !== "you";
-  const real = (r: (typeof rows)[number]) => (r.projection.ok && !noAds(r) ? r.projection : null);
-  const [more, setMore] = useMoreDetails("profit-products");
+  const rows = data.products.map((p) => ({ p, ...productLine(p, data) }));
   return (
     <Card className="min-w-0">
-      <CardHeader
-        title="Your products"
-        description="What each product's stock earns before ads, and what it really earns after them. Pick one to see how."
-        actions={<MoreDetailsButton open={more} onToggle={setMore} className="hidden md:inline-flex" />}
-      />
+      <CardHeader title="Your products" description="What a delivered order of each product really earns, with its ads, and its real profit in these days. Pick one to see how." />
       <div className="hidden px-2 pb-3 md:block">
         <Table>
           <THead>
             <tr>
               <Th>Product</Th>
-              <Th className="text-right">Stock</Th>
-              <Th className="text-right"><Term label="Before ads" definition="Units × (sale price − cost per unit)." /></Th>
-              <Th className="text-right"><Term label="Real benefit" definition="After ad spend, confirmation, delivery and return rates and every fee." /></Th>
-              <Th className="text-right">Missing</Th>
-              {more ? (
-                <>
-                  <Th className="text-right">Per unit</Th>
-                  <Th className="text-right"><Term label="Breakeven CPA" definition="The most you can pay in ads per order placed." /></Th>
-                </>
-              ) : null}
+              <Th>Offer</Th>
+              <Th className="text-end"><Term label="Per delivered order" definition="Profit of one delivered order after ads, returns and every fee." /></Th>
+              <Th className="text-end"><Term label="Ads per delivered order" definition="Ad spend per order ÷ confirmation rate ÷ delivery rate." /></Th>
+              <Th className="text-end"><Term label="Real profit" definition="The orders placed in these days, after everything." /></Th>
             </tr>
           </THead>
           <tbody>
-            {rows.map((r) => {
-              const x = real(r);
-              return (
-                <Tr key={r.p.id} className={cn("cursor-pointer", selected === r.p.id && "bg-brand-soft/60")} onClick={() => onSelect(r.p.id)}>
-                  <Td className="whitespace-normal">
-                    <button type="button" className="text-left font-semibold hover:text-brand-strong" aria-pressed={selected === r.p.id} onClick={(e) => { e.stopPropagation(); onSelect(r.p.id); }}>{r.p.name}</button>
-                    <span className="mt-0.5 flex flex-wrap gap-1">
-                      {!r.p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}
-                      {noAds(r) ? <Badge tone="warning">No ads linked</Badge> : null}
-                      {r.p.plan ? <Badge tone="info">Saved numbers</Badge> : null}
-                    </span>
-                  </Td>
-                  <Td className="num text-right">{count(r.seed.units)}<span className="block text-[11px] text-subtle">{r.seed.stockSource === "TYPED" ? (r.p.plan?.stockUnits != null ? "typed" : "example") : "MDM"}</span></Td>
-                  <Td className="num text-right font-semibold">{fmt(r.potential.benefit)}</Td>
-                  <Td className={cn("num text-right font-bold", x && x.benefit < 0 ? "text-negative" : "text-positive")} title={noAds(r) ? "Link this product's campaigns to count its ads" : r.projection.ok ? undefined : r.projection.reason}>{x ? fmt(x.benefit) : noAds(r) ? <span className="text-xs font-semibold text-subtle">Link ads</span> : "—"}</Td>
-                  <Td className="num text-right text-negative">{x ? fmt(x.missing) : "—"}</Td>
-                  {more ? (
-                    <>
-                      <Td className="num text-right">{x ? fmt(x.benefitPerUnit) : "—"}</Td>
-                      <Td className="num text-right">{x ? fmt(x.breakevenCpa) : "—"}</Td>
-                    </>
-                  ) : null}
-                </Tr>
-              );
-            })}
+            {rows.map(({ p, input, result: r }) => (
+              <Tr key={p.id} className={cn("cursor-pointer", selected === p.id && "bg-brand-soft/60")} onClick={() => onSelect(p.id)}>
+                <Td className="whitespace-normal">
+                  <button type="button" className="text-start font-semibold hover:text-brand-strong" aria-pressed={selected === p.id} onClick={(e) => { e.stopPropagation(); onSelect(p.id); }}>{p.name}</button>
+                  <span className="mt-0.5 flex flex-wrap gap-1">
+                    {!p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}
+                    {!p.adsLinked ? <Badge tone="warning">No ads linked</Badge> : null}
+                  </span>
+                </Td>
+                <Td className="text-[13px] text-muted">{offerLabel(input.pieces)}</Td>
+                <Td className={cn("num text-end font-bold", r.ok && r.profit < 0 ? "text-negative" : "text-positive")} title={r.ok ? undefined : r.reason}>{r.ok ? fmt(r.profit) : "—"}</Td>
+                <Td className="num text-end">{r.ok && r.adCostPerDelivered !== null ? fmt(r.adCostPerDelivered) : <span className="text-xs font-semibold text-subtle">{p.adsLinked ? "—" : "Link ads"}</span>}</Td>
+                <Td className={cn("num text-end font-semibold", p.actual.trueNetProfit < 0 && "text-negative")}>{fmt(p.actual.trueNetProfit)}</Td>
+              </Tr>
+            ))}
           </tbody>
         </Table>
       </div>
       <ul className="flex flex-col gap-2 px-4 pb-4 md:hidden">
-        {rows.map((r) => {
-          const x = real(r);
-          return (
-            <li key={r.p.id}>
-              <button type="button" aria-pressed={selected === r.p.id} onClick={() => onSelect(r.p.id)} className={cn("press flex w-full min-w-0 flex-col gap-2 rounded-2xl p-3 text-left", selected === r.p.id ? "bg-brand-soft ring-1 ring-brand/30" : "bg-surface-2")}>
-                <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">{r.p.name}{!r.p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}{noAds(r) ? <Badge tone="warning">No ads linked</Badge> : null}</span>
-                <span className="grid grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 text-[11px] text-subtle">
-                  <span className="min-w-0">Stock<b className="num block truncate text-[13px] text-fg">{count(r.seed.units)}</b></span>
-                  <span className="min-w-0">Before ads<b className="num block truncate text-[13px] text-fg">{fmt(r.potential.benefit)}</b></span>
-                  <span className="min-w-0">Real benefit<b className={cn("num block truncate text-[13px]", x && x.benefit < 0 ? "text-negative" : x ? "text-positive" : "text-subtle")}>{x ? fmt(x.benefit) : noAds(r) ? "Link ads" : "—"}</b></span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
+        {rows.map(({ p, result: r }) => (
+          <li key={p.id}>
+            <button type="button" aria-pressed={selected === p.id} onClick={() => onSelect(p.id)} className={cn("press flex w-full min-w-0 flex-col gap-2 rounded-2xl p-3 text-start", selected === p.id ? "bg-brand-soft ring-1 ring-brand/30" : "bg-surface-2")}>
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">{p.name}{!p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}{!p.adsLinked ? <Badge tone="warning">No ads linked</Badge> : null}</span>
+              <span className="grid grid-cols-2 gap-2 text-[11px] text-subtle">
+                <span className="min-w-0">Per delivered order<b className={cn("num block truncate text-[13px]", r.ok && r.profit < 0 ? "text-negative" : "text-positive")}>{r.ok ? fmt(r.profit) : "—"}</b></span>
+                <span className="min-w-0">Real profit<b className={cn("num block truncate text-[13px] text-fg", p.actual.trueNetProfit < 0 && "text-negative")}>{fmt(p.actual.trueNetProfit)}</b></span>
+              </span>
+            </button>
+          </li>
+        ))}
       </ul>
     </Card>
   );
@@ -839,7 +725,7 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
     <>
       <PageHeader
         title="Profit tracker"
-        description="What each product's stock earns at its price, what it really earns after ads and fees, and where the difference goes."
+        description="What one delivered order really leaves you once the product, delivery, ads and returns are paid, and your real profit by day."
         actions={
           data && data.products.length > 1 ? (
             <Select aria-label="Product" value={selected?.id ?? ""} onChange={(e) => select(e.target.value)} className="w-full sm:w-56">
@@ -880,8 +766,13 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
           <UnlinkedAds data={data} canLink={canEdit} />
           {data.products.length > 1 ? <ProductsOverview data={data} selected={selected?.id ?? ""} onSelect={select} /> : null}
           <div ref={detailRef} className="scroll-mt-24">
-            {selected ? <ProductCalculator key={selected.id} row={selected} data={data} canSave={canSave} canEdit={canEdit && !!editRow} onEditDetails={() => setEditing(true)} /> : null}
+            {selected ? <OrderProfitView key={selected.id} row={selected} data={data} canEdit={canEdit && !!editRow} onEditDetails={() => setEditing(true)} days={days} /> : null}
           </div>
+          {selected ? (
+            <MoreDetails id="profit-stock" hint="Your stock: what the units MDM holds can earn, before ads and after them, and your real orders against your price.">
+              <ProductCalculator key={selected.id} row={selected} data={data} canSave={canSave} canEdit={canEdit && !!editRow} onEditDetails={() => setEditing(true)} />
+            </MoreDetails>
+          ) : null}
         </div>
       )}
       {editing && editRow ? (

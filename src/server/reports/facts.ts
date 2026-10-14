@@ -2,6 +2,7 @@ import type { AdPlatform } from "@prisma/client";
 import { db } from "@/server/db";
 import type { AdFilter } from "@/domain/adFilter";
 import { selectCostVersion } from "@/domain/costVersions";
+import { linesWithOffers } from "@/domain/offers";
 import { recurringByMonth } from "@/domain/recurring";
 import { allocateOverhead, orderEconomics, type AllocationGroup, type CostResolver, type CostTerms, type ExpenseFact, type OrderFact } from "@/domain/economics";
 import { parseEconomicsDefaults, parseVerdictThresholds } from "@/domain/settings";
@@ -33,7 +34,8 @@ export type WorkspaceFacts = {
   expenses: (ExpenseFact & { date: Date })[];
   creatives: CreativeInfo[];
   campaigns: CampaignInfo[];
-  products: { id: string; name: string; sku: string }[];
+  /** `piecesPerOrder` is the product's offer (src/domain/offers.ts). */
+  products: { id: string; name: string; sku: string; piecesPerOrder: number }[];
   resolveCost: CostResolver;
   defaults: ReturnType<typeof parseEconomicsDefaults>;
   thresholds: ReturnType<typeof parseVerdictThresholds>;
@@ -77,7 +79,7 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
     db.expense.findMany({ where: { workspaceId: w, date: between(range) }, select: { amount: true, allocation: true, productId: true, date: true } }),
     db.recurringExpense.findMany({ where: { workspaceId: w }, select: { amount: true, frequency: true, startDate: true, endDate: true, allocation: true, productId: true } }),
     db.creative.findMany({ where: { workspaceId: w }, select: { id: true, externalCreativeId: true, name: true, campaignId: true, campaignName: true, platform: true, productId: true } }),
-    db.product.findMany({ where: { workspaceId: w }, select: { id: true, name: true, sku: true } }),
+    db.product.findMany({ where: { workspaceId: w }, select: { id: true, name: true, sku: true, piecesPerOrder: true } }),
     db.productCostVersion.findMany({ where: { workspaceId: w } }),
     db.campaign.findMany({ where: { workspaceId: w }, select: { id: true, externalId: true, name: true, adAccountId: true, status: true, productId: true } }),
     db.adAccount.findMany({ where: { workspaceId: w, defaultProductId: { not: null } }, select: { externalId: true, defaultProductId: true } }),
@@ -109,6 +111,8 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
   };
 
   const defaults = parseEconomicsDefaults(ws.economicsDefaults);
+  // A line counts the pieces it really sends: its product's free pieces too when it doesn't list them.
+  const pieces = new Map(products.map((p) => [p.id, p.piecesPerOrder]));
   const orderFacts = orders.map((o) => ({
       id: o.id,
       orderNumber: o.orderNumber,
@@ -118,7 +122,7 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
       productId: o.lines[0]?.productId ?? null,
       creativeId: o.attribution?.creativeId ?? null,
       wilaya: o.wilaya,
-      lines: o.lines,
+      lines: linesWithOffers(o.lines, (id) => pieces.get(id) ?? 1),
       parcels: o.parcels.map((p) => ({ status: p.normalizedStatus, codAmount: p.codAmount, shippingFee: p.shippingFee, returnFee: p.returnFee, dispatched: p.dispatchedAt !== null })),
       // REMITTED events carry the gross COD settled for a parcel. Carrier fees are already charged
       // through outbound shipping / RTO costs, so CARRIER_FEE events are not subtracted again here.

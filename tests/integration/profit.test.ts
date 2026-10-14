@@ -138,3 +138,66 @@ describe("profit tracker", () => {
     expect(r.products.find((p) => p.id === ids.product.id)!.actual.adSpend).toBe(350000);
   });
 });
+
+describe("profit tracker: offers and campaigns", () => {
+  it("counts an offer's free pieces in the product cost, and adds up the campaigns linked to the product", async () => {
+    const t = await makeTenant("Offers");
+    const w = t.ws.id;
+    const product = await t.caller.products.create({ name: "Lamp", sku: "LMP", cost, piecesPerOrder: 2 });
+    const spring = await db.campaign.create({ data: { workspaceId: w, externalId: "c-spring", name: "Spring", adAccountId: "act_1" } });
+    const autumn = await db.campaign.create({ data: { workspaceId: w, externalId: "c-autumn", name: "Autumn", adAccountId: "act_1" } });
+    await t.caller.campaigns.setProduct({ id: spring.id, productId: product.id });
+    await t.caller.campaigns.setProduct({ id: autumn.id, productId: product.id });
+    const ad = (key: string, campaignId: string) => db.creative.create({ data: { workspaceId: w, externalCreativeId: key, normalizedKey: key, campaignId } });
+    await ad("ad_s", "c-spring");
+    await ad("ad_a", "c-autumn");
+    // Noon UTC, so the order's day is the same in the workspace's time zone; ad days are stored as
+    // midnight UTC of the day.
+    const adDay = new Date(Math.floor(Date.now() / DAY) * DAY - 3 * DAY);
+    const placedAt = new Date(adDay.getTime() + DAY / 2);
+    // Spring: one order listing the paid piece only, one listing both pieces. Autumn: one order of
+    // two offers listing 4 pieces. One order without an ad.
+    const orders = [
+      await t.caller.orders.create({ orderNumber: "1", placedAt, status: "CONFIRMED", codAmount: 390000, utmContent: "ad_s", lines: [{ productId: product.id, quantity: 1, unitPrice: 390000 }] }),
+      await t.caller.orders.create({ orderNumber: "2", placedAt, status: "CONFIRMED", codAmount: 390000, utmContent: "ad_s", lines: [{ productId: product.id, quantity: 2, unitPrice: 195000 }] }),
+      await t.caller.orders.create({ orderNumber: "3", placedAt, status: "CONFIRMED", codAmount: 780000, utmContent: "ad_a", lines: [{ productId: product.id, quantity: 4, unitPrice: 195000 }] }),
+      await t.caller.orders.create({ orderNumber: "4", placedAt, status: "PENDING", codAmount: 390000, lines: [{ productId: product.id, quantity: 1, unitPrice: 390000 }] }),
+    ];
+    for (const [i, o] of orders.slice(0, 3).entries()) {
+      await db.parcel.create({ data: { workspaceId: w, orderId: o.id, provider: "MDM_EXPRESS", trackingId: `T${i}`, normalizedStatus: "DELIVERED", codAmount: o.codAmount, dispatchedAt: placedAt } });
+    }
+    const spend = (campaignId: string, amount: number, hash: string) => db.adSpend.create({ data: { workspaceId: w, date: adDay, creativeId: null, externalCreativeId: hash, campaignId, adAccountId: "act_1", spend: amount, sourceRowHash: hash } });
+    await spend("c-spring", 60000, "s1");
+    await spend("c-autumn", 30000, "a1");
+
+    const r = await t.caller.profit.tracker({});
+    const p = r.products[0];
+    expect(p.piecesPerOrder).toBe(2);
+    // 2 + 2 + 4 pieces delivered, 900 DZD each.
+    expect(p.actual).toMatchObject({ deliveredUnits: 8, cogs: 8 * 90000, adSpend: 90000 });
+    expect(p.funnel).toMatchObject({ spend: 90000, placed: 4, confirmed: 3, delivered: 3, adCostPerOrder: 22500 });
+    expect(p.campaigns.map((c) => [c.name, c.spend, c.placed, c.delivered, c.adCostPerOrder])).toEqual([
+      ["Spring", 60000, 2, 2, 30000],
+      ["Autumn", 30000, 1, 1, 30000],
+    ]);
+    expect(p.otherOrders).toMatchObject({ placed: 1, spend: 0 });
+    const day = p.days.find((d) => d.placed > 0)!;
+    expect(day).toMatchObject({ placed: 4, delivered: 3, revenue: 1560000, adSpend: 90000 });
+    expect(day.profit).toBe(day.revenue - day.costs - day.adSpend);
+
+    // The dashboard counts the same pieces.
+    const dash = await t.caller.reports.dashboard({});
+    expect(dash.metrics.cogs).toBe(8 * 90000);
+    // The simulator's product cost is for one order: both pieces.
+    const sim = await t.caller.simulator.observed({ productId: product.id });
+    expect(sim.costs).toMatchObject({ salePrice: cost.salePrice, sourcingCost: 2 * 90000 });
+
+    // Changing the offer changes every order's cost; an analyst can't change it.
+    await t.caller.products.update({ id: product.id, piecesPerOrder: 1 });
+    const one = await t.caller.profit.tracker({});
+    expect(one.products[0].actual.cogs).toBe(7 * 90000);
+    const analyst = await addMember(w, "ANALYST");
+    await expect(analyst.caller.products.update({ id: product.id, piecesPerOrder: 3 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(t.caller.products.update({ id: product.id, piecesPerOrder: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
