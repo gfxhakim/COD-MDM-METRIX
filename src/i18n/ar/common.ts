@@ -69,6 +69,7 @@ const ar: Dict = {
   Close: "إغلاق",
   Loading: "جارٍ التحميل",
   "What is {label}?": "ما معنى {label}؟",
+  "What is this?": "ما معنى هذا؟",
   "More details": "تفاصيل أكثر",
   "Fewer details": "تفاصيل أقل",
   "More filters": "خيارات تصفية أكثر",
