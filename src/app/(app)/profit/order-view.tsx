@@ -15,7 +15,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { offerLabel } from "@/domain/offers";
 import { adCostPerDelivered, orderProfit, type OrderProfitInput } from "@/domain/orderProfit";
 import { roundRate, seedFor, type FieldSource } from "@/domain/profitTracker";
@@ -136,7 +136,7 @@ function OfferControl({ row, canEdit, fmt, price }: { row: Row; canEdit: boolean
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-surface-2 p-3.5 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-muted">{t("Your offer")}</p>
+        <p className="text-xs font-semibold text-muted"><Term label={t("Your offer")} definition={t("How many pieces one order sends. The order price stays the same; the product cost is cost per piece × pieces, free pieces included.")} /></p>
         <p className="text-sm">
           {price > 0
             ? pieces === 1 ? tx("{offer}: each order sends {n} piece for {price}.", parts) : tx("{offer}: each order sends {n} pieces for {price}.", parts)
@@ -169,10 +169,10 @@ function AdChain({ adCostPerOrder, input, fmt }: { adCostPerOrder: number; input
   const perConfirmed = Math.round(adCostPerOrder / input.confirmationRate);
   const perDelivered = adCostPerDelivered(adCostPerOrder, input) ?? 0;
   const shipped = input.shippingRate < 0.995;
-  const box = (value: number, label: string, hero = false) => (
+  const box = (value: number, label: string, def: string, hero = false) => (
     <div className={cn("flex min-w-0 flex-col rounded-2xl px-3.5 py-2.5", hero ? "bg-brand-hero shine text-white shadow-[0_10px_24px_rgb(204_19_37/0.3)]" : "bg-surface-2")}>
       <span className="num text-[17px] font-extrabold leading-tight">{fmt(value)}</span>
-      <span className={cn("text-[11px]", hero ? "text-white/85" : "text-subtle")}>{label}</span>
+      <span className={cn("text-[11px]", hero ? "text-white/85" : "text-subtle")}><Term label={label} definition={def} iconClassName={hero ? "text-white/70 hover:text-white" : undefined} /></span>
     </div>
   );
   const step = (text: string) => (
@@ -183,11 +183,11 @@ function AdChain({ adCostPerOrder, input, fmt }: { adCostPerOrder: number; input
   );
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label={t("Ads cost {placed} per order placed, {confirmed} per confirmed order and {delivered} per delivered order", { placed: fmt(adCostPerOrder), confirmed: fmt(perConfirmed), delivered: fmt(perDelivered) })}>
-      {box(adCostPerOrder, t("per order placed"))}
+      {box(adCostPerOrder, t("per order placed"), t("What the ads cost for each order that comes in. Worked out as: this product's ad spend ÷ its orders placed."))}
       {step(t("÷ {pct} confirmed", { pct: pct(input.confirmationRate) }))}
-      {box(perConfirmed, t("per confirmed order"))}
+      {box(perConfirmed, t("per confirmed order"), t("Worked out as: ads per order placed ÷ confirmation rate. The ads of cancelled orders are carried by the confirmed ones."))}
       {step(shipped ? t("÷ {ship} shipped ÷ {del} delivered", { ship: pct(input.shippingRate), del: pct(input.deliveryRate) }) : t("÷ {del} delivered", { del: pct(input.deliveryRate) }))}
-      {box(perDelivered, t("per delivered order"), true)}
+      {box(perDelivered, t("per delivered order"), t("What the ads cost for each order that is delivered. Worked out as: ad spend per order placed ÷ confirmation rate ÷ shipping rate ÷ delivery rate."), true)}
     </div>
   );
 }
@@ -195,19 +195,19 @@ function AdChain({ adCostPerOrder, input, fmt }: { adCostPerOrder: number; input
 /** A campaign's numbers as a small grid, for phones. */
 function CampaignNumbers({ fmt, spend, placed, perOrder, confirmed, delivered, perDelivered, over }: { fmt: (v: number) => string; spend: number; placed: number; perOrder: number | null; confirmed: number | null; delivered: number | null; perDelivered: number | null; over: boolean }) {
   const { t } = useT();
-  const cells: [string, string, string?][] = [
+  const cells: [string, string, string?, string?][] = [
     [t("Spent"), fmt(spend)],
     [t("Orders"), count(placed)],
-    [t("Per order"), perOrder === null ? "—" : fmt(perOrder)],
-    [t("Confirmed"), pct(confirmed)],
-    [t("Delivered"), pct(delivered)],
-    [t("Per delivered order"), perDelivered === null ? "—" : fmt(perDelivered), over ? "text-negative" : "text-brand-strong"],
+    [t("Per order"), perOrder === null ? "—" : fmt(perOrder), undefined, t("Ad spend ÷ orders placed from the campaign's ads.")],
+    [t("Confirmed"), pct(confirmed), undefined, t("Confirmed ÷ orders placed from the campaign's ads. With too few finished parcels, the product's rates are used (marked Product's rates).")],
+    [t("Delivered"), pct(delivered), undefined, t("Delivered parcels of those that finished. Parcels still on the road don't count yet.")],
+    [t("Per delivered order"), perDelivered === null ? "—" : fmt(perDelivered), over ? "text-negative" : "text-brand-strong", t("What the ads cost for each order that is delivered. Worked out as: ad spend per order placed ÷ confirmation rate ÷ shipping rate ÷ delivery rate.")],
   ];
   return (
     <dl className="mt-2.5 grid grid-cols-3 gap-x-3 gap-y-2">
-      {cells.map(([label, value, tone]) => (
+      {cells.map(([label, value, tone, def]) => (
         <div key={label} className="min-w-0">
-          <dt className="text-[10.5px] leading-tight text-subtle">{label}</dt>
+          <dt className="text-[10.5px] leading-tight text-subtle">{def ? <Term label={label} definition={def} /> : label}</dt>
           <dd className={cn("num text-[13px] font-bold", tone)}>{value}</dd>
         </div>
       ))}
@@ -225,7 +225,7 @@ function CampaignsCard({ row, input, limit, minFinished, fmt, canLink }: { row: 
   if (!row.adsLinked) {
     return (
       <Card className="min-w-0 border border-warning/30">
-        <CardHeader title={<span className="flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />{t("No campaign is linked to {name}", { name: row.name })}</span>} description={t("Ads count for a product only through the campaigns (or ad accounts) you link to it. Link them, and this page adds them all up for you.")} />
+        <CardHeader title={<span className="inline-flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />{t("No campaign is linked to {name}", { name: row.name })}</span>} help={t("Until a campaign is linked, Profit per delivered order counts no ads, so it looks higher than it really is.")} description={t("Ads count for a product only through the campaigns (or ad accounts) you link to it. Link them, and this page adds them all up for you.")} />
         <div className="px-5 pb-5">
           <Button asChild variant="primary"><Link href="/campaigns">{canLink ? t("Link campaigns") : t("Open Campaigns")}</Link></Button>
         </div>
@@ -236,6 +236,7 @@ function CampaignsCard({ row, input, limit, minFinished, fmt, canLink }: { row: 
     <Card className="min-w-0">
       <CardHeader
         title={t("Ads for this product")}
+        help={t("Every campaign linked to this product, added up. Their ad spend ÷ orders placed gives the ads per order, which the steps below turn into ads per delivered order.")}
         description={
           rows.length === 1
             ? t("1 linked campaign added together: {spent} spent for {orders} orders placed.", { spent: fmt(all.spend), orders: count(all.placed) })
@@ -255,9 +256,9 @@ function CampaignsCard({ row, input, limit, minFinished, fmt, canLink }: { row: 
                     <Th className="text-end">{t("Spent")}</Th>
                     <Th className="text-end">{t("Orders")}</Th>
                     <Th className="text-end"><Term label={t("Per order")} definition={t("Ad spend ÷ orders placed from the campaign's ads.")} /></Th>
-                    <Th className="text-end">{t("Confirmed")}</Th>
+                    <Th className="text-end"><Term label={t("Confirmed")} definition={t("Confirmed ÷ orders placed from the campaign's ads. With too few finished parcels, the product's rates are used (marked Product's rates).")} /></Th>
                     <Th className="text-end"><Term label={t("Delivered")} definition={t("Delivered parcels of those that finished. Parcels still on the road don't count yet.")} /></Th>
-                    <Th className="text-end"><Term label={t("Per delivered order")} definition={t("Cost per order ÷ confirmation rate ÷ delivery rate.")} /></Th>
+                    <Th className="text-end"><Term label={t("Per delivered order")} definition={t("What the ads cost for each order that is delivered. Worked out as: ad spend per order placed ÷ confirmation rate ÷ shipping rate ÷ delivery rate.")} /></Th>
                   </tr>
                 </THead>
                 <tbody>
@@ -329,7 +330,10 @@ function CampaignsCard({ row, input, limit, minFinished, fmt, canLink }: { row: 
               </li>
             </ul>
             <div>
-              <h3 className="mb-3 text-sm font-bold">{t("Ad cost per delivered order, by campaign")}</h3>
+              <h3 className="mb-3 text-sm font-bold">
+                {t("Ad cost per delivered order, by campaign")}
+                <HelpTip label={t("Ad cost per delivered order, by campaign")} className="ms-1.5 align-middle">{t("One bar per linked campaign: what its ads cost per delivered order, longest on top. Black bars pass the dashed line, the most a delivered order can pay, and lose money.")}</HelpTip>
+              </h3>
               <CampaignBars
                 fmt={fmt}
                 limit={limit}
@@ -407,13 +411,13 @@ export function OrderProfitView({ row, data, canEdit, onEditDetails, days }: { r
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <Hero
                   label={noAds ? t("Profit per delivered order, ads not counted") : t("Profit per delivered order")}
-                  def={t("What one delivered order really leaves you: its price minus the product, delivery, calls, the ads it took, and its share of the returned and lost parcels.")}
+                  def={t("What one delivered order really leaves you: its price − the product, delivery, calls, the ads it took and its share of returned and lost parcels. Before your expenses.")}
                   value={r.profit}
                   currency={cur}
                   sub={t("{margin} of the price · {n} orders placed for each one delivered", { margin: pct(r.margin), n: r.ordersPerDelivered.toFixed(1) })}
                 />
                 <div className="flex min-w-0 flex-col justify-between gap-2 rounded-[22px] bg-surface p-5 shadow-card ring-1 ring-border/60">
-                  <span className="text-[15px] font-semibold"><Term label={t("Ads per delivered order")} definition={t("Ad spend per order placed ÷ confirmation rate ÷ delivery rate: what the ads cost for each order that is delivered.")} /></span>
+                  <span className="text-[15px] font-semibold"><Term label={t("Ads per delivered order")} definition={t("What the ads cost for each order that is delivered. Worked out as: ad spend per order placed ÷ confirmation rate ÷ shipping rate ÷ delivery rate.")} /></span>
                   <span className="num text-[30px] font-extrabold leading-none tracking-[-0.03em]">{noAds ? "—" : fmt(r.adCostPerDelivered ?? 0)}</span>
                   <span className="text-xs text-muted">{noAds ? t("Link this product's campaigns to count its ads.") : t("{ads} per order ÷ {conf} confirmed ÷ {del} delivered", { ads: fmt(input.adCostPerOrder ?? 0), conf: pct(input.confirmationRate), del: pct(input.deliveryRate) })}</span>
                 </div>
@@ -432,7 +436,10 @@ export function OrderProfitView({ row, data, canEdit, onEditDetails, days }: { r
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
                 <section className="min-w-0">
-                  <h3 className="mb-3 text-sm font-bold">{t("One delivered order, step by step")}</h3>
+                  <h3 className="mb-3 text-sm font-bold">
+                    {t("One delivered order, step by step")}
+                    <HelpTip label={t("One delivered order, step by step")} className="ms-1.5 align-middle">{t("Each bar takes one cost off the price of one order: first the order's own costs, then the ads and the returned and lost parcels each delivered order carries.")}</HelpTip>
+                  </h3>
                   <Bridge
                     label={t("From the price of one order to its real profit")}
                     currency={cur}
@@ -452,7 +459,10 @@ export function OrderProfitView({ row, data, canEdit, onEditDetails, days }: { r
                   />
                 </section>
                 <section className="flex min-w-0 flex-col gap-4">
-                  <h3 className="text-sm font-bold">{t("Where the price of a delivered order goes")}</h3>
+                  <h3 className="text-sm font-bold">
+                    {t("Where the price of a delivered order goes")}
+                    <HelpTip label={t("Where the price of a delivered order goes")} className="ms-1.5 align-middle">{t("The price of one delivered order as one bar: each color is a cost, green is the profit left. Each % is a share of the price.")}</HelpTip>
+                  </h3>
                   <PriceSplit
                     label={t("Where the price of a delivered order goes")}
                     price={input.price}
@@ -493,19 +503,19 @@ export function OrderProfitView({ row, data, canEdit, onEditDetails, days }: { r
           </div>
           {trying ? (
             <div id="pt-try" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <Field label={t("Price of one order")} htmlFor="try-price" hint={hint("price")}><MoneyInput id="try-price" currency={cur} value={field("price")} onChange={set("price")} /></Field>
-              <Field label={t("Cost of one piece")} htmlFor="try-cost" hint={hint("costPerPiece")}><MoneyInput id="try-cost" currency={cur} value={field("costPerPiece")} onChange={set("costPerPiece")} /></Field>
-              <Field label={t("Ads per order placed")} htmlFor="try-ads" hint={hint("adCostPerOrder")}><MoneyInput id="try-ads" currency={cur} value={field("adCostPerOrder")} onChange={set("adCostPerOrder")} /></Field>
-              <Field label={t("Confirmation rate")} htmlFor="try-conf" hint={`${hint("confirmationRate")}${row.sample.placed ? ` · ${t("{a} of {b} orders", { a: count(row.sample.confirmed), b: count(row.sample.placed) })}` : ""}`}>
+              <Field label={t("Price of one order")} htmlFor="try-price" help={t("What the customer pays for one whole order, without delivery. With Buy 1, get 1 free it is the price of both pieces together. Example: 2900.")} hint={hint("price")}><MoneyInput id="try-price" currency={cur} value={field("price")} onChange={set("price")} /></Field>
+              <Field label={t("Cost of one piece")} htmlFor="try-cost" help={t("What one piece costs you from your supplier. The page multiplies it by the pieces of your offer: 2 pieces × 800 = 1600 per order.")} hint={hint("costPerPiece")}><MoneyInput id="try-cost" currency={cur} value={field("costPerPiece")} onChange={set("costPerPiece")} /></Field>
+              <Field label={t("Ads per order placed")} htmlFor="try-ads" help={t("What ads cost for each order placed: the linked campaigns' ad spend ÷ this product's orders placed. The page turns it into ads per delivered order.")} hint={hint("adCostPerOrder")}><MoneyInput id="try-ads" currency={cur} value={field("adCostPerOrder")} onChange={set("adCostPerOrder")} /></Field>
+              <Field label={t("Confirmation rate")} htmlFor="try-conf" help={t("The % of orders placed that the call center confirms. Your orders give it as confirmed ÷ placed.")} hint={`${hint("confirmationRate")}${row.sample.placed ? ` · ${t("{a} of {b} orders", { a: count(row.sample.confirmed), b: count(row.sample.placed) })}` : ""}`}>
                 <div className="relative"><Input id="try-conf" inputMode="decimal" className="num pe-8" value={field("confirmationRate")} onChange={(e) => set("confirmationRate")(e.target.value)} /><span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span></div>
               </Field>
-              <Field label={t("Delivery rate")} htmlFor="try-del" hint={`${hint("deliveryRate")}${row.sample.finished ? ` · ${t("{a} of {b} finished parcels", { a: count(row.sample.delivered), b: count(row.sample.finished) })}` : ""}`}>
+              <Field label={t("Delivery rate")} htmlFor="try-del" help={t("The % of shipped parcels the customer receives and pays for. Your orders give it as delivered ÷ finished parcels, so parcels still on the road don't count.")} hint={`${hint("deliveryRate")}${row.sample.finished ? ` · ${t("{a} of {b} finished parcels", { a: count(row.sample.delivered), b: count(row.sample.finished) })}` : ""}`}>
                 <div className="relative"><Input id="try-del" inputMode="decimal" className="num pe-8" value={field("deliveryRate")} onChange={(e) => set("deliveryRate")(e.target.value)} /><span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span></div>
               </Field>
-              <Field label={t("Delivery fee per parcel")} htmlFor="try-ship" hint={hint("deliveryFee")}><MoneyInput id="try-ship" currency={cur} value={field("deliveryFee")} onChange={set("deliveryFee")} /></Field>
-              <Field label={t("Return fee per parcel")} htmlFor="try-rto" hint={hint("returnFee")}><MoneyInput id="try-rto" currency={cur} value={field("returnFee")} onChange={set("returnFee")} /></Field>
-              <Field label={t("Call center per order")} htmlFor="try-call" hint={hint("callCenterFee")}><MoneyInput id="try-call" currency={cur} value={field("callCenterFee")} onChange={set("callCenterFee")} /></Field>
-              <Field label={t("Packaging per parcel")} htmlFor="try-pack" hint={hint("packagingFee")}><MoneyInput id="try-pack" currency={cur} value={field("packagingFee")} onChange={set("packagingFee")} /></Field>
+              <Field label={t("Delivery fee per parcel")} htmlFor="try-ship" help={t("What MDM charges you to send one parcel. It is paid on every shipped parcel: delivered, returned or lost.")} hint={hint("deliveryFee")}><MoneyInput id="try-ship" currency={cur} value={field("deliveryFee")} onChange={set("deliveryFee")} /></Field>
+              <Field label={t("Return fee per parcel")} htmlFor="try-rto" help={t("What MDM charges when a parcel comes back, on top of its delivery fee.")} hint={hint("returnFee")}><MoneyInput id="try-rto" currency={cur} value={field("returnFee")} onChange={set("returnFee")} /></Field>
+              <Field label={t("Call center per order")} htmlFor="try-call" help={t("What the call center charges for one order. The calls of orders that aren't delivered are shared over the delivered ones.")} hint={hint("callCenterFee")}><MoneyInput id="try-call" currency={cur} value={field("callCenterFee")} onChange={set("callCenterFee")} /></Field>
+              <Field label={t("Packaging per parcel")} htmlFor="try-pack" help={t("Box, bag and label for one parcel. Paid on every shipped parcel, even one that comes back.")} hint={hint("packagingFee")}><MoneyInput id="try-pack" currency={cur} value={field("packagingFee")} onChange={set("packagingFee")} /></Field>
             </div>
           ) : null}
         </div>
@@ -517,6 +527,7 @@ export function OrderProfitView({ row, data, canEdit, onEditDetails, days }: { r
         <Card className="min-w-0">
           <CardHeader
             title={t("Real profit by day")}
+            help={t("One bar per day (per week or month over long periods): green is profit, red is loss, striped still has parcels on the road. Expenses are not in the bars.")}
             description={row.actual.overhead ? t("The orders placed each day: what their delivered parcels collected, minus their costs and that day's ads. Your expenses come off the total below.") : t("The orders placed each day: what their delivered parcels collected, minus their costs and that day's ads.")}
           />
           <div className="flex flex-col gap-3 px-5 pb-5">
@@ -533,7 +544,7 @@ export function OrderProfitView({ row, data, canEdit, onEditDetails, days }: { r
           </div>
         </Card>
         <Card className="min-w-0">
-          <CardHeader title={t("From order to delivery")} description={t("This product's orders placed in these days.")} />
+          <CardHeader title={t("From order to delivery")} help={t("Each bar is how many orders reached that step. The % is the share of the step above; Delivered is a share of finished parcels, not of all shipped.")} description={t("This product's orders placed in these days.")} />
           <div className="flex flex-col gap-3 px-5 pb-5">
             <OrderFunnel
               steps={[

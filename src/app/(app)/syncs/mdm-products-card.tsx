@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
+import { HelpTip } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
 import { addDays, shortDay, todayIn } from "@/lib/dateRanges";
@@ -44,11 +45,12 @@ export function MdmProductsCard({ timezone }: { timezone: string }) {
     <Card className="min-w-0" role="region" aria-labelledby="mdm-bring-title">
       <CardHeader
         title={<span id="mdm-bring-title" className="inline-flex items-center gap-2"><PackageCheck className="size-4 text-brand-strong" /> {t("What to bring from MDM")}</span>}
+        help={t("For each product: Bring in or Don't bring, and from which order date. An order comes in when at least one of its products is brought in from that day.")}
         description={t("Pick the MDM products the sync brings in, and how far back. Orders already in the app keep updating.")}
       />
       <div className="flex flex-col gap-3 px-5 pb-5">
         <label className="flex flex-col gap-1.5 rounded-2xl bg-surface-2 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-semibold">{t("New products MDM sends")}</span>
+          <span className="font-semibold">{t("New products MDM sends")} <HelpTip label={t("New products MDM sends")} className="align-middle">{t("What the sync does with a product it sees in MDM for the first time: bring its orders in right away, or leave them out until someone picks it below.")}</HelpTip></span>
           {canEdit ? (
             <Select aria-label={t("New products MDM sends")} value={data.bringNew ? "bring" : "wait"} disabled={setNew.isPending} onChange={(e) => setNew.mutate({ bring: e.target.value === "bring" })} className="h-9 w-full text-sm sm:w-64">
               <option value="bring">{t("Bring them in")}</option>

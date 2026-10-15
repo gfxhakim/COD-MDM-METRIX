@@ -69,6 +69,7 @@ const ar: Dict = {
   Close: "إغلاق",
   Loading: "جارٍ التحميل",
   "What is {label}?": "ما معنى {label}؟",
+  "What is this?": "ما معنى هذا؟",
   "More details": "تفاصيل أكثر",
   "Fewer details": "تفاصيل أقل",
   "More filters": "خيارات تصفية أكثر",
@@ -166,15 +167,15 @@ const ar: Dict = {
   "Cost per confirmed order: ad spend ÷ confirmed orders.": "تكلفة الطلبية المؤكَّدة: مصاريف الإعلانات ÷ الطلبيات المؤكَّدة.",
   "Cost per delivered order: ad spend ÷ delivered parcels.": "تكلفة الطلبية المسلَّمة: مصاريف الإعلانات ÷ الطرود المسلَّمة.",
   "Confirmed ÷ placed orders.": "الطلبيات المؤكَّدة ÷ الطلبيات الواردة.",
-  "Delivered ÷ parcels whose delivery is finished (delivered, returned or lost). Parcels still with the carrier are left out until they finish.":
-    "الطرود المسلَّمة ÷ الطرود التي انتهى توصيلها (مسلَّمة أو مرتجَعة أو ضائعة). الطرود التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها.",
+  "Delivered ÷ parcels whose delivery is finished (delivered, returned, lost or exchanged). Parcels still with the carrier are left out until they finish.":
+    "الطرود المسلَّمة ÷ الطرود التي انتهى توصيلها (مسلَّمة أو مرتجَعة أو ضائعة أو مُستبدَلة). الطرود التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها.",
   "Returned (RTO) ÷ parcels whose delivery is finished. Parcels still with the carrier are left out until they finish.":
     "الطرود المرتجَعة (RTO) ÷ الطرود التي انتهى توصيلها. الطرود التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها.",
   "Delivered quantity × sourcing cost from the cost version in effect on the order date. Returned goods go back to stock.":
     "الكمية المسلَّمة × تكلفة المنتج حسب التكلفة المعمول بها في تاريخ الطلبية. البضاعة المرتجَعة تعود إلى المخزون.",
   "Expenses in the period. At business level all of them count; per product/creative they are allocated by your overhead policy.":
     "المصاريف في هذه الفترة. على مستوى النشاط كله تُحتسب كلها؛ ولكل منتج أو إعلان تُوزَّع حسب طريقة توزيع المصاريف العامة التي اخترتها.",
-  "KILL: losing money with enough data. BAD TRAFFIC: cheap orders that don't deliver. SCALE: POAS at or above target with enough orders. WATCH: enough data, below target. INSUFFICIENT DATA: too few orders.":
+  "Kill: losing money with enough data. Bad traffic: cheap orders that don't deliver. Scale: POAS at or above target with enough orders. Watch: enough data, below target. Not enough data: too few orders.":
     "أوقِف: يخسر المال مع بيانات كافية. زيارات سيئة: طلبيات رخيصة لا تُسلَّم. وسِّع: POAS عند الهدف أو أعلى مع طلبيات كافية. راقِب: بيانات كافية لكن تحت الهدف. بيانات غير كافية: طلبيات قليلة جدًا.",
 
   // Meta ads filter

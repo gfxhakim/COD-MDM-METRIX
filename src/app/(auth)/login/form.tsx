@@ -16,8 +16,8 @@ export function LoginForm({ showDemoHint }: { showDemoHint: boolean }) {
       <h1 className="text-2xl font-extrabold tracking-tight">{t("Sign in")}</h1>
       <p className="mt-1 text-sm text-muted">{t("See which products and creatives make delivered profit.")}</p>
       <form action={action} className="mt-6 flex flex-col gap-4">
-        <Field label={t("Email")} htmlFor="email"><Input id="email" name="email" type="email" autoComplete="email" required /></Field>
-        <Field label={t("Password")} htmlFor="password"><Input id="password" name="password" type="password" autoComplete="current-password" required /></Field>
+        <Field label={t("Email")} htmlFor="email" help={t("The email of your account, the one you signed up with.")}><Input id="email" name="email" type="email" autoComplete="email" required /></Field>
+        <Field label={t("Password")} htmlFor="password" help={t("The password you chose when you signed up. Capital and small letters count as different.")}><Input id="password" name="password" type="password" autoComplete="current-password" required /></Field>
         {state?.error ? <p className="text-sm text-negative" role="alert">{state.error}</p> : null}
         <Button variant="primary" type="submit" disabled={pending}>{pending ? t("Signing in…") : t("Sign in")}</Button>
       </form>

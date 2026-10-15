@@ -18,7 +18,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { PHONE, useMedia } from "@/lib/use-media";
@@ -29,12 +29,12 @@ import { msg, type TFunction } from "@/i18n/core";
 import { AdLinksPicker, type AdLinks } from "./ad-links";
 
 const COST_FIELDS = [
-  { key: "salePrice", label: msg("Sale price"), hint: msg("What the customer pays for one order, every piece of your offer included, without delivery") },
-  { key: "sourcingCost", label: msg("Sourcing cost (COGS)"), hint: msg("Per piece. Pick the currency you pay your supplier in.") },
-  { key: "forwardShippingFee", label: msg("Forward shipping fee"), hint: msg("Per shipped parcel") },
-  { key: "rtoFee", label: msg("RTO fee"), hint: msg("Per returned parcel") },
-  { key: "callCenterFee", label: msg("Call-center fee"), hint: msg("Per call basis unit") },
-  { key: "packagingFee", label: msg("Packaging fee"), hint: msg("Per shipped parcel") },
+  { key: "salePrice", label: msg("Sale price"), hint: msg("What the customer pays for one order, every piece of your offer included, without delivery"), help: msg("Used as the price of an order line that comes without one, and by the Profit tracker and Breakeven CPA. Profit counts the cash of delivered parcels. Example: 2900.") },
+  { key: "sourcingCost", label: msg("Sourcing cost (COGS)"), hint: msg("Per piece. Pick the currency you pay your supplier in."), help: msg("What one piece costs you from the supplier. It counts for each delivered piece, free offer pieces included; returned pieces go back to stock. Example: 800.") },
+  { key: "forwardShippingFee", label: msg("Forward shipping fee"), hint: msg("Per shipped parcel"), help: msg("What the carrier charges to deliver one parcel. Profit uses it when a parcel has no real fee from the carrier. Example: 600.") },
+  { key: "rtoFee", label: msg("RTO fee"), hint: msg("Per returned parcel"), help: msg("What the carrier charges when a parcel comes back to you, on top of the shipping fee. Profit uses it when a parcel has no real return fee. Example: 200.") },
+  { key: "callCenterFee", label: msg("Call-center fee"), hint: msg("Per call basis unit"), help: msg("What your call center charges. It counts per lead, per confirmed order or per call attempt, as set in Settings > Economics & currencies. Example: 100.") },
+  { key: "packagingFee", label: msg("Packaging fee"), hint: msg("Per shipped parcel"), help: msg("Box, bag and label for one parcel. It counts on each shipped parcel once its delivery is finished. Example: 50.") },
 ] as const;
 type CostKey = (typeof COST_FIELDS)[number]["key"];
 type CostValues = Record<CostKey, number>;
@@ -61,7 +61,7 @@ function CostFields({ value, onChange, currency, rates }: { value: CostForm; onC
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {COST_FIELDS.map((f) => (
-        <Field key={f.key} label={t(f.label)} htmlFor={f.key} hint={t(f.hint)}>
+        <Field key={f.key} label={t(f.label)} htmlFor={f.key} help={t(f.help)} hint={t(f.hint)}>
           {f.key === "sourcingCost" ? (
             <CurrencyAmountInput id={f.key} value={value.sourcing} onChange={(v) => onChange({ ...value, sourcing: v })} workspaceCurrency={currency} rates={rates} />
           ) : (
@@ -124,21 +124,22 @@ function ProductDialog({ product, open, onOpenChange, currency, rates, products 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title={product ? t("Edit product") : t("New product")} description={product ? t("Cost assumptions are versioned separately so history is never overwritten.") : t("Set the unit economics that apply from today.")} className="max-w-2xl">
+      <DialogContent title={product ? t("Edit product") : t("New product")} description={product ? t("Cost assumptions are versioned separately so history is never overwritten.") : t("Set the price and costs. The first ones also count for orders placed before today.")} className="max-w-2xl">
         <form onSubmit={submit} className="flex flex-col gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t("Product name")} htmlFor="pname"><Input id="pname" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
-            <Field label={t("SKU")} htmlFor="psku"><Input id="psku" value={sku} onChange={(e) => setSku(e.target.value)} required className="font-mono" /></Field>
+            <Field label={t("Product name")} htmlFor="pname" help={t("The name you know this product by. It shows on every page, and a new MDM product with the same name is linked to it.")}><Input id="pname" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
+            <Field label={t("SKU")} htmlFor="psku" help={t("A short code for the product: letters, digits, dot, dash or underscore. Imports and MDM match order lines to the product by this code. Example: NECK-01.")}><Input id="psku" value={sku} onChange={(e) => setSku(e.target.value)} required className="font-mono" /></Field>
           </div>
           <label className="flex items-center gap-2 text-sm text-muted">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-[#e1182c]" /> {t("Active")}
+            <HelpTip label={t("Active")}>{t("Untick it when you stop selling the product. It leaves the new order, simulator and import lists, but its past orders still count.")}</HelpTip>
           </label>
-          <Field label={t("Offer")} htmlFor="poffer" hint={t("How many pieces one order sends. Its sale price is for the whole order, and each piece's cost counts.")}>
+          <Field label={t("Offer")} htmlFor="poffer" help={t("Pick Buy 1, get 1 free when one order sends 2 pieces. When MDM lists fewer pieces than the offer, the offer's count is used.")} hint={t("How many pieces one order sends. Its sale price is for the whole order, and each piece's cost counts.")}>
             <OfferPicker id="poffer" value={pieces} onChange={setPieces} />
           </Field>
           {!product ? <CostFields value={cost} onChange={setCost} currency={currency} rates={rates} /> : null}
           <section className="flex flex-col gap-2 border-t border-border pt-4">
-            <h3 className="text-sm font-medium">{t("Ads for this product")}</h3>
+            <h3 className="text-sm font-medium"><Term label={t("Ads for this product")} definition={t("A campaign counts for one product only, and its own link wins over its ad account's. Ticking one here moves it from any other product.")} /></h3>
             <p className="text-xs text-muted">{t("Pick the ad accounts and campaigns that sell this product. Their spend and ads then count for it, so its profit and POAS use only its own ads. Orders keep the product they were placed for.")}</p>
             <AdLinksPicker productId={product?.id} value={links} onChange={setLinks} products={products} />
           </section>
@@ -201,13 +202,13 @@ export function CostVersionDialog({ product, open, onOpenChange, rates, onSaved 
           }}
           className="flex flex-col gap-4"
         >
-          <Field label={t("Effective from")} htmlFor="eff"><Input id="eff" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} required /></Field>
+          <Field label={t("Effective from")} htmlFor="eff" help={t("The first order date these costs apply to. It must be later than the start of the current version. Example: the day the supplier's new price starts.")}><Input id="eff" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} required /></Field>
           <CostFields value={cost} onChange={setCost} currency={product.currency} rates={rates} />
-          <Field label={t("Note")} htmlFor="note"><Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("e.g. Supplier price increase")} /></Field>
+          <Field label={t("Note")} htmlFor="note" help={t("A reminder for you of why the costs changed. It shows only in the history below.")}><Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("e.g. Supplier price increase")} /></Field>
           {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
           <div className="flex justify-end"><Button type="submit" variant="primary" disabled={mutation.isPending}>{t("Add cost version")}</Button></div>
         </form>
-        <h3 className="mb-2 mt-8 text-xs font-medium uppercase tracking-wide text-subtle">{t("History")}</h3>
+        <h3 className="mb-2 mt-8 text-xs font-medium uppercase tracking-wide text-subtle"><Term label={t("History")} definition={t("Every cost version of this product, newest first. Each order uses the version in effect on the day it was placed.")} /></h3>
         {details.isLoading ? <Loading /> : (
           <ol className="flex flex-col gap-2">
             {details.data?.costVersions.map((v) => (
@@ -257,15 +258,15 @@ function MdmProducts({ products, canWrite }: { products: ProductRow[]; canWrite:
   return (
     <Card className="mt-6">
       <div className="flex flex-col gap-1 border-b border-border p-4">
-        <h2 className="text-base font-semibold">{t("Products from MDM")}</h2>
+        <h2 className="text-base font-semibold"><Term label={t("Products from MDM")} definition={t("Linked by MDM's product ID, so renaming a product in MDM keeps it linked. A product the sync made that is left empty after a move is removed.")} /></h2>
         <p className="text-sm text-muted">{t("Each product MDM sends with your orders counts as one of your products. A new one gets its own product, marked From MDM. If two MDM products are really the same product, point both at it here; their orders move with them.")}</p>
       </div>
       <Table>
         <THead>
           <tr>
             <Th>{t("In MDM")}</Th>
-            <Th className="text-end">{t("Units ordered")}</Th>
-            <Th>{t("Counts as")}</Th>
+            <Th className="text-end"><Term label={t("Units ordered")} definition={t("Pieces MDM listed on your order lines with this product, over all dates. Free offer pieces that MDM doesn't list are not included.")} /></Th>
+            <Th><Term label={t("Counts as")} definition={t("The product whose costs and profit this MDM product's orders count for. Changing it moves its past order lines too.")} /></Th>
           </tr>
         </THead>
         <tbody>
@@ -321,11 +322,19 @@ export function ProductsView() {
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex flex-wrap items-center gap-1.5 font-medium">
         {p.name}
-        {p.fromMdm ? <Badge tone="brand">{t("From MDM")}</Badge> : null}
+        {p.fromMdm ? (
+          <>
+            <Badge tone="brand">{t("From MDM")}</Badge>
+            <HelpTip label={t("From MDM")}>{t("The MDM sync made this product when MDM first sent it with your orders. Check its name and costs.")}</HelpTip>
+          </>
+        ) : null}
         {!p.currentCost ? (
-          canWrite ? (
-            <button type="button" onClick={() => setVersioning(p)} className="rounded-full focus-visible:outline-2"><Badge tone="warning">{t("Needs details · add costs")}</Badge></button>
-          ) : <Badge tone="warning">{t("Needs details")}</Badge>
+          <>
+            {canWrite ? (
+              <button type="button" onClick={() => setVersioning(p)} className="rounded-full focus-visible:outline-2"><Badge tone="warning">{t("Needs details · add costs")}</Badge></button>
+            ) : <Badge tone="warning">{t("Needs details")}</Badge>}
+            <HelpTip label={t("Needs details")}>{t("It has no costs yet, so its orders count a product cost of 0 and the default fees in Settings > Economics & currencies. Add costs to see its real profit.")}</HelpTip>
+          </>
         ) : null}
       </span>
       {p.mdmProducts.length ? (
@@ -363,6 +372,15 @@ export function ProductsView() {
     ["callCenterFee", msg("Call center")],
     ["packagingFee", msg("Packaging")],
   ] as const;
+  const COST_DEFS: Record<(typeof COSTS)[number][0] | "salePrice" | "ads", string> = {
+    salePrice: msg("What the customer pays for one order, every piece of your offer included, without delivery"),
+    sourcingCost: msg("Cost of goods per delivered unit (COGS)."),
+    forwardShippingFee: msg("Forward shipping fee per shipped parcel, from the current cost version. A parcel's real carrier fee wins when known."),
+    rtoFee: msg("Fee charged by the carrier for each parcel returned to origin."),
+    callCenterFee: msg("Call-center fee from the current cost version, counted per lead, confirmed order or call attempt as set in Settings > Economics & currencies."),
+    packagingFee: msg("Packaging fee per shipped parcel, from the current cost version."),
+    ads: msg("Campaigns and whole ad accounts linked to this product. Edit the product to change them, or link campaigns on the Campaigns page."),
+  };
 
   return (
     <>
@@ -396,12 +414,12 @@ export function ProductsView() {
                   <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2">
                     {COSTS.map(([k, label]) => (
                       <div key={k} className="min-w-0">
-                        <dt className="text-[11px] text-muted">{t(label)}</dt>
+                        <dt className="text-[11px] text-muted"><Term label={t(label)} definition={t(COST_DEFS[k])} /></dt>
                         <dd className="num truncate text-[13px] font-semibold">{money.fmt(p.currentCost![k], p.currency)}</dd>
                       </div>
                     ))}
                     <div className="min-w-0">
-                      <dt className="text-[11px] text-muted">{t("Ads")}</dt>
+                      <dt className="text-[11px] text-muted"><Term label={t("Ads")} definition={t(COST_DEFS.ads)} /></dt>
                       <dd className="truncate text-[13px] font-semibold">{adsLink(p)}</dd>
                     </div>
                   </dl>
@@ -416,18 +434,18 @@ export function ProductsView() {
               <tr>
                 <Th>{t("Product")}</Th>
                 {more ? <Th>{t("SKU")}</Th> : null}
-                <Th className="text-end">{t("Sale price")}</Th>
-                <Th className="text-end"><Term label={t("Sourcing")} definition={t("Cost of goods per delivered unit (COGS).")} /></Th>
+                <Th className="text-end"><Term label={t("Sale price")} definition={t(COST_DEFS.salePrice)} /></Th>
+                <Th className="text-end"><Term label={t("Sourcing")} definition={t(COST_DEFS.sourcingCost)} /></Th>
                 {more ? (
                   <>
-                    <Th className="text-end">{t("Shipping")}</Th>
-                    <Th className="text-end"><Term label={t("RTO fee")} definition={t("Fee charged by the carrier for each parcel returned to origin.")} /></Th>
-                    <Th className="text-end">{t("Call center")}</Th>
-                    <Th className="text-end">{t("Packaging")}</Th>
+                    <Th className="text-end"><Term label={t("Shipping")} definition={t(COST_DEFS.forwardShippingFee)} /></Th>
+                    <Th className="text-end"><Term label={t("RTO fee")} definition={t(COST_DEFS.rtoFee)} /></Th>
+                    <Th className="text-end"><Term label={t("Call center")} definition={t(COST_DEFS.callCenterFee)} /></Th>
+                    <Th className="text-end"><Term label={t("Packaging")} definition={t(COST_DEFS.packagingFee)} /></Th>
                   </>
                 ) : null}
-                <Th><Term label={t("Ads")} definition={t("Campaigns and whole ad accounts linked to this product. Edit the product to change them, or link campaigns on the Campaigns page.")} /></Th>
-                {more ? <Th>{t("Costs since")}</Th> : null}
+                <Th><Term label={t("Ads")} definition={t(COST_DEFS.ads)} /></Th>
+                {more ? <Th><Term label={t("Costs since")} definition={t("The day the current costs started, and how many cost versions the product has (v2 = 2 versions).")} /></Th> : null}
                 <Th>{t("Status")}</Th>
                 <Th><span className="sr-only">{t("Actions")}</span></Th>
               </tr>

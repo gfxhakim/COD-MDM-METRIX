@@ -20,7 +20,7 @@ import { useSlidingPill } from "@/components/ui/sliding-pill";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import {
   ACTUAL_LABEL,
   actualBreakdown,
@@ -186,11 +186,14 @@ function PctInput({ id, value, onChange, disabled }: { id: string; value: string
   );
 }
 
-function Check({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+function Check({ checked, onChange, children, help }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode; help?: React.ReactNode }) {
   return (
     <label className="flex items-start gap-2 text-sm text-muted">
       <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#e1182c]" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span>{children}</span>
+      <span>
+        {children}
+        {help ? <HelpTip label={typeof children === "string" ? children : undefined} className="ms-1.5 align-middle">{help}</HelpTip> : null}
+      </span>
     </label>
   );
 }
@@ -280,24 +283,24 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 
   const stockField = (
     <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
-      <Field label={t("Stock to count")} htmlFor="stock-src" hint={form.stockSource === "TYPED" ? (row.stock.read ? undefined : t("MDM hasn't sent stock for this product yet. Type how many units you have.")) : t("{n} units in MDM", { n: count(parsed.units) })}>
+      <Field label={t("Stock to count")} htmlFor="stock-src" help={t("Which units the calculation counts: what MDM has available, that plus what is on the way, everything MDM received, or a number you type.")} hint={form.stockSource === "TYPED" ? (row.stock.read ? undefined : t("MDM hasn't sent stock for this product yet. Type how many units you have.")) : t("{n} units in MDM", { n: count(parsed.units) })}>
         <Select id="stock-src" value={form.stockSource} onChange={(e) => setEdits((x) => ({ ...x, stockSource: e.target.value as StockSource, stockUnits: e.target.value === "TYPED" ? form.stockUnits : String(stockUnitsFor(e.target.value as StockSource, row.stock, null)) }))}>
           {STOCK_SOURCES.map((s) => <option key={s} value={s} disabled={s !== "TYPED" && !row.stock.read}>{t(STOCK_SOURCE_LABEL[s])}</option>)}
         </Select>
       </Field>
-      <Field label={t("Units")} htmlFor="stock-units">
+      <Field label={t("Units")} htmlFor="stock-units" help={t("How many units the calculation counts. It follows MDM unless you pick A number I type.")}>
         <Input id="stock-units" inputMode="numeric" className="num" value={form.stockSource === "TYPED" ? form.stockUnits : String(parsed.units)} disabled={form.stockSource !== "TYPED"} onChange={(e) => set("stockUnits")(e.target.value.replace(/[^\d]/g, ""))} />
       </Field>
     </div>
   );
   const priceFields = (
     <div className="grid grid-cols-2 gap-3">
-      <Field label={t("Sale price per piece")} htmlFor="pt-price" hint={row.piecesPerOrder > 1 && form.salePrice === dataForm.salePrice ? t("Your offer: the order price ÷ {n} pieces", { n: row.piecesPerOrder }) : moneyHint("salePrice")}><MoneyInput id="pt-price" currency={cur} value={form.salePrice} onChange={set("salePrice")} /></Field>
-      <Field label={t("Cost per piece")} htmlFor="pt-cost" hint={moneyHint("unitCost")}><MoneyInput id="pt-cost" currency={cur} value={form.unitCost} onChange={set("unitCost")} /></Field>
+      <Field label={t("Sale price per piece")} htmlFor="pt-price" help={t("What one piece sells for, without delivery. With an offer it is the order price ÷ its pieces: 3800 for 2 pieces gives 1900.")} hint={row.piecesPerOrder > 1 && form.salePrice === dataForm.salePrice ? t("Your offer: the order price ÷ {n} pieces", { n: row.piecesPerOrder }) : moneyHint("salePrice")}><MoneyInput id="pt-price" currency={cur} value={form.salePrice} onChange={set("salePrice")} /></Field>
+      <Field label={t("Cost per piece")} htmlFor="pt-cost" help={t("What one piece costs you to buy from your supplier. Example: 800.")} hint={moneyHint("unitCost")}><MoneyInput id="pt-cost" currency={cur} value={form.unitCost} onChange={set("unitCost")} /></Field>
     </div>
   );
   const unitsPerOrder = (
-    <Field label={t("Pieces per order")} htmlFor="pt-upo" hint={hint("unitsPerOrder", "unitsPerOrder", (v) => v)}>
+    <Field label={t("Pieces per order")} htmlFor="pt-upo" help={t("How many pieces one order sends. Fees are paid per parcel, so more pieces per order means fewer parcels and fewer fees.")} hint={hint("unitsPerOrder", "unitsPerOrder", (v) => v)}>
       <Input id="pt-upo" inputMode="decimal" className="num" value={form.unitsPerOrder} onChange={(e) => set("unitsPerOrder")(e.target.value)} />
     </Field>
   );
@@ -322,15 +325,15 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 
       {row.stock.read ? (
         <dl className="mx-5 mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {[
-            [t("Available"), row.stock.available],
-            [t("On the way"), row.stock.incoming],
-            [t("Received in total"), row.stock.received],
-            [t("In delivery"), row.stockDetail?.inDelivery ?? 0],
-            [t("Coming back"), row.stockDetail?.returning ?? 0],
-          ].map(([l, v]) => (
+          {([
+            [t("Available"), row.stock.available, t("Units in MDM's warehouse, ready to be sent.")],
+            [t("On the way"), row.stock.incoming, t("Units on their way to MDM's warehouse that it hasn't received yet.")],
+            [t("Received in total"), row.stock.received, t("Every unit of this product MDM has received so far, sold or not.")],
+            [t("In delivery"), row.stockDetail?.inDelivery ?? 0, t("Units in parcels that are with the carrier right now.")],
+            [t("Coming back"), row.stockDetail?.returning ?? 0, t("Units in returned parcels on their way back to MDM's warehouse.")],
+          ] as const).map(([l, v, def]) => (
             <div key={l} className="rounded-2xl bg-surface-2 px-3 py-2.5">
-              <dt className="text-[11px] text-subtle">{l}</dt>
+              <dt className="text-[11px] text-subtle"><Term label={l} definition={def} /></dt>
               <dd className="num text-[17px] font-bold">{count(v as number)}</dd>
             </div>
           ))}
@@ -366,7 +369,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
               <p className="text-sm text-muted">{t("Every unit sells at its price: no ads, no cancelled or returned orders. This is the most the stock can earn.")}</p>
               {stockField}
               {priceFields}
-              <Check checked={form.includeFees} onChange={set("includeFees")}>{t("Also take off each order's delivery, packaging and call center fees")}</Check>
+              <Check checked={form.includeFees} onChange={set("includeFees")} help={t("Counted as if every order were delivered at the first try: no ads, no cancelled or returned orders. Orders = units ÷ pieces per order.")}>{t("Also take off each order's delivery, packaging and call center fees")}</Check>
               {form.includeFees ? unitsPerOrder : null}
             </div>
             <div className="flex min-w-0 flex-col gap-3">
@@ -374,13 +377,13 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
               <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
                 <Stat label={t("Sales")} def={t("Units × sale price.")}>{fmt(potential.revenue)}</Stat>
                 <Stat label={t("Stock cost")} def={t("Units × cost per unit.")}>{fmt(potential.purchaseCost)}</Stat>
-                <Stat label={t("Per unit")}>{fmt(potential.benefitPerUnit)}</Stat>
+                <Stat label={t("Per unit")} def={t("Worked out as: sale price per piece − cost per piece. What each unit earns before ads and fees.")}>{fmt(potential.benefitPerUnit)}</Stat>
                 <Stat label={t("Margin")} def={t("(Sale price − cost per unit) ÷ sale price.")}>{formatPercent(potential.margin)}</Stat>
               </div>
               {form.includeFees ? (
                 <div className="grid grid-cols-2 gap-3">
-                  <Stat label={t("Fees")} sub={t("{n} orders × {amount}", { n: count(potential.orders), amount: fmt(feesPerOrder(parsed.inputs)) })}>{fmt(potential.fees)}</Stat>
-                  <Stat label={t("Benefit after fees")} tone={potential.benefitAfterFees < 0 ? "bad" : undefined}>{fmt(potential.benefitAfterFees)}</Stat>
+                  <Stat label={t("Fees")} def={t("Delivery, packaging, call center and other MDM fees of every order, as if each were delivered at the first try. Worked out as: orders × fees per order.")} sub={t("{n} orders × {amount}", { n: count(potential.orders), amount: fmt(feesPerOrder(parsed.inputs)) })}>{fmt(potential.fees)}</Stat>
+                  <Stat label={t("Benefit after fees")} def={t("Worked out as: benefit before ads − fees. Still without ads, cancelled or returned orders.")} tone={potential.benefitAfterFees < 0 ? "bad" : undefined}>{fmt(potential.benefitAfterFees)}</Stat>
                 </div>
               ) : null}
               {potential.units > 0 && parsed.inputs.salePrice > 0 ? (
@@ -414,36 +417,36 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                 <div id="pt-rates" className="flex flex-col gap-6">
                   <Group title={t("Rates")}>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label={t("Confirmed")} htmlFor="pt-conf" hint={rateHint("confirmationRate")}><PctInput id="pt-conf" value={form.confirmationRate} onChange={set("confirmationRate")} /></Field>
-                      <Field label={t("Shipped (of confirmed)")} htmlFor="pt-ship" hint={rateHint("shippingRate")}><PctInput id="pt-ship" value={form.shippingRate} onChange={set("shippingRate")} /></Field>
-                      <Field label={t("Delivered (of shipped)")} htmlFor="pt-del" hint={rateHint("deliveryRate")}><PctInput id="pt-del" value={form.deliveryRate} onChange={set("deliveryRate")} /></Field>
-                      <Field label={t("Lost (of shipped)")} htmlFor="pt-lost" hint={rateHint("lostRate")}><PctInput id="pt-lost" value={form.lostRate} onChange={set("lostRate")} /></Field>
-                      <Field label={t("Returned (of shipped)")} htmlFor="pt-ret" hint={form.returnAuto ? t("The rest of the shipped parcels") : undefined}>
+                      <Field label={t("Confirmed")} htmlFor="pt-conf" help={t("The % of orders placed that the call center confirms. Your orders give it as confirmed ÷ placed.")} hint={rateHint("confirmationRate")}><PctInput id="pt-conf" value={form.confirmationRate} onChange={set("confirmationRate")} /></Field>
+                      <Field label={t("Shipped (of confirmed)")} htmlFor="pt-ship" help={t("The % of confirmed orders that are really sent; the others are cancelled after the call. Your orders give it as shipped ÷ confirmed.")} hint={rateHint("shippingRate")}><PctInput id="pt-ship" value={form.shippingRate} onChange={set("shippingRate")} /></Field>
+                      <Field label={t("Delivered (of shipped)")} htmlFor="pt-del" help={t("The % of shipped parcels the customer receives and pays for. Your orders give it as delivered ÷ finished parcels, so parcels still on the road don't count.")} hint={rateHint("deliveryRate")}><PctInput id="pt-del" value={form.deliveryRate} onChange={set("deliveryRate")} /></Field>
+                      <Field label={t("Lost (of shipped)")} htmlFor="pt-lost" help={t("The % of shipped parcels that never arrive and never come back: their goods and delivery fee are lost. Your orders give it as lost ÷ finished parcels.")} hint={rateHint("lostRate")}><PctInput id="pt-lost" value={form.lostRate} onChange={set("lostRate")} /></Field>
+                      <Field label={t("Returned (of shipped)")} htmlFor="pt-ret" help={t("The % of shipped parcels that come back. Each one pays its delivery and return fees, then goes back to stock to be sent again.")} hint={form.returnAuto ? t("The rest of the shipped parcels") : undefined}>
                         <PctInput id="pt-ret" value={form.returnAuto && projection.ok ? pctText(projection.returnRateUsed) : form.returnRate} onChange={set("returnRate")} disabled={form.returnAuto} />
                       </Field>
                     </div>
-                    <Check checked={form.returnAuto} onChange={(v) => setEdits((x) => ({ ...x, returnAuto: v, returnRate: projection.ok ? pctText(projection.returnRateUsed) : form.returnRate }))}>{t("Every parcel not delivered or lost comes back")}</Check>
+                    <Check checked={form.returnAuto} help={t("Ticked: returned = 100% − delivered − lost. Untick it to type your own returned %.")} onChange={(v) => setEdits((x) => ({ ...x, returnAuto: v, returnRate: projection.ok ? pctText(projection.returnRateUsed) : form.returnRate }))}>{t("Every parcel not delivered or lost comes back")}</Check>
                     <p className="text-xs text-subtle">
                       {row.sample.finished > 0 ? t("Your orders in these days: {placed} placed, {finished} parcels finished.", { placed: count(row.sample.placed), finished: count(row.sample.finished) }) : t("No finished parcels for this product in these days.")}
                       {!data.minFinished || row.sample.finished >= data.minFinished ? "" : ` ${t("Rates come from your orders after {n} finished parcels.", { n: data.minFinished })}`}
                     </p>
                   </Group>
                   <Group title={t("Ads and fees")}>
-                    <Field label={t("Ad spend per order placed")} htmlFor="pt-cpa" hint={adsMissing ? t("No campaign is linked to this product yet") : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
+                    <Field label={t("Ad spend per order placed")} htmlFor="pt-cpa" help={t("What ads cost for each order placed. Your orders give it as this product's ad spend ÷ its orders placed. Type one if no campaign is linked yet.")} hint={adsMissing ? t("No campaign is linked to this product yet") : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label={t("Delivery fee per parcel")} htmlFor="pt-s" hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
-                      <Field label={t("Return fee per parcel")} htmlFor="pt-r" hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
-                      <Field label={t("Call center fee")} htmlFor="pt-k" hint={moneyHint("callCenterFee")}><MoneyInput id="pt-k" currency={cur} value={form.callCenterFee} onChange={set("callCenterFee")} /></Field>
-                      <Field label={t("Paid for each order")} htmlFor="pt-kb">
+                      <Field label={t("Delivery fee per parcel")} htmlFor="pt-s" help={t("What MDM charges you to send one parcel. It is paid on every shipped parcel: delivered, returned or lost.")} hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
+                      <Field label={t("Return fee per parcel")} htmlFor="pt-r" help={t("What MDM charges when a parcel comes back, on top of its delivery fee.")} hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
+                      <Field label={t("Call center fee")} htmlFor="pt-k" help={t("What the call center charges for one order. Choose under Paid for each order whether every order placed pays it or only confirmed ones.")} hint={moneyHint("callCenterFee")}><MoneyInput id="pt-k" currency={cur} value={form.callCenterFee} onChange={set("callCenterFee")} /></Field>
+                      <Field label={t("Paid for each order")} htmlFor="pt-kb" help={t("Placed: the call center is paid for every order that comes in. Confirmed: only for the orders it confirms. Settings > Economics & currencies sets the starting choice.")}>
                         <Select id="pt-kb" value={form.callCenterBasis} onChange={(e) => set("callCenterBasis")(e.target.value as CallCenterBasis)}>
                           <option value="PLACED_LEAD">{t("Placed")}</option>
                           <option value="CONFIRMED_ORDER">{t("Confirmed")}</option>
                         </Select>
                       </Field>
-                      <Field label={t("Packaging per parcel")} htmlFor="pt-g" hint={moneyHint("packagingFee")}><MoneyInput id="pt-g" currency={cur} value={form.packagingFee} onChange={set("packagingFee")} /></Field>
-                      <Field label={t("Other MDM fees per delivered order")} htmlFor="pt-x" hint={t("COD or fulfilment fee, if MDM charges one")}><MoneyInput id="pt-x" currency={cur} value={form.extraFeePerDelivered} onChange={set("extraFeePerDelivered")} /></Field>
+                      <Field label={t("Packaging per parcel")} htmlFor="pt-g" help={t("Box, bag and label for one parcel. Paid on every shipped parcel, even one that comes back.")} hint={moneyHint("packagingFee")}><MoneyInput id="pt-g" currency={cur} value={form.packagingFee} onChange={set("packagingFee")} /></Field>
+                      <Field label={t("Other MDM fees per delivered order")} htmlFor="pt-x" help={t("Taken off each delivered order only. Type 0 if MDM charges nothing more.")} hint={t("COD or fulfilment fee, if MDM charges one")}><MoneyInput id="pt-x" currency={cur} value={form.extraFeePerDelivered} onChange={set("extraFeePerDelivered")} /></Field>
                     </div>
-                    <Field label={t("Other costs for this stock")} htmlFor="pt-o" hint={t("Transport to MDM, a designer, anything paid once")}><MoneyInput id="pt-o" currency={cur} value={form.otherCosts} onChange={set("otherCosts")} /></Field>
+                    <Field label={t("Other costs for this stock")} htmlFor="pt-o" help={t("One fixed amount taken once off the whole stock's benefit, not per order.")} hint={t("Transport to MDM, a designer, anything paid once")}><MoneyInput id="pt-o" currency={cur} value={form.otherCosts} onChange={set("otherCosts")} /></Field>
                   </Group>
                 </div>
               ) : null}
@@ -473,7 +476,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                   />
                   <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
                     <Stat label={t("Missing benefit")} def={t("Benefit before ads − real benefit: what ads, rates and fees take.")} tone="bad">{fmt(projection.missing)}</Stat>
-                    <Stat label={t("Breakeven CPA")} def={t("The most you can pay in ads per order placed before this stock loses money.")} sub={t("per order placed")}>{fmt(projection.breakevenCpa)}</Stat>
+                    <Stat label={t("Breakeven CPA")} def={t("The most you can pay in ads per order placed before this stock loses money. Worked out as: real benefit before ads ÷ orders placed.")} sub={t("per order placed")}>{fmt(projection.breakevenCpa)}</Stat>
                     <Stat label={t("POAS")} def={t("Real benefit ÷ ad spend.")}>{projection.poas === null ? "—" : projection.poas.toFixed(2)}</Stat>
                     <Stat label={t("Return on stock")} def={t("Real benefit ÷ what the stock cost.")}>{formatPercent(projection.returnOnStock, 0)}</Stat>
                   </div>
@@ -483,7 +486,10 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                     </p>
                   ) : null}
                   <div className="rounded-2xl bg-surface-2 p-4">
-                    <h3 className="text-sm font-bold">{t("To sell {n} units you need about", { n: count(parsed.units) })}</h3>
+                    <h3 className="text-sm font-bold">
+                      {t("To sell {n} units you need about", { n: count(parsed.units) })}
+                      <HelpTip label={t("To sell {n} units you need about", { n: count(parsed.units) })} className="ms-1.5 align-middle">{t("Worked out backwards: parcels to ship = units ÷ pieces per order ÷ (delivered % + lost %), confirmed = shipped ÷ shipping rate, placed = confirmed ÷ confirmation rate.")}</HelpTip>
+                    </h3>
                     <ol className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
                       {[
                         [t("Orders placed"), projection.flow.leads],
@@ -502,7 +508,10 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                     <p className="mt-3 text-xs text-subtle">{t("Ad spend for them: {amount}. Returned parcels come back to stock and are sent again.", { amount: fmt(projection.adSpend) })}</p>
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-bold">{t("Where the benefit goes")}</h3>
+                    <h3 className="mb-3 text-sm font-bold">
+                      {t("Where the benefit goes")}
+                      <HelpTip label={t("Where the benefit goes")} className="ms-1.5 align-middle">{t("Each bar is one cost that takes the benefit before ads down to the real benefit, biggest first. Together they make the missing benefit.")}</HelpTip>
+                    </h3>
                     <Bridge
                       label={t("From the benefit before ads to the real benefit")}
                       currency={cur}
@@ -527,7 +536,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                  <Stat label={t("Units delivered")} sub={t("{n} parcels", { n: count(row.sample.delivered) })}>{count(row.actual.deliveredUnits)}</Stat>
+                  <Stat label={t("Units delivered")} def={t("Pieces in the delivered parcels of the orders placed in these days, free pieces of your offer included.")} sub={t("{n} parcels", { n: count(row.sample.delivered) })}>{count(row.actual.deliveredUnits)}</Stat>
                   <Stat label={t("Collected")} def={t("Cash on delivery of the delivered parcels.")}>{fmt(row.actual.deliveredRevenue)}</Stat>
                   <Stat label={t("Real profit")} def={t("Collected − ad spend − cost of the units − delivery and return fees − call center − packaging − this product's expenses.")} tone={actual.profit < 0 ? "bad" : "good"}>{fmt(actual.profit)}</Stat>
                   <Stat label={t("Missing benefit")} def={t("What the delivered units should have made at your sale price − real profit.")}>{fmt(actual.missing)}</Stat>
@@ -585,16 +594,16 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
   const rows = data.products.map((p) => ({ p, ...productLine(p, data) }));
   return (
     <Card className="min-w-0">
-      <CardHeader title={t("Your products")} description={t("What a delivered order of each product really earns, with its ads, and its real profit in these days. Pick one to see how.")} />
+      <CardHeader title={t("Your products")} help={t("One row per product, with the same numbers as its own page below. Tap a product to see how each one is worked out.")} description={t("What a delivered order of each product really earns, with its ads, and its real profit in these days. Pick one to see how.")} />
       <div className="hidden px-2 pb-3 md:block">
         <Table>
           <THead>
             <tr>
               <Th>{t("Product")}</Th>
               <Th>{t("Offer")}</Th>
-              <Th className="text-end"><Term label={t("Per delivered order")} definition={t("Profit of one delivered order after ads, returns and every fee.")} /></Th>
-              <Th className="text-end"><Term label={t("Ads per delivered order")} definition={t("Ad spend per order ÷ confirmation rate ÷ delivery rate.")} /></Th>
-              <Th className="text-end"><Term label={t("Real profit")} definition={t("The orders placed in these days, after everything.")} /></Th>
+              <Th className="text-end"><Term label={t("Per delivered order")} definition={t("What one delivered order really leaves you: its price − the product, delivery, calls, the ads it took and its share of returned and lost parcels. Before your expenses.")} /></Th>
+              <Th className="text-end"><Term label={t("Ads per delivered order")} definition={t("What the ads cost for each order that is delivered. Worked out as: ad spend per order placed ÷ confirmation rate ÷ shipping rate ÷ delivery rate.")} /></Th>
+              <Th className="text-end"><Term label={t("Real profit")} definition={t("The orders placed in the days picked: what their delivered parcels collected, minus ad spend, the product, every fee and this product's expenses. Parcels still on the road count once they finish.")} /></Th>
             </tr>
           </THead>
           <tbody>
@@ -662,7 +671,8 @@ function UnlinkedAds({ data, canLink }: { data: Tracker; canLink: boolean }) {
   return (
     <Card className="min-w-0 border border-warning/30">
       <CardHeader
-        title={<span className="flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />{t("Ads not linked to a product")}</span>}
+        title={<span className="inline-flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />{t("Ads not linked to a product")}</span>}
+        help={t("Ad spend counts for a product only through a campaign or ad account linked to it. This lists the spend linked to none, so you can link it.")}
         description={
           campaigns.length
             ? t("{amount} of ad spend counts for no product, so no product's profit includes it. Your business's total profit still does. Pick the product each campaign sells.", { amount: fmt(total) })
@@ -758,7 +768,7 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
         }
       />
       <div className="mb-5 flex flex-col gap-2">
-        <span className="text-xs font-semibold text-muted">{t("Rates, ad spend and real orders from")}</span>
+        <span className="text-xs font-semibold text-muted"><Term label={t("Rates, ad spend and real orders from")} definition={t("Only orders placed in these days, and the ad spend of these days, count for the rates, ads per order and real profit. Stock and product details stay the same.")} /></span>
         <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
           {RANGES.map((r) => <Chip key={r.key} active={range === r.key} onClick={() => setRange(r.key)} className="shrink-0">{t(r.label)}</Chip>)}
         </div>

@@ -13,6 +13,7 @@ import { Check3, Chip, Section } from "@/components/ui/choice";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import {
   COLUMN_PRESETS,
   EXPORT_COLUMNS,
@@ -60,6 +61,41 @@ const FORMATS: { key: ExportFormat; label: string; hint: string; icon: React.Rea
   { key: "csv", label: "CSV", hint: msg("For Google Sheets or other tools"), icon: <FileText /> },
   { key: "print", label: msg("Print or PDF"), hint: msg("A printable page to save as PDF"), icon: <Printer /> },
 ];
+
+/** The ⓘ explanation of each column the export can hold. */
+const COLUMN_HELP: Record<ExportColumnKey, string> = {
+  orderNumber: msg("The number your store or MDM gave the order, e.g. #1001."),
+  mdmOrderId: msg("MDM's own number for the order. Empty for orders MDM never received."),
+  customerName: msg("The name the customer gave, as MDM or the store sent it."),
+  phone: msg("The customer's main phone number, in full."),
+  phone2: msg("Another number the customer gave, if any."),
+  address: msg("The delivery address the customer gave."),
+  city: msg("The commune the parcel goes to."),
+  wilaya: msg("The wilaya the parcel goes to."),
+  deliveryType: msg("Home: delivered to the customer's door. Stop desk: the customer collects the parcel at the carrier's office."),
+  status: msg("The order's latest status in MDM's own words: its newest parcel's status, or MDM's order status when that is newer."),
+  statusGroup: msg("Which group under Statuses the MDM status falls in, e.g. With the carrier."),
+  statusAt: msg("When the order got its latest status."),
+  placedAt: msg("When the customer placed the order."),
+  products: msg("Product names with their pieces, e.g. Watch ×2. With one row per product, one name per row."),
+  upsell: msg("Yes when MDM marked the order as upsold by its call center."),
+  sku: msg("The product codes of the order's lines."),
+  quantity: msg("Pieces in the order, all products added up. With one row per product, the pieces on that row."),
+  unitPrice: msg("Price of one piece. With one row per order, filled only when the order has a single product."),
+  codAmount: msg("What the customer pays the delivery person for the whole order, in the currency picked below."),
+  shippingFee: msg("What MDM charges to deliver the order's parcels, added up."),
+  returnFee: msg("What MDM charges for the order's parcels that came back, added up."),
+  trackingId: msg("The carrier's tracking number of each parcel, separated by commas."),
+  store: msg("The store name MDM shows for the order."),
+  source: msg("Where the order came from: MDM Express, Shopify, EasySell, Manual or Other."),
+  adId: msg("The Meta ad ID that brought the order, from its utm_content."),
+  adName: msg("The name of that ad on the Creatives page."),
+  utmCampaign: msg("The campaign name from the ad link (utm_campaign)."),
+  utmSource: msg("Where the visit came from, e.g. facebook (utm_source)."),
+  dispatchedAt: msg("When the order's first parcel left with the carrier."),
+  deliveredAt: msg("When the order's first parcel was delivered."),
+  returnedAt: msg("When the order's first parcel came back."),
+};
 
 type Saved = {
   range: RangeKey;
@@ -243,7 +279,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent title={t("Export orders")} description={t("Pick the orders, then how you want the file. Your choices are remembered on this device.")} className="max-w-2xl">
         <div className="flex flex-col gap-6">
-          <Section title={t("Dates")}>
+          <Section title={t("Dates")} help={t("Which days to export, counted in the workspace's time zone. The first and last days are included.")}>
             <div className="flex flex-wrap gap-1.5">
               {RANGES.map((r) => (
                 <Chip key={r.key} active={s.range === r.key} onClick={() => setS((p) => ({ ...p, range: r.key, from: p.from || days.from || addDays(today, -29), to: p.to || days.to || today }))}>{t(r.label)}</Chip>
@@ -251,15 +287,15 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
             </div>
             {s.range === "custom" ? (
               <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-                <label className="flex flex-col gap-1 text-xs text-muted">{t("From")}<Input type="date" value={s.from} max={s.to || today} onChange={(e) => set("from", e.target.value)} aria-invalid={badRange} /></label>
-                <label className="flex flex-col gap-1 text-xs text-muted">{t("To")}<Input type="date" value={s.to} min={s.from || undefined} onChange={(e) => set("to", e.target.value)} aria-invalid={badRange} /></label>
+                <label className="flex flex-col gap-1 text-xs text-muted"><Term label={t("From")} definition={t("The first day to export. Leave it empty to start from the oldest order.")} /><Input type="date" value={s.from} max={s.to || today} onChange={(e) => set("from", e.target.value)} aria-invalid={badRange} /></label>
+                <label className="flex flex-col gap-1 text-xs text-muted"><Term label={t("To")} definition={t("The last day to export. Leave it empty to go up to today.")} /><Input type="date" value={s.to} min={s.from || undefined} onChange={(e) => set("to", e.target.value)} aria-invalid={badRange} /></label>
               </div>
             ) : null}
             <p className="num text-xs text-muted">
               {badRange ? <span className="text-negative">{t("The start date is after the end date.")}</span> : days.from || days.to ? t("{from} to {to}", { from: days.from ? shortDay(days.from, t) : t("The start"), to: days.to ? shortDay(days.to, t) : t("today") }) : t("Every order, whatever its date")}
             </p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <span>{t("Dates of")}</span>
+              <Term label={t("Dates of")} definition={t("Order date: orders placed in those days. Latest status change: orders whose newest status came in those days, e.g. delivered last week.")} />
               <div className="flex gap-1.5">
                 <Chip active={s.dateField === "placed"} onClick={() => set("dateField", "placed")}>{t("Order date")}</Chip>
                 <Chip active={s.dateField === "status"} onClick={() => set("dateField", "status")}>{t("Latest status change")}</Chip>
@@ -267,14 +303,14 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
             </div>
           </Section>
 
-          <Section title={t("Which orders")}>
+          <Section title={t("Which orders")} help={t("Synced from MDM: orders MDM knows, synced or with an MDM parcel. All orders also adds orders from file imports and manual orders.")}>
             <div className="flex flex-wrap gap-1.5">
               <Chip active={s.scope === "mdm"} onClick={() => set("scope", "mdm")}>{t("Synced from MDM")}</Chip>
               <Chip active={s.scope === "all"} onClick={() => set("scope", "all")}>{t("All orders")}</Chip>
             </div>
             {carried.length ? (
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                <span>{t("From the page filters:")}</span>
+                <Term label={t("From the page filters:")} definition={t("The filters set on the Orders page apply to this export too. Remove one with its ×.")} />
                 {carried.map((c) => (
                   <span key={c.key} className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft py-1 ps-3 pe-1 font-medium text-brand-strong">
                     <span className="truncate">{c.label}</span>
@@ -287,6 +323,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
 
           <Section
             title={t("Statuses")}
+            help={t("Each order counts once, under its latest MDM status: its newest parcel's, or MDM's order status when newer. Orders MDM never had use pending, confirmed or cancelled.")}
             aside={groups.length ? (
               <span className="flex gap-3 text-xs font-medium">
                 <button type="button" className="text-brand-strong hover:underline" onClick={() => setS((p) => ({ ...p, offGroups: [], offStatuses: [] }))}>{t("All")}</button>
@@ -336,7 +373,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
             )}
           </Section>
 
-          <Section title={t("Format")}>
+          <Section title={t("Format")} help={t("Excel keeps numbers and dates ready to add up. CSV is plain text for other tools. Print or PDF opens a page of up to 5,000 rows.")}>
             <div className="grid gap-2 sm:grid-cols-3">
               {FORMATS.map((f) => (
                 <button
@@ -359,14 +396,14 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
             </div>
             {s.format === "csv" ? (
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>{t("Separator")}</span>
+                <Term label={t("Separator")} definition={t("The character between columns. Pick Semicolon when Excel in French opens the file with everything in one column.")} />
                 <Chip active={s.csvDelimiter === ","} onClick={() => set("csvDelimiter", ",")}>{t("Comma")}</Chip>
                 <Chip active={s.csvDelimiter === ";"} onClick={() => set("csvDelimiter", ";")}>{t("Semicolon (French Excel)")}</Chip>
               </div>
             ) : null}
           </Section>
 
-          <Section title={t("Columns")} aside={<span className="num text-xs text-muted">{t("{n} of {total}", { n: columns.length, total: visibleColumns.length })}</span>}>
+          <Section title={t("Columns")} help={t("Pick a ready set, or tick columns one by one. Customer names, phones and addresses are offered only to owners, admins and operators.")} aside={<span className="num text-xs text-muted">{t("{n} of {total}", { n: columns.length, total: visibleColumns.length })}</span>}>
             <div className="flex flex-wrap gap-1.5">
               {COLUMN_PRESETS.map((p) => <Chip key={p.key} active={s.preset === p.key} onClick={() => pickPreset(p.key)}>{t(p.label)}</Chip>)}
               {s.preset === "custom" ? <Chip active>{t("Custom")}</Chip> : null}
@@ -376,27 +413,28 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
                 <label key={c.key} className="flex min-w-0 cursor-pointer items-center gap-2 py-1 text-[13px]">
                   <input type="checkbox" className="size-4 shrink-0 accent-[#e1182c]" checked={s.columns.includes(c.key)} onChange={() => toggleColumn(c.key)} />
                   <span className="truncate">{t(c.label)}</span>
+                  <Term label={t(c.label)} hideLabel definition={t(COLUMN_HELP[c.key])} />
                 </label>
               ))}
             </div>
             {!seeCustomers ? <p className="text-xs text-subtle">{t("Customer names, phones and addresses are left out of exports for view-only accounts.")}</p> : null}
           </Section>
 
-          <Section title={t("Rows and amounts")}>
+          <Section title={t("Rows and amounts")} help={t("One row per product splits an order with 2 products into 2 rows. Its COD amount and fees sit on the first row only, so column totals stay right.")}>
             <div className="flex flex-wrap gap-1.5">
               <Chip active={s.layout === "orders"} onClick={() => set("layout", "orders")}>{t("One row per order")}</Chip>
               <Chip active={s.layout === "lines"} onClick={() => set("layout", "lines")}>{t("One row per product")}</Chip>
             </div>
             <div className="grid grid-cols-2 items-center gap-3 sm:flex">
               <label className="flex items-center gap-2 text-xs text-muted">
-                {t("Amounts in")}
+                <Term label={t("Amounts in")} definition={t("The currency for COD amounts, prices and fees. Other currencies are converted with the rates in Settings > Economics & currencies.")} />
                 <Select aria-label={t("Currency")} value={currency} onChange={(e) => set("currency", e.target.value)} className="h-8 w-24">
                   {money.available.map((c) => <option key={c} value={c}>{c}</option>)}
                 </Select>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-[13px]">
                 <input type="checkbox" className="size-4 accent-[#e1182c]" checked={s.totals} onChange={(e) => set("totals", e.target.checked)} />
-                {t("Add totals by status")}
+                <Term label={t("Add totals by status")} definition={t("Adds a Totals by status table (its own sheet in Excel): orders, pieces and COD amount for each MDM status, then a total row.")} />
               </label>
             </div>
           </Section>

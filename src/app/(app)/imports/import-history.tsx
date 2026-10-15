@@ -11,6 +11,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import type { RowIssue } from "@/domain/imports/common";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
@@ -43,8 +44,16 @@ function BatchDialog({ id, kind, onClose }: { id: string; kind: Kind; onClose: (
         {q.error ? <ErrorState message={errorMessage(q.error)} /> : !b ? <Loading /> : (
           <div className="flex flex-col gap-4 text-sm">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {[[t("Rows"), b.totalRows], [t("Imported"), b.importedRows], [t("Updated"), b.updatedRows], [t("Duplicates"), b.duplicateRows], [t("Errors"), b.errorRows]].map(([l, v]) => (
-                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-xs text-muted">{l}</p><p className="num text-lg font-semibold">{v}</p></div>
+              {(
+                [
+                  [t("Rows"), b.totalRows, t("Data rows in the file, not counting the header row.")],
+                  [t("Imported"), b.importedRows, t("New records this file added: orders, spend rows, expenses or bank rows. An order spread over several lines counts once.")],
+                  [t("Updated"), b.updatedRows, t("Ad spend: rows whose amount changed since an earlier import. Orders: orders MDM had already synced that got their ad ID from this file.")],
+                  [t("Duplicates"), b.duplicateRows, t("Rows already here from an earlier import, or orders MDM sync brought in, so they were skipped.")],
+                  [t("Errors"), b.errorRows, t("Rows that could not be read and were skipped. Fix them in your file and import it again.")],
+                ] as const
+              ).map(([l, v, help]) => (
+                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-xs text-muted"><Term label={l} definition={help} /></p><p className="num text-lg font-semibold">{v}</p></div>
               ))}
             </div>
             {summary.failure ? <p className="text-negative">{t(summary.failure)}</p> : null}
@@ -93,7 +102,7 @@ export function ImportHistory({ kind }: { kind: Kind }) {
 
   return (
     <Card>
-      <CardHeader title={t("History")} description={t("Every file imported into this workspace, with what happened to each row.")} />
+      <CardHeader title={t("History")} description={t("Every file imported into this workspace, with what happened to each row.")} help={t("Only files of this tab's kind are listed. View details shows a file's row errors; Delete import removes everything that file added, so you can import a corrected one.")} />
       {list.error ? <ErrorState message={errorMessage(list.error)} /> : list.isLoading ? <Loading /> : !list.data?.length ? (
         <EmptyState icon={<History />} title={t("No imports yet")} description={t(KIND_META[kind].empty)} />
       ) : (

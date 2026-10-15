@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app/shell";
 import { ToastProvider } from "@/components/ui/toast";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { Providers } from "@/lib/trpc/client";
 import { getSessionUser, WORKSPACE_COOKIE } from "@/server/auth/session";
 import { listWorkspacesForUser } from "@/server/repositories/workspaces";
@@ -18,13 +17,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const current = workspaces.find((w) => w.id === preferred) ?? workspaces[0];
   return (
     <Providers key={current.id} workspaceId={current.id}>
-      <TooltipProvider>
-        <ToastProvider>
-          <AppShell current={current} workspaces={workspaces} user={user}>
-            {children}
-          </AppShell>
-        </ToastProvider>
-      </TooltipProvider>
+      <ToastProvider>
+        <AppShell current={current} workspaces={workspaces} user={user}>
+          {children}
+        </AppShell>
+      </ToastProvider>
     </Providers>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { HelpTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /** Building blocks of the picker panels (export, custom sync): pill choices, titled sections, tri-state checkboxes. */
@@ -22,11 +23,18 @@ export function Chip({ active, children, className, ...props }: React.ButtonHTML
   );
 }
 
-export function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+export function Section({ title, help, aside, children }: { title: string; help?: React.ReactNode; aside?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-bold tracking-tight">{title}</h3>
+        {help ? (
+          <span className="inline-flex items-center gap-1">
+            <h3 className="text-sm font-bold tracking-tight">{title}</h3>
+            <HelpTip label={title}>{help}</HelpTip>
+          </span>
+        ) : (
+          <h3 className="text-sm font-bold tracking-tight">{title}</h3>
+        )}
         {aside}
       </div>
       {children}

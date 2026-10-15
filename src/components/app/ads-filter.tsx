@@ -9,6 +9,7 @@ import { Chip, Section } from "@/components/ui/choice";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/states";
+import { HelpTip } from "@/components/ui/tooltip";
 import { adFilterActive, adFilterSchema, type AdFilter } from "@/domain/adFilter";
 import { useT } from "@/i18n/client";
 import { englishT, msg, type TFunction } from "@/i18n/core";
@@ -156,7 +157,7 @@ function Panel({ initial, onApply, onClose }: { initial: AdFilter | undefined; o
           <div className="flex flex-col gap-6 pb-24">
             <p className="rounded-2xl bg-surface-2 px-4 py-3 text-xs leading-relaxed text-muted">{t("Campaigns you pick count on their own. Without campaigns, the ad accounts you pick count, or else every ad account of the Business Managers you pick.")}</p>
             {o.tokens.length ? (
-              <Section title={t("Business Managers")} aside={pickedTokens.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setTokens([])}>{t("Clear")}</button> : null}>
+              <Section title={t("Business Managers")} help={t("One for each Meta token saved in Settings > Meta ads. Picking one counts every ad account that token can read.")} aside={pickedTokens.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setTokens([])}>{t("Clear")}</button> : null}>
                 <div className="flex flex-wrap gap-2">
                   {o.tokens.map((tk) => (
                     <Chip key={tk.id} active={pickedTokens.includes(tk.id)} onClick={() => setTokens(toggle(pickedTokens, tk.id))}>{tk.label}</Chip>
@@ -164,7 +165,7 @@ function Panel({ initial, onApply, onClose }: { initial: AdFilter | undefined; o
                 </div>
               </Section>
             ) : null}
-            <Section title={pickedAccounts.length ? t("Ad accounts · {n} picked", { n: pickedAccounts.length }) : t("Ad accounts")} aside={pickedAccounts.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setAccounts([])}>{t("Clear")}</button> : null}>
+            <Section title={pickedAccounts.length ? t("Ad accounts · {n} picked", { n: pickedAccounts.length }) : t("Ad accounts")} help={t("Tick ad accounts to count only their ads. An account marked from imported spend comes from an Ads Manager export, not from a token.")} aside={pickedAccounts.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setAccounts([])}>{t("Clear")}</button> : null}>
               <div className="flex flex-col gap-0.5">
                 {accounts.map((a) => (
                   <Row
@@ -178,7 +179,7 @@ function Panel({ initial, onApply, onClose }: { initial: AdFilter | undefined; o
                 {accounts.length === 0 ? <p className="px-3 text-sm text-muted">{t("No ad account in these Business Managers yet.")}</p> : null}
               </div>
             </Section>
-            <Section title={pickedCampaigns.length ? t("Campaigns · {n} picked", { n: pickedCampaigns.length }) : t("Campaigns")} aside={pickedCampaigns.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setDraft({ ...draft, campaignIds: [] })}>{t("Clear")}</button> : null}>
+            <Section title={pickedCampaigns.length ? t("Campaigns · {n} picked", { n: pickedCampaigns.length }) : t("Campaigns")} help={t("Tick campaigns to count only their ads, in any ad account. Running means on in Meta now; Running only hides paused and off ones, except those you ticked.")} aside={pickedCampaigns.length ? <button type="button" className="text-xs font-semibold text-brand-strong" onClick={() => setDraft({ ...draft, campaignIds: [] })}>{t("Clear")}</button> : null}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
@@ -248,6 +249,7 @@ export function AdsFilter({ className }: { className?: string }) {
             <X className="size-3.5" />
           </button>
         ) : null}
+        <HelpTip label={t("Filter by Meta ads")} className="ms-0.5">{t("Narrows the numbers to the Meta ads you pick: only their orders, their ad spend and their share of expenses. All ads also counts orders without an ad.")}</HelpTip>
       </div>
       {open ? <Panel initial={filter} onApply={setFilter} onClose={() => setOpen(false)} /> : null}
     </>

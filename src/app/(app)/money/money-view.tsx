@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading, Skeleton } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { ACCOUNT_PART_LABEL, ACCOUNT_PARTS, mdmWords, type AccountPart, type PartState } from "@/domain/mdmAccount";
 import { sameWilaya } from "@/domain/wilayas";
 import { useT } from "@/i18n/client";
@@ -174,7 +174,7 @@ function Payouts({ data }: { data: Overview }) {
   const has = data.payouts.length > 0;
   return (
     <Card className="min-w-0">
-      <CardHeader title={t("Payouts")} description={t("What MDM paid you, or is preparing to pay. Tap one to see what it is made of.")} actions={<Updated at={data.parts.payouts?.okAt} />} />
+      <CardHeader title={t("Payouts")} help={t("The latest 50, newest first, with MDM's own status. Green means MDM confirmed it paid. Each sync reads new and changed payouts.")} description={t("What MDM paid you, or is preparing to pay. Tap one to see what it is made of.")} actions={<Updated at={data.parts.payouts?.okAt} />} />
       <div className="flex flex-col gap-3 px-5 pb-5">
         <PartNote part="payouts" state={data.parts.payouts} hasData={has} />
         {has ? (
@@ -234,7 +234,7 @@ function Fees({ data, timezone }: { data: Overview; timezone: string }) {
   const oneCurrency = rows.every((r) => r.currency === cur);
   return (
     <Card className="min-w-0">
-      <CardHeader title={<Term label={t("Money and fees per order")} definition={t(DEF.fees)} />} description={t("Collected for your parcels, and what MDM charged for them, by the day MDM wrote it.")} actions={<Updated at={data.parts.fees?.okAt} />} />
+      <CardHeader title={t("Money and fees per order")} help={t(DEF.fees)} description={t("Collected for your parcels, and what MDM charged for them, by the day MDM wrote it.")} actions={<Updated at={data.parts.fees?.okAt} />} />
       <div className="flex flex-col gap-3 px-5 pb-5">
         <PartNote part="fees" state={data.parts.fees} hasData={data.feeLines > 0} />
         {data.feeLines > 0 ? (
@@ -257,7 +257,7 @@ function Fees({ data, timezone }: { data: Overview; timezone: string }) {
               <>
                 <Table>
                   <THead>
-                    <tr><Th>{t("Line")}</Th><Th className="hidden text-end sm:table-cell">{t("account::Lines")}</Th><Th className="text-end">{t("Amount")}</Th><Th className="hidden text-end sm:table-cell">{t("Paid out")}</Th><Th className="text-end">{t("With MDM")}</Th></tr>
+                    <tr><Th>{t("Line")}</Th><Th className="hidden text-end sm:table-cell">{t("account::Lines")}</Th><Th className="text-end"><Term label={t("Amount")} definition={t("Worked out as: every line of this kind in these days, added up. Red took money from your account, green added money to it.")} /></Th><Th className="hidden text-end sm:table-cell"><Term label={t("Paid out")} definition={t("The part of Amount already put into a payout by MDM. Worked out as: Amount − With MDM.")} /></Th><Th className="text-end"><Term label={t("With MDM")} definition={t("Worked out as: the lines of this kind not in any payout yet, added up. MDM settles them in a later payout.")} /></Th></tr>
                   </THead>
                   <tbody>
                     {rows.map((r) => (
@@ -292,13 +292,13 @@ function Fees({ data, timezone }: { data: Overview; timezone: string }) {
   );
 }
 
-const CAPITAL: { key: keyof NonNullable<Overview["capital"]>["buckets"]; label: string }[] = [
-  { key: "available", label: msg("Available") },
-  { key: "processing", label: msg("Being prepared") },
-  { key: "inDelivery", label: msg("In delivery") },
-  { key: "returning", label: msg("Coming back") },
-  { key: "lost", label: msg("Lost") },
-  { key: "totalInbound", label: msg("Entered in total") },
+const CAPITAL: { key: keyof NonNullable<Overview["capital"]>["buckets"]; label: string; help: string }[] = [
+  { key: "available", label: msg("Available"), help: msg("Units in MDM's warehouse, ready to send for new orders. The amount under them is what they are worth at your purchase price in MDM.") },
+  { key: "processing", label: msg("Being prepared"), help: msg("Units MDM has taken for orders it is preparing to send.") },
+  { key: "inDelivery", label: msg("In delivery"), help: msg("Units in parcels on their way to your customers.") },
+  { key: "returning", label: msg("Coming back"), help: msg("Units in returned parcels still on their way back to MDM's warehouse.") },
+  { key: "lost", label: msg("Lost"), help: msg("Units MDM marked as lost, and what they were worth.") },
+  { key: "totalInbound", label: msg("Entered in total"), help: msg("Every unit that ever entered MDM's warehouse for you, whatever happened to it after.") },
 ];
 
 const STOCK_COLUMNS = [
@@ -323,14 +323,14 @@ function Stock({ data }: { data: Overview }) {
   const cap = data.capital;
   return (
     <Card className="min-w-0">
-      <CardHeader title={t("Stock at MDM")} description={t("Units in MDM's warehouse and on the road, per product, and what they are worth at your purchase price in MDM.")} actions={<Updated at={data.parts.stock?.okAt} />} />
+      <CardHeader title={t("Stock at MDM")} help={t("MDM's counts per product, read with every sync. The Profit tracker takes its stock from here: Available at MDM by default, changed per product in Stock to count.")} description={t("Units in MDM's warehouse and on the road, per product, and what they are worth at your purchase price in MDM.")} actions={<Updated at={data.parts.stock?.okAt} />} />
       <div className="flex flex-col gap-4 px-5 pb-5">
         <PartNote part="stock" state={data.parts.stock} hasData={data.stock.length > 0} />
         {cap ? (
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             {CAPITAL.map((c, i) => (
               <div key={c.key} className={cn("flex min-w-0 flex-col gap-1 rounded-2xl p-3", i === 0 ? "bg-brand glow" : "bg-surface-2")}>
-                <span className={cn("text-[11px] font-semibold", i === 0 ? "text-white/85" : "text-muted")}>{t(c.label)}</span>
+                <span className={cn("text-[11px] font-semibold", i === 0 ? "text-white/85" : "text-muted")}><Term label={t(c.label)} definition={t(c.help)} iconClassName={i === 0 ? "text-white/70 hover:text-white" : undefined} /></span>
                 <span className="num text-lg font-extrabold leading-tight">{count(cap.buckets[c.key].units)} <span className={cn("text-xs font-semibold", i === 0 ? "text-white/80" : "text-subtle")}>{t("units")}</span></span>
                 <Money value={cap.buckets[c.key].value} currency={cap.currency} className={cn("truncate text-xs", i === 0 ? "text-white/90" : "text-muted")} />
               </div>
@@ -403,7 +403,7 @@ function Arrivals({ data }: { data: Overview }) {
   const { t, tx, date } = useT();
   return (
     <Card className="min-w-0">
-      <CardHeader title={t("Stock arrivals")} description={t("Stock you sent into MDM's warehouse: what was expected and what MDM received.")} actions={<Updated at={data.parts.arrivals?.okAt} />} />
+      <CardHeader title={t("Stock arrivals")} help={t("The latest 30. Expected is what you declared, Received what MDM counted in, Damaged what it found broken. Check any gap with MDM.")} description={t("Stock you sent into MDM's warehouse: what was expected and what MDM received.")} actions={<Updated at={data.parts.arrivals?.okAt} />} />
       <div className="flex flex-col gap-3 px-5 pb-5">
         <PartNote part="arrivals" state={data.parts.arrivals} hasData={data.arrivals.length > 0} />
         {data.arrivals.length ? (
@@ -455,7 +455,7 @@ function Prices({ data }: { data: Overview }) {
   const shown = all || q ? rows : rows.slice(0, 8);
   return (
     <Card className="min-w-0">
-      <CardHeader title={t("MDM price list")} description={t("What MDM charges you: call center, fulfilment and delivery per wilaya.")} actions={<Updated at={data.parts.prices?.okAt} />} />
+      <CardHeader title={t("MDM price list")} help={t("Read about once a day. Profit doesn't use this list: it takes each parcel's fees from MDM, and other costs from your products or Settings > Economics & currencies.")} description={t("What MDM charges you: call center, fulfilment and delivery per wilaya.")} actions={<Updated at={data.parts.prices?.okAt} />} />
       <div className="flex flex-col gap-4 px-5 pb-5">
         <PartNote part="prices" state={data.parts.prices} hasData={!!p} />
         {p ? (
@@ -463,7 +463,7 @@ function Prices({ data }: { data: Overview }) {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {p.callCenter ? (
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle">{t("Call center")}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle"><Term label={t("Call center")} definition={t("What MDM's call center charges to call your customers and confirm their orders. Only the prices MDM set for you are shown.")} /></span>
                   <PriceRow label={t("Per order received")} value={p.callCenter.perLead} currency={p.currency} />
                   <PriceRow label={t("Per confirmed order")} value={p.callCenter.perConfirmed} currency={p.currency} />
                   <PriceRow label={t("Per delivered order")} value={p.callCenter.perDelivered} currency={p.currency} />
@@ -472,7 +472,7 @@ function Prices({ data }: { data: Overview }) {
               ) : null}
               {p.fulfilment ? (
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle">{t("Fulfilment")}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle"><Term label={t("Fulfilment")} definition={t("What MDM charges to pick, pack and send your parcels from its warehouse, plus extra for orders with many items.")} /></span>
                   <PriceRow label={t("Per parcel sent")} value={p.fulfilment.perDispatched} currency={p.currency} />
                   <PriceRow label={t("Per parcel delivered")} value={p.fulfilment.perDelivered} currency={p.currency} />
                   <PriceRow label={p.fulfilment.maxItems ? t("Per item above {n}", { n: p.fulfilment.maxItems }) : t("Per extra item")} value={p.fulfilment.extraPerItem} currency={p.currency} />
@@ -482,7 +482,7 @@ function Prices({ data }: { data: Overview }) {
             {p.delivery.length ? (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle">{t("Delivery, per wilaya")}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle"><Term label={t("Delivery, per wilaya")} definition={t("Per parcel, by the customer's wilaya. Home: home delivery. Stop desk: the customer collects it at a desk. Return: the parcel comes back. Exchange: an item is swapped.")} /></span>
                   <label className="relative w-full sm:w-56">
                     <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" aria-hidden="true" />
                     <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Find a wilaya")} aria-label={t("Find a wilaya")} className="ps-9" />
@@ -609,7 +609,7 @@ export function MoneyView() {
               </>
             ) : (
               <Card className="p-5">
-                <div className="flex items-center gap-2 pb-3 text-[17px] font-bold"><Wallet className="size-5 text-brand" aria-hidden="true" />{t("Wallet")}</div>
+                <div className="flex items-center gap-2 pb-3 text-[17px] font-bold"><Wallet className="size-5 text-brand" aria-hidden="true" />{t("Wallet")}<HelpTip label={t("Wallet")}>{t("What MDM owes you and has paid you: ready to collect, on hold and paid. It shows once a sync can read your MDM wallet.")}</HelpTip></div>
                 <PartNote part="wallet" state={data.parts.wallet} hasData={false} />
               </Card>
             )}

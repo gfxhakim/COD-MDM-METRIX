@@ -12,7 +12,7 @@ import { AR } from "../src/i18n/ar";
  * Flows 12–20 came later: Meta ads, campaigns, exporting orders, custom syncs,
  * MDM money and stock, the Profit tracker, repeating expenses, the Meta ads filter,
  * and the red dock with every page fitting a phone. Flow 21 deletes data from Settings > Your data.
- * Flow 22 switches to Arabic.
+ * Flow 22 switches to Arabic. Flows 23-24 open an ⓘ explanation by tap on a phone and by hover.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -126,7 +126,7 @@ test.describe("new workspace", () => {
 
     // A dollar rate saved in Settings fills in when an expense is paid in USD.
     await page.goto("/settings?tab=economics");
-    await page.getByLabel("Add a currency").selectOption("USD");
+    await page.getByLabel("Add a currency", { exact: true }).selectOption("USD");
     await page.locator("#fx-USD").fill("250");
     await page.getByRole("button", { name: "Save exchange rates" }).click();
     await expect(page.getByText("Exchange rates saved")).toBeVisible();
@@ -161,7 +161,7 @@ test.describe("new workspace", () => {
     await page.goto(matrix);
     const row = page.locator("tr", { hasText: "cr_e2e_hook_01" });
     await expect(row).toContainText("2,700");
-    await page.getByLabel("Show amounts in").selectOption("USD");
+    await page.getByLabel("Show amounts in", { exact: true }).selectOption("USD");
     await expect(row).toContainText(/USD.10\.80/); // 2 700 DZD at 250
 
     // The pick follows this browser to every page; the original entry stays visible.
@@ -169,7 +169,7 @@ test.describe("new workspace", () => {
     const plan = page.locator("tr", { hasText: "E2E store plan" });
     await expect(plan).toContainText(/USD.29 × 250/);
     await expect(plan).not.toContainText("7,250");
-    await page.getByLabel("Show amounts in").selectOption("DZD");
+    await page.getByLabel("Show amounts in", { exact: true }).selectOption("DZD");
     await expect(plan).toContainText("7,250");
 
     // The workspace default, for everyone, in Settings.
@@ -214,7 +214,7 @@ test.describe("new workspace", () => {
     const rent = page.getByRole("listitem").filter({ hasText: "E2E office rent" });
     await expect(rent).toContainText("Stopped");
     await expect(rent).toContainText("30,000");
-    await page.getByLabel("Category").selectOption({ label: "E2E Office" });
+    await page.getByLabel("Category", { exact: true }).selectOption({ label: "E2E Office" });
     await expect(page.getByText("Nothing matches")).toBeVisible();
     await expect(rent).toBeVisible();
 
@@ -247,14 +247,14 @@ test.describe("new workspace", () => {
     await expect(pay).toHaveCount(0);
     await page.getByRole("button", { name: "New expense" }).first().click();
     await pay.getByRole("button", { name: "Employee pay" }).click();
-    await expect(pay.getByLabel("Who is paid")).toHaveValue("");
-    await pay.getByLabel("Who is paid").fill("E2E confirmation agent");
+    await expect(pay.getByLabel("Who is paid", { exact: true })).toHaveValue("");
+    await pay.getByLabel("Who is paid", { exact: true }).fill("E2E confirmation agent");
     await pay.locator("#ed").fill("2026-09-16");
     await pay.locator("#eend").fill("2026-09-30");
     await pay.locator("#ea").fill("30000");
     await pay.getByRole("button", { name: "Add repeating expense" }).click();
     await expect(pay).toHaveCount(0);
-    await page.getByLabel("Category").selectOption({ label: "All categories" });
+    await page.getByLabel("Category", { exact: true }).selectOption({ label: "All categories" });
     const mine = page.getByRole("listitem").filter({ hasText: "My pay" }).filter({ hasText: "60,000" });
     const agent = page.getByRole("listitem").filter({ hasText: "E2E confirmation agent" });
     await expect(mine).toBeVisible();
@@ -316,7 +316,7 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByText("Expected 350")).toBeVisible();
     // Every wilaya shows under its one Arabic name, and its French name still finds it.
     await expect(page.locator("tr", { hasText: "الجزائر" })).toBeVisible();
-    await page.getByLabel("Find a wilaya").fill("Oran");
+    await page.getByLabel("Find a wilaya", { exact: true }).fill("Oran");
     await expect(page.locator("tr", { hasText: "وهران" })).toBeVisible();
     await expect(page.locator("tr", { hasText: "الجزائر" })).toHaveCount(0);
 
@@ -324,21 +324,21 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     // own: the demo owner would reach the sign-in limit.)
     await page.goto("/syncs");
     const card = page.getByRole("region", { name: "What to bring from MDM" });
-    await expect(card.getByLabel("New products MDM sends")).toHaveValue("bring");
+    await expect(card.getByLabel("New products MDM sends", { exact: true })).toHaveValue("bring");
     // The demo's MDM stock lists the corrector.
-    const bring = card.getByLabel("Bring in Posture Corrector Pro");
+    const bring = card.getByLabel("Bring in Posture Corrector Pro", { exact: true });
     await bring.selectOption("no");
     await expect(page.getByText("Saved. It applies from the next sync.")).toBeVisible();
     await expect(card.getByText("Not brought in")).toBeVisible();
-    await expect(card.getByLabel("How far back for Posture Corrector Pro")).toBeDisabled();
+    await expect(card.getByLabel("How far back for Posture Corrector Pro", { exact: true })).toBeDisabled();
 
     await bring.selectOption("yes");
     await expect(page.getByText("Saved. The next sync brings in its orders.")).toBeVisible();
     await expect(card.getByText("The next sync reads every MDM order once")).toBeVisible();
-    await card.getByLabel("How far back for Posture Corrector Pro").selectOption("30");
+    await card.getByLabel("How far back for Posture Corrector Pro", { exact: true }).selectOption("30");
     await expect(card.getByText(/^From \d+ \w+/)).toBeVisible();
-    await expect(card.getByLabel("First day for Posture Corrector Pro")).toBeVisible();
-    await card.getByLabel("How far back for Posture Corrector Pro").selectOption("all");
+    await expect(card.getByLabel("First day for Posture Corrector Pro", { exact: true })).toBeVisible();
+    await card.getByLabel("How far back for Posture Corrector Pro", { exact: true }).selectOption("all");
     await expect(card.getByText(/^From \d+ \w+/)).toHaveCount(0);
   });
 
@@ -350,10 +350,10 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     // The lamp's campaign isn't linked, so its spend counts for no product: it is listed to link here.
     await expect(page.getByText("Ads not linked to a product")).toBeVisible();
     await expect(page.locator("tr", { hasText: "LED Night Lamp" })).toContainText("No ads linked");
-    await page.getByLabel("Product for LN-03 | Conversions | DZ").selectOption({ label: "LED Night Lamp" });
+    await page.getByLabel("Product for LN-03 | Conversions | DZ", { exact: true }).selectOption({ label: "LED Night Lamp" });
     await expect(page.getByText("Its ad spend now counts for LED Night Lamp")).toBeVisible();
     // Only the demo's imported spend with no campaign ID is left, and it has nothing to link.
-    await expect(page.getByLabel("Product for LN-03 | Conversions | DZ")).toHaveCount(0);
+    await expect(page.getByLabel("Product for LN-03 | Conversions | DZ", { exact: true })).toHaveCount(0);
     await expect(page.getByText("comes from ads with no known campaign")).toBeVisible();
     await expect(page.locator("tr", { hasText: "LED Night Lamp" })).not.toContainText("No ads linked");
     await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
@@ -389,13 +389,13 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(card.getByText("Real benefit").first()).toBeVisible();
     await expect(card.getByRole("list", { name: "From the benefit before ads to the real benefit" })).toContainText("Ad spend");
     // Rates and fees come from the data, folded until someone wants to change them.
-    await expect(card.getByLabel("Delivered (of shipped)")).toHaveCount(0);
+    await expect(card.getByLabel("Delivered (of shipped)", { exact: true })).toHaveCount(0);
     await card.getByRole("button", { name: "Change rates and fees" }).click();
-    await card.getByLabel("Delivered (of shipped)").fill("0");
+    await card.getByLabel("Delivered (of shipped)", { exact: true }).fill("0");
     await expect(card.getByRole("alert")).toContainText("never sells");
-    await card.getByLabel("Delivered (of shipped)").fill("70");
+    await card.getByLabel("Delivered (of shipped)", { exact: true }).fill("70");
 
-    await card.getByLabel("Stock to count").selectOption("TYPED");
+    await card.getByLabel("Stock to count", { exact: true }).selectOption("TYPED");
     await card.getByLabel("Units", { exact: true }).fill("500");
     await card.getByRole("button", { name: "Save for this product" }).click();
     await expect(page.getByText("Saved for Posture Corrector Pro")).toBeVisible();
@@ -445,14 +445,14 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await page.goto("/campaigns");
     await expect(page.getByRole("heading", { name: "Ad accounts & campaigns" })).toBeVisible();
     // The seeded spend came from a CSV, so its campaigns have no ad account.
-    await page.getByLabel("Ad account").selectOption("__none__");
+    await page.getByLabel("Ad account", { exact: true }).selectOption("__none__");
     const row = page.locator("tr", { hasText: "camp_LN-03" });
     await expect(row).toContainText(name);
     await page.getByRole("button", { name: `Show ads of ${name}` }).click();
     await expect(page.locator("tr", { hasText: "cr_ln_story_02" })).toBeVisible();
 
     // Linked to another product here, its lamp orders are flagged.
-    await page.getByLabel(`Product for ${name}`).selectOption({ label: "Mini Blender Go" });
+    await page.getByLabel(`Product for ${name}`, { exact: true }).selectOption({ label: "Mini Blender Go" });
     await expect(page.getByText("Campaign linked")).toBeVisible();
     await expect(row).toContainText("for another product");
 
@@ -465,8 +465,8 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Product updated")).toBeVisible();
     await page.goto("/campaigns");
-    await page.getByLabel("Ad account").selectOption("__none__");
-    await expect(page.getByLabel(`Product for ${name}`)).toHaveValue("");
+    await page.getByLabel("Ad account", { exact: true }).selectOption("__none__");
+    await expect(page.getByLabel(`Product for ${name}`, { exact: true })).toHaveValue("");
   });
 
   test("10. review an unmatched parcel", async ({ page }) => {
@@ -646,7 +646,7 @@ test("21. delete imported files from Settings > Your data", async ({ page }) => 
   const dialog = page.getByRole("dialog", { name: "Delete every imported file?" });
   const confirm = dialog.getByRole("button", { name: "Delete", exact: true });
   await expect(confirm).toBeDisabled();
-  await dialog.getByLabel("Type DELETE to confirm").fill("delete");
+  await dialog.getByLabel("Type DELETE to confirm", { exact: true }).fill("delete");
   await confirm.click();
   await expect(page.getByText("Deleted every imported file")).toBeVisible();
   await expect(data.getByText("No imported files")).toBeVisible();
@@ -695,4 +695,33 @@ test("22. switch to Arabic: pages turn right to left, fit a phone, and the accou
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
   await page.goto("/profit");
   await expect(page.getByRole("heading", { name: "Profit tracker", level: 1 })).toBeVisible();
+});
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("23. tap an ⓘ to read what a field is for, tap again or elsewhere to hide it", async ({ page }) => {
+    await page.goto("/signup");
+    const tip = page.getByRole("tooltip").filter({ hasText: "It names your workspace" });
+    const info = page.getByRole("button", { name: "What is Business name?" });
+    await info.tap();
+    await expect(tip).toBeVisible();
+    await info.tap();
+    await expect(tip).toBeHidden();
+    await info.tap();
+    await expect(tip).toBeVisible();
+    await page.getByRole("heading", { level: 1 }).tap();
+    await expect(tip).toBeHidden();
+    // The field itself still takes the tap.
+    await page.getByLabel("Business name", { exact: true }).tap();
+    await expect(page.getByLabel("Business name", { exact: true })).toBeFocused();
+  });
+});
+
+test("24. hover an ⓘ on a computer to read it", async ({ page }) => {
+  await page.goto("/signup");
+  await page.getByRole("button", { name: "What is Password?" }).hover();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Pick one you don't use on other sites" })).toBeVisible();
+  await page.getByRole("button", { name: "What is Password?" }).click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Pick one you don't use on other sites" })).toBeVisible();
 });

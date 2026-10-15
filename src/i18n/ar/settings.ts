@@ -261,7 +261,7 @@ const ar: Dict = {
   "Replace token": "استبدال رمز الوصول",
   "Add Business Manager": "إضافة Business Manager",
   "Ad accounts": "الحسابات الإعلانية",
-  "Every ad account your tokens can read is synced. Switch one off to leave its spend out.": "كل حساب إعلاني تستطيع رموز الوصول قراءته تتم مزامنته. ألغِ تحديد أي حساب لتستبعد مصاريفه.",
+  "Every ad account your tokens can read is synced. Switch one off to stop reading its spend; spend already read still counts.": "كل حساب إعلاني تستطيع رموز الوصول قراءته تتم مزامنته. أوقف أي حساب لتتوقف قراءة مصاريفه؛ المصاريف التي قُرئت من قبل تبقى محسوبة.",
   Sync: "مزامنة",
   Account: "الحساب",
   "Meta status": "الحالة في Meta",
