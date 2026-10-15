@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { AR } from "../src/i18n/ar";
 
 /**
  * The spec's 11 critical E2E flows, in order, against a production build.
@@ -11,6 +12,7 @@ import { expect, test, type Page } from "@playwright/test";
  * Flows 12–20 came later: Meta ads, campaigns, exporting orders, custom syncs,
  * MDM money and stock, the Profit tracker, repeating expenses, the Meta ads filter,
  * and the red dock with every page fitting a phone. Flow 21 deletes data from Settings > Your data.
+ * Flow 22 switches to Arabic.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -655,4 +657,42 @@ test("21. delete imported files from Settings > Your data", async ({ page }) => 
   await page.goto("/settings?tab=data");
   await page.waitForLoadState("networkidle");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
+});
+
+test("22. switch to Arabic: pages turn right to left, fit a phone, and the account remembers it", async ({ page }) => {
+  const me = { name: "E2E Arabic", email: `e2e-ar-${stamp}@test.local`, password: "e2e-password-123", business: `E2E Arabic ${stamp}` };
+  await page.goto("/signup");
+  await page.fill("#name", me.name);
+  await page.fill("#email", me.email);
+  await page.fill("#password", me.password);
+  await page.fill("#workspaceName", me.business);
+  await page.click("button:has-text('Create workspace')");
+  await page.waitForURL("/");
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+
+  await page.getByRole("button", { name: "العربية" }).click();
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ar");
+  for (const [path, title] of [["/profit", "Profit tracker"], ["/expenses", "Expenses"], ["/imports", "Imports"], ["/settings", "Settings"]]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: AR[title], level: 1 })).toBeVisible();
+  }
+
+  // Every page still fits a phone, right to left.
+  await page.setViewportSize({ width: 360, height: 780 });
+  for (const path of ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports", "/settings"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    const wider = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(wider, `${path} in Arabic is wider than a 360px phone`).toBe(0);
+  }
+
+  // Signing in again from a fresh browser keeps Arabic: the account remembers it.
+  await page.context().clearCookies();
+  await signIn(page, me.email, me.password);
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await page.getByRole("button", { name: "English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+  await page.goto("/profit");
+  await expect(page.getByRole("heading", { name: "Profit tracker", level: 1 })).toBeVisible();
 });

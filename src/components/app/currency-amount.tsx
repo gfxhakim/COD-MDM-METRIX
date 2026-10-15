@@ -1,6 +1,8 @@
 "use client";
 
 import { Input, Select } from "@/components/ui/form";
+import { useT } from "@/i18n/client";
+import { englishT, type TFunction } from "@/i18n/core";
 import { CURRENCIES, convertMinor, formatMoney, parseToMinor } from "@/lib/money";
 import { MoneyInput } from "./money-input";
 
@@ -31,6 +33,7 @@ export function CurrencyAmountInput({ id, value, onChange, workspaceCurrency, ra
   required?: boolean;
   disabled?: boolean;
 }) {
+  const { t } = useT();
   const foreign = value.currency !== workspaceCurrency;
   let converted: string | null = null;
   if (foreign && value.amount && Number(value.rate) > 0) {
@@ -48,7 +51,7 @@ export function CurrencyAmountInput({ id, value, onChange, workspaceCurrency, ra
         </div>
         <Select
           id={`${id}-currency`}
-          aria-label="Currency"
+          aria-label={t("Currency")}
           className="w-[5.5rem] shrink-0"
           value={value.currency}
           disabled={disabled}
@@ -63,22 +66,25 @@ export function CurrencyAmountInput({ id, value, onChange, workspaceCurrency, ra
       {foreign ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
           <label htmlFor={`${id}-rate`}>1 {value.currency} =</label>
-          <Input id={`${id}-rate`} inputMode="decimal" className="num h-8 w-24" value={value.rate} onChange={(e) => onChange({ ...value, rate: e.target.value.replace(/[^\d.]/g, "") })} placeholder="e.g. 250" required disabled={disabled} />
+          <Input id={`${id}-rate`} inputMode="decimal" className="num h-8 w-24" value={value.rate} onChange={(e) => onChange({ ...value, rate: e.target.value.replace(/[^\d.]/g, "") })} placeholder={t("e.g. 250")} required disabled={disabled} />
           <span>{workspaceCurrency}</span>
-          {converted ? <span className="num ml-auto text-fg">= {converted}</span> : null}
+          {converted ? <span className="num ms-auto text-fg">= {converted}</span> : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-/** What the API takes: minor units of the chosen currency, plus the rate when it isn't the workspace's. */
-export function parseCurrencyAmount(v: CurrencyAmount, workspaceCurrency: string, label = "Amount") {
+/**
+ * What the API takes: minor units of the chosen currency, plus the rate when it isn't the workspace's.
+ * `label` names the amount in the error (already translated); `t` translates the errors.
+ */
+export function parseCurrencyAmount(v: CurrencyAmount, workspaceCurrency: string, label?: string, t: TFunction = englishT) {
   const amount = parseToMinor(v.amount || "0", v.currency);
-  if (amount < 0) throw new Error(`${label} cannot be negative`);
+  if (amount < 0) throw new Error(t("{label} cannot be negative", { label: label ?? t("Amount") }));
   if (v.currency === workspaceCurrency) return { amount, currency: undefined, rate: null };
   const rate = Number(v.rate);
-  if (!(rate > 0)) throw new Error(`Enter how many ${workspaceCurrency} one ${v.currency} costs`);
+  if (!(rate > 0)) throw new Error(t("Enter how many {book} one {currency} costs", { book: workspaceCurrency, currency: v.currency }));
   return { amount, currency: v.currency as (typeof CURRENCIES)[number], rate };
 }
 

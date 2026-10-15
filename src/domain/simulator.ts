@@ -11,6 +11,7 @@
  *   perLead    = confirm × ship × perShipped − K × (basis is lead ? 1 : confirm)
  */
 import { z } from "zod";
+import { msg } from "@/i18n/core";
 
 const money = z.number().int().min(0).max(1_000_000_000_00);
 const prob = z.number().min(0).max(1);
@@ -41,7 +42,7 @@ export const simulatorInputSchema = z
     const lost = v.model === "DETAILED" ? v.lostProbability : 0;
     const q = v.returnIsComplement ? 0 : v.returnProbability;
     if (v.deliveryProbability + q + lost > 1.000001) {
-      ctx.addIssue({ code: "custom", path: ["returnProbability"], message: "Delivery + return + lost probabilities cannot exceed 100%" });
+      ctx.addIssue({ code: "custom", path: ["returnProbability"], message: msg("Delivery + return + lost probabilities cannot exceed 100%") });
     }
   });
 
@@ -78,9 +79,10 @@ export function simulate(input: SimulatorInput): SimulatorResult {
   const v = simulatorInputSchema.parse(input);
   const { value, q } = contribution(v, v.deliveryProbability);
   const assumptions: string[] = [];
-  if (v.returnIsComplement) assumptions.push(v.model === "DETAILED" ? "Return probability Q = 1 − D − L (every shipped parcel that is not delivered or lost is returned)." : "Return probability Q = 1 − D (every shipped parcel that is not delivered is returned).");
-  if (v.model === "DEFAULT") assumptions.push("Default formula: forward shipping is charged on delivered parcels only; call-center cost K is charged once per order.");
-  else assumptions.push(`Per placed lead; call-center cost charged per ${v.callCenterBasis === "PLACED_LEAD" ? "placed lead" : "confirmed order"}.`);
+  // English texts marked with msg(): the simulator page shows them translated.
+  if (v.returnIsComplement) assumptions.push(v.model === "DETAILED" ? msg("Return probability Q = 1 − D − L (every shipped parcel that is not delivered or lost is returned).") : msg("Return probability Q = 1 − D (every shipped parcel that is not delivered is returned)."));
+  if (v.model === "DEFAULT") assumptions.push(msg("Default formula: forward shipping is charged on delivered parcels only; call-center cost K is charged once per order."));
+  else assumptions.push(v.callCenterBasis === "PLACED_LEAD" ? msg("Per placed lead; call-center cost charged per placed lead.") : msg("Per placed lead; call-center cost charged per confirmed order."));
 
   const breakevenCpa = value;
   const targetCpa = value - v.targetProfitPerOrder;

@@ -12,8 +12,8 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { useT } from "@/i18n/client";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
-import { formatDate } from "@/lib/utils";
 
 type Group = { externalCreativeId: string | null; rows: number; spend: number; from: Date | null; to: Date | null; adName: string | null; campaignName: string | null };
 
@@ -21,6 +21,7 @@ function ResolveDialog({ group, currency, onClose }: { group: Group & { external
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
+  const { t, tx } = useT();
   const creatives = useQuery(trpc.creatives.list.queryOptions());
   const products = useQuery(trpc.products.list.queryOptions({ includeInactive: false }));
   const [mode, setMode] = React.useState<"create" | "link">("create");
@@ -32,7 +33,7 @@ function ResolveDialog({ group, currency, onClose }: { group: Group & { external
     trpc.spendReview.resolve.mutationOptions({
       onSuccess: (r) => {
         for (const key of [trpc.spendReview, trpc.creatives, trpc.reports]) qc.invalidateQueries({ queryKey: key.pathKey() });
-        toast("success", `${r.rows} spend rows matched${r.relinkedOrders ? `, ${r.relinkedOrders} orders linked` : ""}`);
+        toast("success", r.relinkedOrders ? t("{n} spend rows matched, {orders} orders linked", { n: r.rows, orders: r.relinkedOrders }) : t("{n} spend rows matched", { n: r.rows }));
         onClose();
       },
       onError: (e) => setError(errorMessage(e)),
@@ -41,7 +42,7 @@ function ResolveDialog({ group, currency, onClose }: { group: Group & { external
   const options = creatives.data ?? [];
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Match unmatched spend" description={<>ID <span className="font-mono">{group.externalCreativeId}</span> · <Money value={group.spend} currency={currency} /> across {group.rows} rows</>}>
+      <DialogContent title={t("Match unmatched spend")} description={tx("ID {id} · {amount} across {n} rows", { id: <span className="font-mono">{group.externalCreativeId}</span>, amount: <Money value={group.spend} currency={currency} />, n: group.rows })}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -49,24 +50,24 @@ function ResolveDialog({ group, currency, onClose }: { group: Group & { external
             m.mutate(mode === "create" ? { externalCreativeId: group.externalCreativeId, create: { name, productId: productId || null } } : { externalCreativeId: group.externalCreativeId, creativeId });
           }}
         >
-          <Field label="Action" htmlFor="um"><Select id="um" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}><option value="create">Create a creative for this ID</option><option value="link">Link to an existing creative</option></Select></Field>
+          <Field label={t("Action")} htmlFor="um"><Select id="um" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}><option value="create">{t("Create a creative for this ID")}</option><option value="link">{t("Link to an existing creative")}</option></Select></Field>
           {mode === "create" ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Name" htmlFor="un"><Input id="un" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} /></Field>
-              <Field label="Product" htmlFor="up"><Select id="up" value={productId} onChange={(e) => setProductId(e.target.value)}><option value="">Assign later</option>{products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+              <Field label={t("Name")} htmlFor="un"><Input id="un" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} /></Field>
+              <Field label={t("Product")} htmlFor="up"><Select id="up" value={productId} onChange={(e) => setProductId(e.target.value)}><option value="">{t("Assign later")}</option>{products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             </div>
           ) : (
-            <Field label="Creative" htmlFor="uc" hint="Use this when the ad was renamed or the ID differs from the utm_content on orders.">
+            <Field label={t("Creative")} htmlFor="uc" hint={t("Use this when the ad was renamed or the ID differs from the utm_content on orders.")}>
               <Select id="uc" required value={creativeId} onChange={(e) => setCreativeId(e.target.value)}>
-                <option value="">Choose creative…</option>
+                <option value="">{t("Choose creative…")}</option>
                 {options.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.externalCreativeId} ({c.externalCreativeId})</option>)}
               </Select>
             </Field>
           )}
           {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" variant="primary" disabled={m.isPending}>Match spend</Button>
+            <Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button>
+            <Button type="submit" variant="primary" disabled={m.isPending}>{t("Match spend")}</Button>
           </div>
         </form>
       </DialogContent>
@@ -76,6 +77,7 @@ function ResolveDialog({ group, currency, onClose }: { group: Group & { external
 
 export function UnmatchedSpend({ currency }: { currency: string }) {
   const trpc = useTRPC();
+  const { t, tx, date } = useT();
   const canWrite = useCan("catalog.write");
   const q = useQuery(trpc.spendReview.unmatched.queryOptions());
   const [resolving, setResolving] = React.useState<(Group & { externalCreativeId: string }) | null>(null);
@@ -87,24 +89,24 @@ export function UnmatchedSpend({ currency }: { currency: string }) {
   return (
     <Card>
       <CardHeader
-        title="Unmatched spend"
-        description={<>Spend whose creative ID matches no creative. It still counts against business profit, but not against any creative. Total: <Money value={total} currency={currency} className="text-warning" /></>}
+        title={t("Unmatched spend")}
+        description={tx("Spend whose creative ID matches no creative. It still counts against business profit, but not against any creative. Total: {total}", { total: <Money value={total} currency={currency} className="text-warning" /> })}
       />
       <div className="overflow-x-auto">
         <Table>
-          <THead><tr><Th>Creative / ad ID</Th><Th>Ad</Th><Th>Campaign</Th><Th>Dates</Th><Th className="text-right">Rows</Th><Th className="text-right">Spend</Th><Th><span className="sr-only">Actions</span></Th></tr></THead>
+          <THead><tr><Th>{t("Creative / ad ID")}</Th><Th>{t("Ad")}</Th><Th>{t("Campaign")}</Th><Th>{t("Dates")}</Th><Th className="text-end">{t("Rows")}</Th><Th className="text-end">{t("Spend")}</Th><Th><span className="sr-only">{t("Actions")}</span></Th></tr></THead>
           <tbody>
             {groups.map((g) => (
               <Tr key={g.externalCreativeId ?? "none"}>
-                <Td className="font-mono text-xs">{g.externalCreativeId ?? <span className="text-muted">No ID in export</span>}</Td>
+                <Td className="font-mono text-xs">{g.externalCreativeId ?? <span className="text-muted">{t("No ID in export")}</span>}</Td>
                 <Td className="max-w-48 truncate">{g.adName ?? "—"}</Td>
                 <Td className="max-w-48 truncate text-muted">{g.campaignName ?? "—"}</Td>
-                <Td className="whitespace-nowrap text-xs text-muted">{formatDate(g.from)} – {formatDate(g.to)}</Td>
-                <Td className="num text-right">{g.rows}</Td>
-                <Td className="text-right"><Money value={g.spend} currency={currency} /></Td>
+                <Td className="whitespace-nowrap text-xs text-muted">{date(g.from)} – {date(g.to)}</Td>
+                <Td className="num text-end">{g.rows}</Td>
+                <Td className="text-end"><Money value={g.spend} currency={currency} /></Td>
                 <Td>
                   {canWrite && g.externalCreativeId ? (
-                    <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => setResolving(g as Group & { externalCreativeId: string })}><Link2 /> Match</Button></div>
+                    <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => setResolving(g as Group & { externalCreativeId: string })}><Link2 /> {t("Match")}</Button></div>
                   ) : null}
                 </Td>
               </Tr>

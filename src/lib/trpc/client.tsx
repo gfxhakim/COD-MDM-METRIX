@@ -6,6 +6,7 @@ import { createTRPCContext } from "@trpc/tanstack-react-query";
 import { useState } from "react";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/trpc/root";
+import { currentT } from "@/i18n/client";
 
 export const { TRPCProvider, useTRPC, useTRPCClient } = createTRPCContext<AppRouter>();
 
@@ -55,7 +56,8 @@ export function errorMessage(err: unknown): string {
       if (first) return `${first[0]}: ${first[1][0]}`;
       if (zod.formErrors?.[0]) return zod.formErrors[0];
     }
-    return err.message;
+    // Server messages are English; the ones with an Arabic text show in the picked language.
+    return currentT()(err.message);
   }
-  return err instanceof Error ? err.message : "Something went wrong";
+  return err instanceof Error ? currentT()(err.message) : currentT()("Something went wrong");
 }

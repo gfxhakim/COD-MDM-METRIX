@@ -17,25 +17,28 @@ import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Term } from "@/components/ui/tooltip";
+import { useT } from "@/i18n/client";
+import { msg, type TFunction } from "@/i18n/core";
 import { DEF } from "@/lib/definitions";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { useSlidingPill } from "@/components/ui/sliding-pill";
-import { cn, formatDateTime, formatPercent, timeAgo } from "@/lib/utils";
+import { cn, formatPercent } from "@/lib/utils";
 
 type RevenueView = "DELIVERED" | "REMITTED";
 type Day = { date: string; adSpend: number; placed: number; delivered: number };
+type DateFn = ReturnType<typeof useT>["date"];
 
 const DAY_MS = 86_400_000;
 const PRESETS = [
-  { days: 0, label: "All time" },
-  { days: 7, label: "7 days" },
-  { days: 30, label: "30 days" },
-  { days: 90, label: "90 days" },
+  { days: 0, label: msg("All time") },
+  { days: 7, label: msg("7 days") },
+  { days: 30, label: msg("30 days") },
+  { days: 90, label: msg("90 days") },
 ] as const;
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const utc = (date: string) => Date.parse(`${date}T00:00:00Z`);
-const dayLabel = (t: number, withYear = false) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC" });
+const dayLabel = (date: DateFn, ms: number, withYear = false) => date(new Date(ms), { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC" });
 const count = (n: number) => n.toLocaleString("en-US");
 const compact = (n: number) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 
@@ -56,28 +59,28 @@ function fillDays(series: Day[], from: string, to: string): Day[] {
 type Bucket = { label: string; long: string; placed: number; delivered: number; adSpend: number };
 
 /** Days, weeks or months, picked so the chart keeps a readable number of bars. */
-function bucketize(days: Day[]): { unit: "Daily" | "Weekly" | "Monthly"; buckets: Bucket[]; capped: boolean } {
+function bucketize(days: Day[], t: TFunction, date: DateFn): { unit: "Daily" | "Weekly" | "Monthly"; buckets: Bucket[]; capped: boolean } {
   if (days.length <= 14) {
-    return { unit: "Daily", capped: false, buckets: days.map((d) => ({ label: dayLabel(utc(d.date)), long: dayLabel(utc(d.date), true), placed: d.placed, delivered: d.delivered, adSpend: d.adSpend })) };
+    return { unit: "Daily", capped: false, buckets: days.map((d) => ({ label: dayLabel(date, utc(d.date)), long: dayLabel(date, utc(d.date), true), placed: d.placed, delivered: d.delivered, adSpend: d.adSpend })) };
   }
   const groups = new Map<string, Bucket>();
   const weekly = days.length <= 16 * 7;
   const start = utc(days[0].date);
   const years = new Set(days.map((d) => d.date.slice(0, 4))).size;
   for (const d of days) {
-    const t = utc(d.date);
+    const at = utc(d.date);
     let key: string;
     let label: string;
     let long: string;
     if (weekly) {
-      const first = start + Math.floor((t - start) / (7 * DAY_MS)) * 7 * DAY_MS;
+      const first = start + Math.floor((at - start) / (7 * DAY_MS)) * 7 * DAY_MS;
       key = String(first);
-      label = dayLabel(first);
-      long = `Week of ${dayLabel(first, true)}`;
+      label = dayLabel(date, first);
+      long = t("Week of {date}", { date: dayLabel(date, first, true) });
     } else {
       key = d.date.slice(0, 7);
-      label = new Date(t).toLocaleDateString("en-US", { month: "short", ...(years > 1 ? { year: "2-digit" } : {}), timeZone: "UTC" });
-      long = new Date(t).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+      label = date(new Date(at), { month: "short", ...(years > 1 ? { year: "2-digit" } : {}), timeZone: "UTC" });
+      long = date(new Date(at), { month: "long", year: "numeric", timeZone: "UTC" });
     }
     let b = groups.get(key);
     if (!b) {
@@ -129,11 +132,12 @@ function PanelTitle({ children, action, def }: { children: string; action?: Reac
 
 /** Ten blocks: the white ones are POAS, the dark tick is the target set in Settings. */
 function PoasBlocks({ poas, target }: { poas: number | null; target: number }) {
+  const { t } = useT();
   const top = target > 0 ? target * 2 : 1;
   const filled = poas === null ? 0 : Math.max(0, Math.min(10, Math.round((poas / top) * 10)));
   const tick = Math.max(0, Math.min(1, target / top)) * 78;
   return (
-    <svg width="78" height="34" viewBox="0 -4 78 38" role="img" aria-label={`POAS ${poas === null ? "not known yet" : poas.toFixed(2)}, target ${target.toFixed(2)}`} className="shrink-0">
+    <svg width="78" height="34" viewBox="0 -4 78 38" role="img" aria-label={t("POAS {poas}, target {target}", { poas: poas === null ? t("not known yet") : poas.toFixed(2), target: target.toFixed(2) })} className="shrink-0">
       {Array.from({ length: 10 }, (_, i) => (
         <rect key={i} x={i * 8} y={0} width={5.5} height={30} rx={2} fill={i < filled ? "#ffffff" : "rgb(255 255 255 / 0.28)"} className="animate-grow-y" style={{ animationDelay: `${200 + i * 45}ms` }} />
       ))}
@@ -142,8 +146,9 @@ function PoasBlocks({ poas, target }: { poas: number | null; target: number }) {
   );
 }
 
-/** One thin bar per day, for the last 30 days of the period. */
-function DayBars({ days, pick, label, unit }: { days: Day[]; pick: (d: Day) => number; label: string; unit: string }) {
+/** One thin bar per day, for the last 30 days of the period. `tip` words a day's bar. */
+function DayBars({ days, pick, label, tip }: { days: Day[]; pick: (d: Day) => number; label: string; tip: (day: string, n: string) => string }) {
+  const { date } = useT();
   const last = days.slice(-30);
   if (last.length < 2) return null;
   const max = Math.max(1, ...last.map(pick));
@@ -154,7 +159,7 @@ function DayBars({ days, pick, label, unit }: { days: Day[]; pick: (d: Day) => n
         const h = Math.max(2, (pick(d) / max) * 40);
         return (
           <rect key={d.date} x={i * pitch} y={40 - h} width={Math.max(1, pitch * 0.6)} height={h} rx={1.2} className="animate-grow-y" style={{ animationDelay: `${200 + i * 18}ms` }}>
-            <title>{`${dayLabel(utc(d.date))}: ${count(pick(d))} ${unit}`}</title>
+            <title>{tip(dayLabel(date, utc(d.date)), count(pick(d)))}</title>
           </rect>
         );
       })}
@@ -164,9 +169,10 @@ function DayBars({ days, pick, label, unit }: { days: Day[]; pick: (d: Day) => n
 
 /** Twenty squares: the red ones are the share of shipped parcels still on the road. */
 function TransitSquares({ inTransit, shipped }: { inTransit: number; shipped: number }) {
+  const { t } = useT();
   const red = shipped > 0 ? Math.round((inTransit / shipped) * 20) : 0;
   return (
-    <svg width="34" height="27" viewBox="0 0 34 27" role="img" aria-label={`${shipped > 0 ? formatPercent(inTransit / shipped, 0) : "0%"} of shipped parcels are still on the road`} className="shrink-0">
+    <svg width="34" height="27" viewBox="0 0 34 27" role="img" aria-label={t("{pct} of shipped parcels are still on the road", { pct: shipped > 0 ? formatPercent(inTransit / shipped, 0) : "0%" })} className="shrink-0">
       {Array.from({ length: 20 }, (_, i) => (
         <rect key={i} x={(i % 5) * 7} y={(3 - Math.floor(i / 5)) * 7} width={5.5} height={5.5} rx={1.2} fill={i < red ? "#e1182c" : "#ffd3d8"} className="animate-[fade-in_400ms_ease-out_backwards]" style={{ animationDelay: `${200 + i * 30}ms` }} />
       ))}
@@ -192,10 +198,14 @@ function KpiCard({ label, def, href, linkLabel, children, graphic, sub }: { labe
   );
 }
 
+/** How the data health row words an MDM connection that is not connected. */
+const CONNECTION: Record<string, string> = { NOT_CONFIGURED: msg("not configured"), UNTESTED: msg("untested"), ERROR: msg("error"), DISABLED: msg("disabled") };
+
 const SIGNAL = { SCALE: ["#e1182c", 4], WATCH: ["#d99a00", 2], BAD_TRAFFIC: ["#d99a00", 1], KILL: ["#141012", 1], INSUFFICIENT_DATA: ["#cfc6c8", 0] } as const;
 
 /** Signal bars and a word for a verdict. */
 function VerdictSignal({ verdict }: { verdict: VerdictValue | null }) {
+  const { t } = useT();
   if (!verdict) return <span className="text-subtle">—</span>;
   const [color, lit] = SIGNAL[verdict];
   return (
@@ -203,7 +213,7 @@ function VerdictSignal({ verdict }: { verdict: VerdictValue | null }) {
       <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true">
         {[0, 1, 2, 3].map((i) => <rect key={i} x={i * 5} width={3} height={12} rx={1.5} fill={i < lit ? color : "#e6dfe0"} />)}
       </svg>
-      <span className="text-[11px]">{VERDICT_LABEL[verdict]}</span>
+      <span className="text-[11px]">{t(VERDICT_LABEL[verdict])}</span>
     </span>
   );
 }
@@ -219,7 +229,7 @@ function HealthRow({ icon, label, value, href, tone }: { icon: React.ReactNode; 
     <Link href={href} className="press group flex items-center gap-3 rounded-2xl px-2 py-2 text-sm hover:bg-surface-2">
       <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 text-muted [&_svg]:size-4", tone === "negative" && "bg-negative-soft text-negative", tone === "warning" && "bg-warning-soft text-warning")}>{icon}</span>
       <span className="min-w-0 flex-1 text-muted">{label}</span>
-      <span className={cn("num text-right font-semibold", tone === "negative" && "text-negative", tone === "warning" && "text-warning")}>{value}</span>
+      <span className={cn("num text-end font-semibold", tone === "negative" && "text-negative", tone === "warning" && "text-warning")}>{value}</span>
       <ArrowUpRight className="size-3.5 shrink-0 text-subtle transition-[color,translate] duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand-strong" aria-hidden="true" />
     </Link>
   );
@@ -227,28 +237,32 @@ function HealthRow({ icon, label, value, href, tone }: { icon: React.ReactNode; 
 
 /** Orders placed and delivered per day, week or month, with the best one in red. */
 function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string }) {
-  const { unit, buckets, capped } = bucketize(days);
+  const { t, tx, date } = useT();
+  const { unit, buckets, capped } = bucketize(days, t, date);
   const [active, setActive] = React.useState<number | null>(null);
   const top = niceTop(Math.max(0, ...buckets.map((b) => Math.max(b.placed, b.delivered))));
   const best = buckets.reduce((bi, b, i) => (b.delivered > 0 && b.delivered >= (buckets[bi]?.delivered ?? 0) ? i : bi), -1);
   const spend = buckets.reduce((a, b) => a + b.adSpend, 0);
   const shown = active ?? best;
-  const word = unit === "Daily" ? "day" : unit === "Weekly" ? "week" : "month";
+  const n = buckets.length;
+  const title = unit === "Daily" ? t("Daily overview") : unit === "Weekly" ? t("Weekly overview") : t("Monthly overview");
+  const span = unit === "Daily" ? (n === 1 ? t("1 day") : t("{n} days", { n })) : unit === "Weekly" ? (n === 1 ? t("1 week") : t("{n} weeks", { n })) : n === 1 ? t("1 month") : t("{n} months", { n });
+  const bestLabel = unit === "Daily" ? t("Best day") : unit === "Weekly" ? t("Best week") : t("Best month");
   return (
     <Panel className="h-full gap-3">
-      <PanelTitle action={<span className="whitespace-nowrap rounded-full bg-surface-3 px-3 py-1 text-[11px] font-medium text-muted">{capped ? "Last 12 months" : `${buckets.length} ${word}${buckets.length === 1 ? "" : "s"}`}</span>}>{`${unit} overview`}</PanelTitle>
+      <PanelTitle action={<span className="whitespace-nowrap rounded-full bg-surface-3 px-3 py-1 text-[11px] font-medium text-muted">{capped ? t("Last 12 months") : span}</span>}>{title}</PanelTitle>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] border border-[#d8d2d3] bg-[#ebe8e8]" />Orders placed</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-[#b9b0b2]" />Delivered</span>
-        {best >= 0 ? <span className="flex items-center gap-1.5 text-brand-strong"><span className="size-2.5 rounded-[3px] bg-brand" />Best {word}</span> : null}
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] border border-[#d8d2d3] bg-[#ebe8e8]" />{t("Orders placed")}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-[#b9b0b2]" />{t("Delivered")}</span>
+        {best >= 0 ? <span className="flex items-center gap-1.5 text-brand-strong"><span className="size-2.5 rounded-[3px] bg-brand" />{bestLabel}</span> : null}
       </div>
       {buckets.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted">No orders in this period.</p>
+        <p className="py-10 text-center text-sm text-muted">{t("No orders in this period.")}</p>
       ) : (
         <>
           <div className="mt-2 flex min-h-44 flex-1 gap-2">
-            <div className="relative w-8 shrink-0 text-right text-[10px] text-subtle" aria-hidden="true">
-              {[1, 2 / 3, 1 / 3, 0].map((f) => <span key={f} className="absolute right-0 -translate-y-1/2" style={{ top: `${(1 - f) * 100}%` }}>{compact(top * f)}</span>)}
+            <div className="relative w-8 shrink-0 text-end text-[10px] text-subtle" aria-hidden="true">
+              {[1, 2 / 3, 1 / 3, 0].map((f) => <span key={f} className="absolute end-0 -translate-y-1/2" style={{ top: `${(1 - f) * 100}%` }}>{compact(top * f)}</span>)}
             </div>
             <div className="relative min-h-44 min-w-0 flex-1" onMouseLeave={() => setActive(null)}>
               {[0, 1 / 3, 2 / 3].map((f) => <div key={f} className="absolute inset-x-0 border-t border-[#f1eeee]" style={{ top: `${f * 100}%` }} aria-hidden="true" />)}
@@ -262,7 +276,7 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
                       key={b.label + i}
                       type="button"
                       className="relative h-full min-w-0 flex-1 cursor-default rounded-lg"
-                      aria-label={`${b.long}: ${count(b.placed)} orders placed, ${count(b.delivered)} delivered, ${fmt(b.adSpend)} on ads`}
+                      aria-label={t("{period}: {placed} orders placed, {delivered} delivered, {spend} on ads", { period: b.long, placed: count(b.placed), delivered: count(b.delivered), spend: fmt(b.adSpend) })}
                       onMouseEnter={() => setActive(i)}
                       onFocus={() => setActive(i)}
                       onBlur={() => setActive(null)}
@@ -281,23 +295,26 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
               </div>
             </div>
           </div>
-          <div className="flex gap-[3%] pl-10 text-center text-[10px] text-muted" aria-hidden="true">
+          <div className="flex gap-[3%] ps-10 text-center text-[10px] text-muted" aria-hidden="true">
             {buckets.map((b, i) => (
               <span key={b.label + i} className={cn("min-w-0 flex-1 whitespace-nowrap", i === best && "font-bold text-brand-strong", buckets.length > 5 && (buckets.length - 1 - i) % 2 === 1 && i !== best && "invisible")}>{b.label}</span>
             ))}
           </div>
           <p className="min-h-4 text-[11px] text-muted" aria-live="polite">
             {shown >= 0 && buckets[shown] ? (
-              <>
-                <span className="font-semibold text-fg">{buckets[shown].long}</span>: <span className="num">{count(buckets[shown].placed)}</span> placed, <span className="num">{count(buckets[shown].delivered)}</span> delivered, <span className="num">{fmt(buckets[shown].adSpend)}</span> on ads
-              </>
+              tx("{period}: {placed} placed, {delivered} delivered, {spend} on ads", {
+                period: <span className="font-semibold text-fg">{buckets[shown].long}</span>,
+                placed: <span className="num">{count(buckets[shown].placed)}</span>,
+                delivered: <span className="num">{count(buckets[shown].delivered)}</span>,
+                spend: <span className="num">{fmt(buckets[shown].adSpend)}</span>,
+              })
             ) : null}
           </p>
         </>
       )}
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-[#f1eeee] pt-3">
-        <span className="text-xs text-muted"><Term label="Ad spend" definition={DEF.adSpend} /></span>
-        <span className="num text-right text-sm font-bold">{fmt(spend)}</span>
+        <span className="text-xs text-muted"><Term label={t("Ad spend")} definition={t(DEF.adSpend)} /></span>
+        <span className="num text-end text-sm font-bold">{fmt(spend)}</span>
       </div>
     </Panel>
   );
@@ -305,6 +322,7 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
 
 /** Shipped parcels as one strip of thin bars: delivered, returned, still on the road, other. */
 function ParcelStrip({ delivered, returned, inTransit, other }: { delivered: number; returned: number; inTransit: number; other: number }) {
+  const { t } = useT();
   const total = delivered + returned + inTransit + other;
   const N = 100;
   const parts = [
@@ -323,7 +341,7 @@ function ParcelStrip({ delivered, returned, inTransit, other }: { delivered: num
   const fills = total > 0 ? parts.flatMap((p, i) => Array.from({ length: bars[i] }, () => p.fill)) : Array.from({ length: N }, () => "#f1eeee");
   const pct = (n: number) => (total > 0 ? formatPercent(n / total, 0) : "0%");
   return (
-    <svg viewBox="0 0 640 48" preserveAspectRatio="none" className="block h-12 w-full" role="img" aria-label={`Of ${count(total)} shipped parcels: ${pct(delivered)} delivered, ${pct(returned)} returned, ${pct(inTransit)} still on the road${other ? `, ${pct(other)} lost or exchanged` : ""}`}>
+    <svg viewBox="0 0 640 48" preserveAspectRatio="none" className="block h-12 w-full" role="img" aria-label={other ? t("Of {n} shipped parcels: {delivered} delivered, {returned} returned, {inTransit} still on the road, {other} lost or exchanged", { n: count(total), delivered: pct(delivered), returned: pct(returned), inTransit: pct(inTransit), other: pct(other) }) : t("Of {n} shipped parcels: {delivered} delivered, {returned} returned, {inTransit} still on the road", { n: count(total), delivered: pct(delivered), returned: pct(returned), inTransit: pct(inTransit) })}>
       <defs>
         <linearGradient id="dash-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ff4a58" /><stop offset="1" stopColor="#b80e1e" /></linearGradient>
       </defs>
@@ -333,13 +351,14 @@ function ParcelStrip({ delivered, returned, inTransit, other }: { delivered: num
 }
 
 function RateCard({ title, icon, value, of, caption, rateLabel, rate, def, note }: { title: string; icon: React.ReactNode; value: number; of: number; caption: string; rateLabel: string; rate: number | null; def: string; note?: React.ReactNode }) {
+  const { t } = useT();
   return (
     <Panel className="gap-3 p-[18px]">
       <span className="text-sm font-semibold">{title}</span>
       <div className="flex items-center gap-3">
         <span className="bg-brand grid size-10 shrink-0 place-items-center rounded-xl shadow-[0_6px_14px_rgb(225_24_44/0.35)] [&_svg]:size-[18px]" aria-hidden="true">{icon}</span>
         <div className="flex min-w-0 flex-col">
-          <span className="num truncate text-[15px] font-bold">{count(value)} of {count(of)}</span>
+          <span className="num truncate text-[15px] font-bold">{t("{n} of {total}", { n: count(value), total: count(of) })}</span>
           <span className="truncate text-xs text-muted">{caption}</span>
         </div>
       </div>
@@ -358,6 +377,7 @@ function RateCard({ title, icon, value, of, caption, rateLabel, rate, def, note 
 }
 
 export function DashboardView() {
+  const { t, tx, ago, dateTime } = useT();
   const trpc = useTRPC();
   const { user } = useShell();
   const [from, setFrom] = React.useState("");
@@ -397,6 +417,7 @@ export function DashboardView() {
   const target = ws.data?.verdictThresholds.targetPoas ?? 0.3;
   const days = React.useMemo(() => (r ? fillDays(r.series, from, to) : []), [r, from, to]);
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
+  const basis = (v: string) => (v === "DELIVERED" ? t("delivered revenue") : t("cash remitted"));
 
   const pickPreset = (n: number) => {
     setPreset(n);
@@ -426,17 +447,22 @@ export function DashboardView() {
     if (m.truePoas !== null) {
       tips.push(
         m.truePoas < target ? (
-          <>Your POAS is <b className="text-fg">{m.truePoas.toFixed(2)}</b>, under your <b className="text-fg">{target.toFixed(2)}</b> target. Cut the ads marked Kill first.</>
+          tx("Your POAS is {poas}, under your {target} target. Cut the ads marked Kill first.", { poas: <b className="num text-fg">{m.truePoas.toFixed(2)}</b>, target: <b className="num text-fg">{target.toFixed(2)}</b> })
         ) : (
-          <>Your POAS is <b className="text-fg">{m.truePoas.toFixed(2)}</b>, above your <b className="text-fg">{target.toFixed(2)}</b> target. Put more budget on the ads marked Scale.</>
+          tx("Your POAS is {poas}, above your {target} target. Put more budget on the ads marked Scale.", { poas: <b className="num text-fg">{m.truePoas.toFixed(2)}</b>, target: <b className="num text-fg">{target.toFixed(2)}</b> })
         ),
       );
     }
     const risky = r.wilayas.filter((w) => w.shipped >= 10 && (w.returnRate ?? 0) >= 0.3).sort((a, b) => (b.returnRate ?? 0) - (a.returnRate ?? 0)).slice(0, 2);
     if (risky.length) {
-      tips.push(<>{risky.map((w, i) => <React.Fragment key={w.wilaya}>{i ? " and " : null}<bdi>{w.wilaya}</bdi></React.Fragment>)} send{risky.length > 1 ? "" : "s"} back about <b className="text-fg">{Math.round((risky[0].returnRate ?? 0) * 10)} parcels in 10</b>. Confirm those orders twice.</>);
+      const share = <b className="text-fg">{t("{n} parcels in 10", { n: Math.round((risky[0].returnRate ?? 0) * 10) })}</b>;
+      tips.push(
+        risky.length > 1
+          ? tx("{wilaya} and {other} send back about {share}. Confirm those orders twice.", { wilaya: <bdi>{risky[0].wilaya}</bdi>, other: <bdi>{risky[1].wilaya}</bdi>, share })
+          : tx("{wilaya} sends back about {share}. Confirm those orders twice.", { wilaya: <bdi>{risky[0].wilaya}</bdi>, share }),
+      );
     }
-    if (unpaid > 0) tips.push(<><b className="text-fg">{fmt(unpaid)}</b> is delivered but not paid out to you yet.</>);
+    if (unpaid > 0) tips.push(tx("{amount} is delivered but not paid out to you yet.", { amount: <b className="num text-fg">{fmt(unpaid)}</b> }));
   }
 
   const filterField = "h-10 rounded-full border-transparent bg-surface shadow-card";
@@ -447,21 +473,21 @@ export function DashboardView() {
       <section className="stagger mb-6 flex flex-col gap-3">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="flex min-w-0 flex-col gap-2">
-            <span className="text-base text-muted sm:text-lg">Ready to grow your profit?</span>
-            <h1 className="break-words text-[30px] font-extrabold leading-tight tracking-[-0.035em] sm:text-[46px]">Welcome back, {firstName}.</h1>
+            <span className="text-base text-muted sm:text-lg">{t("Ready to grow your profit?")}</span>
+            <h1 className="break-words text-[30px] font-extrabold leading-tight tracking-[-0.035em] sm:text-[46px]">{t("Welcome back, {name}.", { name: firstName })}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div ref={presetsRef} data-slide="" role="group" aria-label="Period" className="no-scrollbar relative flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-surface p-1 shadow-card">
+            <div ref={presetsRef} data-slide="" role="group" aria-label={t("Period")} className="no-scrollbar relative flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-surface p-1 shadow-card">
               {presetPill}
               {PRESETS.map((p) => (
                 <button key={p.days} type="button" aria-pressed={preset === p.days} onClick={() => pickPreset(p.days)} className={cn("slide-item press h-8 whitespace-nowrap rounded-full px-3.5 text-xs font-medium", preset === p.days ? "bg-brand glow" : "text-muted hover:bg-surface-3 hover:text-fg")}>
-                  {p.label}
+                  {t(p.label)}
                 </button>
               ))}
             </div>
-            <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("press relative grid size-10 shrink-0 place-items-center rounded-full shadow-card", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label="More filters" title="More filters: days, product, ad and revenue basis">
+            <button type="button" aria-expanded={filtersOpen} aria-controls="dash-filters" onClick={() => setFiltersOpen((o) => !o)} className={cn("press relative grid size-10 shrink-0 place-items-center rounded-full shadow-card", filtersOpen ? "bg-brand glow" : "bg-surface text-fg")} aria-label={t("More filters")} title={t("More filters: days, product, ad and revenue basis")}>
               <SlidersHorizontal className="size-4" aria-hidden="true" />
-              {from || to || productId || creativeId || view ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
+              {from || to || productId || creativeId || view ? <span className="absolute end-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
             </button>
           </div>
         </div>
@@ -469,21 +495,21 @@ export function DashboardView() {
         <AdsFilter />
         <div id="dash-filters" className={cn("flex-wrap items-center gap-2 md:justify-end", filtersOpen ? "flex" : "hidden")}>
           <div className="flex items-center gap-1.5">
-            <Input aria-label="From date" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
+            <Input aria-label={t("From date")} type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
             <span className="text-subtle" aria-hidden>→</span>
-            <Input aria-label="To date" type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
+            <Input aria-label={t("To date")} type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset(null); }} className={cn(filterField, "w-38")} />
           </div>
-          <Select aria-label="Product" value={productId} onChange={(e) => { setProductId(e.target.value); setCreativeId(""); }} className={cn(filterField, "w-40")}>
-            <option value="">All products</option>
+          <Select aria-label={t("Product")} value={productId} onChange={(e) => { setProductId(e.target.value); setCreativeId(""); }} className={cn(filterField, "w-40")}>
+            <option value="">{t("All products")}</option>
             {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
-          <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className={cn(filterField, "w-40")}>
-            <option value="">All creatives</option>
+          <Select aria-label={t("Creative")} value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className={cn(filterField, "w-40")}>
+            <option value="">{t("All creatives")}</option>
             {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
           </Select>
-          <Select aria-label="Revenue basis" value={view || r?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as RevenueView)} className={cn(filterField, "w-52")}>
-            <option value="DELIVERED">Delivered revenue view</option>
-            <option value="REMITTED">Cash remitted view</option>
+          <Select aria-label={t("Revenue basis")} value={view || r?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as RevenueView)} className={cn(filterField, "w-52")}>
+            <option value="DELIVERED">{t("Delivered revenue view")}</option>
+            <option value="REMITTED">{t("Cash remitted view")}</option>
           </Select>
         </div>
         </div>
@@ -504,10 +530,10 @@ export function DashboardView() {
         ) : (
           <>
             <section className="bg-brand-hero shine relative flex min-w-0 flex-col gap-5 overflow-hidden rounded-[22px] p-5 md:col-span-2 xl:col-span-1 shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)]">
-              <span className="pointer-events-none absolute -right-12 -top-16 size-48 rounded-full border-[22px] border-white/10" aria-hidden="true" />
+              <span className="pointer-events-none absolute -end-12 -top-16 size-48 rounded-full border-[22px] border-white/10" aria-hidden="true" />
               <div className="relative flex items-center justify-between gap-3">
-                <span className="text-[15px] font-semibold"><Term label="True net profit" definition={DEF.trueNetProfit} iconClassName="text-white/70 hover:text-white" /></span>
-                <CornerLink href="/creatives" label="Open profit by ad" onRed />
+                <span className="text-[15px] font-semibold"><Term label={t("True net profit")} definition={t(DEF.trueNetProfit)} iconClassName="text-white/70 hover:text-white" /></span>
+                <CornerLink href="/creatives" label={t("Open profit by ad")} onRed />
               </div>
               <div className="relative mt-auto flex items-end gap-3">
                 <div className="min-w-0 flex-1">
@@ -516,52 +542,52 @@ export function DashboardView() {
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <PoasBlocks poas={m.truePoas} target={target} />
                   <span className="whitespace-nowrap text-[11px]">
-                    <Term label={`POAS ${m.truePoas === null ? "—" : m.truePoas.toFixed(2)} / ${target.toFixed(2)}`} definition={`${DEF.truePoas} The dark tick is your target in Settings.`} iconClassName="text-white/70 hover:text-white" />
+                    <Term label={t("POAS {poas} / {target}", { poas: m.truePoas === null ? "—" : m.truePoas.toFixed(2), target: target.toFixed(2) })} definition={`${t(DEF.truePoas)} ${t("The dark tick is your target in Settings.")}`} iconClassName="text-white/70 hover:text-white" />
                   </span>
                 </div>
               </div>
-              <span className="relative -mt-2 text-[11px] text-white/85">{m.trueNetProfit < 0 ? "Loss" : "Profit"} after ads and every cost, on {m.revenueView === "DELIVERED" ? "delivered revenue" : "cash remitted"}</span>
+              <span className="relative -mt-2 text-[11px] text-white/85">{m.trueNetProfit < 0 ? t("Loss after ads and every cost, on {basis}", { basis: basis(m.revenueView) }) : t("Profit after ads and every cost, on {basis}", { basis: basis(m.revenueView) })}</span>
             </section>
 
-            <KpiCard label="Delivered revenue" def={DEF.deliveredRevenue} href="/orders" linkLabel="Open orders and parcels" graphic={<DayBars days={days} pick={(d) => d.delivered} unit="delivered" label="Delivered parcels per day, by order date" />} sub={`${count(m.delivered)} parcels`}>
+            <KpiCard label={t("Delivered revenue")} def={t(DEF.deliveredRevenue)} href="/orders" linkLabel={t("Open orders and parcels")} graphic={<DayBars days={days} pick={(d) => d.delivered} tip={(day, n) => t("{day}: {n} delivered", { day, n })} label={t("Delivered parcels per day, by order date")} />} sub={t("{n} parcels", { n: count(m.delivered) })}>
               <FitMoney value={m.deliveredRevenue} currency={cur} max={36} />
             </KpiCard>
 
-            <KpiCard label="Cash in transit" def={DEF.cashInTransit} href="/orders" linkLabel="Open orders and parcels" graphic={<TransitSquares inTransit={m.inTransit} shipped={m.shipped} />} sub={`${count(m.inTransit)} parcels`}>
+            <KpiCard label={t("Cash in transit")} def={t(DEF.cashInTransit)} href="/orders" linkLabel={t("Open orders and parcels")} graphic={<TransitSquares inTransit={m.inTransit} shipped={m.shipped} />} sub={t("{n} parcels", { n: count(m.inTransit) })}>
               <FitMoney value={m.cashInTransit} currency={cur} max={36} />
             </KpiCard>
 
             <div className="flex min-w-0 flex-col gap-[18px] md:col-span-2 md:flex-row xl:col-span-1 xl:row-span-2 xl:flex-col">
               <Panel className="flex-1 gap-4 md:basis-0 xl:basis-auto">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[15px] font-medium text-muted">Best ad right now</span>
-                  <CornerLink href="/creatives" label="Open all ads" />
+                  <span className="text-[15px] font-medium text-muted">{t("Best ad right now")}</span>
+                  <CornerLink href="/creatives" label={t("Open all ads")} />
                 </div>
                 <div className="relative flex flex-1 flex-col pt-[22px]">
-                  <div className="absolute left-10 right-0 top-0 h-16 rounded-[22px] bg-[#efeced]" aria-hidden="true" />
-                  <div className="absolute left-5 right-0 top-[11px] h-16 rounded-[22px] bg-[#e2dddf]" aria-hidden="true" />
+                  <div className="absolute start-10 end-0 top-0 h-16 rounded-[22px] bg-[#efeced]" aria-hidden="true" />
+                  <div className="absolute start-5 end-0 top-[11px] h-16 rounded-[22px] bg-[#e2dddf]" aria-hidden="true" />
                   <div className="relative flex flex-1 flex-col gap-3.5 overflow-hidden rounded-[22px] bg-ink p-5 text-white shadow-[0_18px_40px_rgb(20_16_18/0.28)]">
-                    <span className="pointer-events-none absolute -bottom-24 -right-16 size-56 rounded-full bg-[radial-gradient(circle,rgb(255_40_60/0.55),rgb(255_40_60/0)_70%)]" aria-hidden="true" />
+                    <span className="pointer-events-none absolute -bottom-24 -end-16 size-56 rounded-full bg-[radial-gradient(circle,rgb(255_40_60/0.55),rgb(255_40_60/0)_70%)]" aria-hidden="true" />
                     {best ? (
                       <>
                         <div className="relative flex items-start justify-between gap-2">
-                          <span className="line-clamp-2 min-w-0 break-words text-[22px] font-bold leading-tight tracking-tight">{best.name || `Ad ${best.externalCreativeId}`}</span>
-                          {best.verdict ? <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-ink">{VERDICT_LABEL[best.verdict]}</span> : null}
+                          <span className="line-clamp-2 min-w-0 break-words text-[22px] font-bold leading-tight tracking-tight">{best.name || t("Ad {id}", { id: best.externalCreativeId ?? "" })}</span>
+                          {best.verdict ? <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-ink">{t(VERDICT_LABEL[best.verdict])}</span> : null}
                         </div>
-                        <span className="relative line-clamp-2 break-words text-[13px] text-[#d9d0d2]">Ad {best.externalCreativeId} · {count(best.shipped)} parcels shipped</span>
+                        <span className="relative line-clamp-2 break-words text-[13px] text-[#d9d0d2]">{t("Ad {id} · {n} parcels shipped", { id: best.externalCreativeId ?? "", n: count(best.shipped) })}</span>
                         <div className="relative grid grid-cols-2 gap-2.5">
-                          <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]">Profit, {shownCode}</span><FitText max={20} min={12}>{bare(best.trueNetProfit, true)}</FitText></div>
+                          <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]">{t("Profit, {currency}", { currency: shownCode })}</span><FitText max={20} min={12}>{bare(best.trueNetProfit, true)}</FitText></div>
                           <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]">POAS</span><FitText max={20} min={12}>{best.truePoas === null ? "—" : best.truePoas.toFixed(2)}</FitText></div>
                         </div>
                         <Link href="/creatives" className={cn(neonButton, "mt-auto")}>
-                          <TrendingUp className="size-4" aria-hidden="true" /> Compare every ad
+                          <TrendingUp className="size-4" aria-hidden="true" /> {t("Compare every ad")}
                         </Link>
                       </>
                     ) : (
                       <>
-                        <span className="relative text-[22px] font-bold leading-tight">No ad is making money yet</span>
-                        <span className="relative text-[13px] text-[#d9d0d2]">Once orders carry the ad ID (utm_content), your best ad shows here.</span>
-                        <Link href="/creatives" className={cn(neonButton, "mt-auto")}>Open ads</Link>
+                        <span className="relative text-[22px] font-bold leading-tight">{t("No ad is making money yet")}</span>
+                        <span className="relative text-[13px] text-[#d9d0d2]">{t("Once orders carry the ad ID (utm_content), your best ad shows here.")}</span>
+                        <Link href="/creatives" className={cn(neonButton, "mt-auto")}>{t("Open ads")}</Link>
                       </>
                     )}
                   </div>
@@ -570,10 +596,10 @@ export function DashboardView() {
               <Panel className="gap-3 md:flex-1 md:basis-0 xl:flex-none xl:basis-auto">
                 <div className="flex items-center gap-2.5">
                   <span className="size-[30px] shrink-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,#ff9aa3_0%,#ff2d42_45%,#9b0718_100%)] shadow-[0_0_16px_rgb(255_45_66/0.75)]" aria-hidden="true" />
-                  <h2 className="text-[15px] font-bold">Smart tips</h2>
+                  <h2 className="text-[15px] font-bold">{t("Smart tips")}</h2>
                 </div>
                 <ul className="flex flex-col gap-2.5 text-[13px] leading-relaxed text-muted">
-                  {tips.length ? tips.map((t, i) => <li key={i}>{t}</li>) : <li>Nothing needs your attention right now.</li>}
+                  {tips.length ? tips.map((tip, i) => <li key={i}>{tip}</li>) : <li>{t("Nothing needs your attention right now.")}</li>}
                 </ul>
               </Panel>
             </div>
@@ -584,24 +610,24 @@ export function DashboardView() {
 
             <div className="flex min-w-0 flex-col gap-[18px] md:col-span-2">
               <Panel className="gap-3.5">
-                <PanelTitle action={<CornerLink href="/orders" label="Open orders and parcels" />}>Order statistics</PanelTitle>
+                <PanelTitle action={<CornerLink href="/orders" label={t("Open orders and parcels")} />}>{t("Order statistics")}</PanelTitle>
                 {m.placed === 0 ? (
-                  <EmptyState icon={<Boxes />} title="No orders in this period" description="Change the filters, import orders, or add one manually." />
+                  <EmptyState icon={<Boxes />} title={t("No orders in this period")} description={t("Change the filters, import orders, or add one manually.")} />
                 ) : (
                   <>
                     <div className="flex flex-wrap items-end justify-between gap-4">
                       <div className="flex min-w-0 flex-col gap-1">
-                        <span className="text-xs text-muted">Orders placed</span>
+                        <span className="text-xs text-muted">{t("Orders placed")}</span>
                         <div className="flex items-center gap-2.5">
                           <span className="num text-[40px] font-extrabold leading-none">{count(m.placed)}</span>
-                          <span className="whitespace-nowrap rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-bold text-brand-deep"><span className="num">{count(m.shipped)}</span> shipped</span>
+                          <span className="whitespace-nowrap rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-bold text-brand-deep">{tx("{n} shipped", { n: <span className="num">{count(m.shipped)}</span> })}</span>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                        <span className="flex items-center gap-1.5"><span className="glow-soft size-[9px] rounded-full bg-brand" />Delivered <b className="num text-fg">{count(m.delivered)}</b></span>
-                        <span className="flex items-center gap-1.5"><span className="size-[9px] rounded-full bg-ink" />Returned <b className="num text-fg">{count(m.returned)}</b></span>
-                        <span className="flex items-center gap-1.5"><span className="size-[9px] rounded-full border border-[#cfc6c8] bg-[#e3dcdd]" />On the road <b className="num text-fg">{count(m.inTransit)}</b></span>
-                        {other > 0 ? <span className="flex items-center gap-1.5"><span className="size-[9px] rounded-full bg-[#9c9194]" />Lost or exchanged <b className="num text-fg">{count(other)}</b></span> : null}
+                        <span className="flex items-center gap-1.5"><span className="glow-soft size-[9px] rounded-full bg-brand" />{tx("Delivered {n}", { n: <b className="num text-fg">{count(m.delivered)}</b> })}</span>
+                        <span className="flex items-center gap-1.5"><span className="size-[9px] rounded-full bg-ink" />{tx("Returned {n}", { n: <b className="num text-fg">{count(m.returned)}</b> })}</span>
+                        <span className="flex items-center gap-1.5"><span className="size-[9px] rounded-full border border-[#cfc6c8] bg-[#e3dcdd]" />{tx("On the road {n}", { n: <b className="num text-fg">{count(m.inTransit)}</b> })}</span>
+                        {other > 0 ? <span className="flex items-center gap-1.5"><span className="size-[9px] rounded-full bg-[#9c9194]" />{tx("Lost or exchanged {n}", { n: <b className="num text-fg">{count(other)}</b> })}</span> : null}
                       </div>
                     </div>
                     <ParcelStrip delivered={m.delivered} returned={m.returned} inTransit={m.inTransit} other={other} />
@@ -611,32 +637,32 @@ export function DashboardView() {
                   <p className="flex items-start gap-2 rounded-2xl bg-warning-soft px-3 py-2 text-xs text-warning">
                     <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                     <span>
-                      {m.unknownStatus > 0 ? `${m.unknownStatus} parcels have an unknown carrier status and are not counted as delivered or returned. ` : ""}
-                      {m.missingCostOrders > 0 ? `${m.missingCostOrders} orders have no cost version for their date; their COGS is counted as 0.` : ""}
+                      {m.unknownStatus > 0 ? `${t("{n} parcels have an unknown carrier status and are not counted as delivered or returned.", { n: m.unknownStatus })} ` : ""}
+                      {m.missingCostOrders > 0 ? t("{n} orders have no cost version for their date; their COGS is counted as 0.", { n: m.missingCostOrders }) : ""}
                     </span>
                   </p>
                 ) : null}
               </Panel>
               <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2">
-                <RateCard title="Confirmed by the call center" icon={<PhoneCall />} value={m.confirmed} of={m.placed} caption="orders confirmed" rateLabel="Confirmation rate" rate={m.confirmationRate} def={DEF.confirmationRate} note={<>Shipping rate <Rate value={m.shippingRate} className="font-semibold text-fg" /></>} />
-                <RateCard title="Delivered to the customer" icon={<PackageCheck />} value={m.delivered} of={m.finished} caption="finished parcels delivered" rateLabel="Delivery rate" rate={m.deliveryRate} def={DEF.deliveryRate} note={<>Return rate <Rate value={m.returnRate} className={cn("font-semibold", (m.returnRate ?? 0) > 0.3 ? "text-negative" : "text-fg")} /></>} />
+                <RateCard title={t("Confirmed by the call center")} icon={<PhoneCall />} value={m.confirmed} of={m.placed} caption={t("orders confirmed")} rateLabel={t("Confirmation rate")} rate={m.confirmationRate} def={t(DEF.confirmationRate)} note={tx("Shipping rate {rate}", { rate: <Rate value={m.shippingRate} className="font-semibold text-fg" /> })} />
+                <RateCard title={t("Delivered to the customer")} icon={<PackageCheck />} value={m.delivered} of={m.finished} caption={t("finished parcels delivered")} rateLabel={t("Delivery rate")} rate={m.deliveryRate} def={t(DEF.deliveryRate)} note={tx("Return rate {rate}", { rate: <Rate value={m.returnRate} className={cn("font-semibold", (m.returnRate ?? 0) > 0.3 ? "text-negative" : "text-fg")} /> })} />
               </div>
             </div>
 
             <Panel className="gap-3 md:col-span-2">
-              <PanelTitle action={<CornerLink href="/creatives" label="Open all ads" />}>Ads list</PanelTitle>
+              <PanelTitle action={<CornerLink href="/creatives" label={t("Open all ads")} />}>{t("Ads list")}</PanelTitle>
               {r.topCreatives.length === 0 ? (
-                <EmptyState title="No ads with orders yet" description="Orders need the ad ID (utm_content) to be linked to an ad." />
+                <EmptyState title={t("No ads with orders yet")} description={t("Orders need the ad ID (utm_content) to be linked to an ad.")} />
               ) : (
-                <div className="flex flex-col" role="table" aria-label="Most profitable ads">
+                <div className="flex flex-col" role="table" aria-label={t("Most profitable ads")}>
                   <div role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 pb-2 text-xs text-muted sm:grid-cols-[minmax(0,1fr)_104px_56px_112px]">
-                    <span role="columnheader">Name</span>
-                    <span role="columnheader" className="hidden sm:block">Verdict</span>
-                    <span role="columnheader" className="hidden text-right sm:block">POAS</span>
-                    <span role="columnheader" className="text-right">Profit, {shownCode}</span>
+                    <span role="columnheader">{t("Name")}</span>
+                    <span role="columnheader" className="hidden sm:block">{t("Verdict")}</span>
+                    <span role="columnheader" className="hidden text-end sm:block">POAS</span>
+                    <span role="columnheader" className="text-end">{t("Profit, {currency}", { currency: shownCode })}</span>
                   </div>
                   {r.topCreatives.map((c, i) => {
-                    const label = c.name || `Ad ${c.externalCreativeId}`;
+                    const label = c.name || t("Ad {id}", { id: c.externalCreativeId ?? "" });
                     return (
                       <div role="row" key={c.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-[#f4f1f1] py-2 text-[13px] sm:grid-cols-[minmax(0,1fr)_104px_56px_112px]">
                         <span role="cell" className="flex min-w-0 items-center gap-2.5">
@@ -647,7 +673,7 @@ export function DashboardView() {
                           </span>
                         </span>
                         <span role="cell" className="hidden sm:block"><VerdictSignal verdict={c.verdict} /></span>
-                        <span role="cell" className="hidden text-right font-semibold sm:block"><Ratio value={c.truePoas} /></span>
+                        <span role="cell" className="hidden text-end font-semibold sm:block"><Ratio value={c.truePoas} /></span>
                         <span role="cell" className="flex min-w-0 justify-end">
                           <span className={cn("num max-w-full truncate rounded-full px-2.5 py-1 text-xs font-bold", c.trueNetProfit < 0 ? "bg-ink text-white" : i === 0 ? "bg-brand glow-soft" : "bg-brand-soft text-brand-deep")}>{bare(c.trueNetProfit, true)}</span>
                         </span>
@@ -659,12 +685,12 @@ export function DashboardView() {
             </Panel>
 
             <Panel className="gap-2.5">
-              <PanelTitle action={<span className="text-xs font-semibold text-subtle">{shownCode}</span>}>Where your cash is</PanelTitle>
+              <PanelTitle action={<span className="text-xs font-semibold text-subtle">{shownCode}</span>}>{t("Where your cash is")}</PanelTitle>
               {[
-                { label: "Collected", sub: m.deliveredRevenue > 0 ? `${formatPercent(m.remittedCash / m.deliveredRevenue, 0)} of delivered` : "Paid out to you", value: m.remittedCash, def: DEF.netCashCollected },
-                { label: "On the road", sub: `${count(m.inTransit)} parcels`, value: m.cashInTransit, def: DEF.cashInTransit },
-                { label: "Not paid yet", sub: "Delivered, not paid out", value: unpaid, def: "Delivered revenue minus the cash already paid out to you, for orders placed in this period." },
-                { label: "Lost on returns", sub: `${count(m.returned)} parcels`, value: -m.rtoLoss, def: DEF.rtoLoss },
+                { label: t("Collected"), sub: m.deliveredRevenue > 0 ? t("{pct} of delivered", { pct: formatPercent(m.remittedCash / m.deliveredRevenue, 0) }) : t("Paid out to you"), value: m.remittedCash, def: t(DEF.netCashCollected) },
+                { label: t("On the road"), sub: t("{n} parcels", { n: count(m.inTransit) }), value: m.cashInTransit, def: t(DEF.cashInTransit) },
+                { label: t("Not paid yet"), sub: t("Delivered, not paid out"), value: unpaid, def: t("Delivered revenue minus the cash already paid out to you, for orders placed in this period.") },
+                { label: t("Lost on returns"), sub: t("{n} parcels", { n: count(m.returned) }), value: -m.rtoLoss, def: t(DEF.rtoLoss) },
               ].map((row, i) => (
                 <div key={row.label} className={cn("flex items-center gap-3 rounded-2xl p-3", i === 0 ? "bg-brand glow" : "bg-surface-2")}>
                   <span className={cn("grid size-7 shrink-0 place-items-center rounded-full bg-white text-xs font-extrabold", i === 0 ? "text-brand-strong" : "text-fg")}>{i + 1}</span>
@@ -678,9 +704,9 @@ export function DashboardView() {
             </Panel>
 
             <Panel className="gap-3">
-              <PanelTitle def={DEF.deliveryRate} action={<CornerLink href="#wilayas" label="Open the full wilaya table" onClick={openWilayas} />}>Delivery by wilaya</PanelTitle>
+              <PanelTitle def={t(DEF.deliveryRate)} action={<CornerLink href="#wilayas" label={t("Open the full wilaya table")} onClick={openWilayas} />}>{t("Delivery by wilaya")}</PanelTitle>
               {r.wilayas.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted">No wilaya data yet.</p>
+                <p className="py-6 text-center text-sm text-muted">{t("No wilaya data yet.")}</p>
               ) : (
                 <ul className="flex flex-col gap-3 text-[13px]">
                   {[...r.wilayas].sort((a, b) => b.shipped - a.shipped).slice(0, 6).map((w, i) => (
@@ -691,40 +717,40 @@ export function DashboardView() {
                   ))}
                 </ul>
               )}
-              <p className="mt-auto flex items-center gap-2 border-t border-[#f1eeee] pt-3 text-[11px] text-muted"><span className="size-2 shrink-0 rounded-full bg-ink" />Black bar: more than 3 parcels in 10 come back.</p>
+              <p className="mt-auto flex items-center gap-2 border-t border-[#f1eeee] pt-3 text-[11px] text-muted"><span className="size-2 shrink-0 rounded-full bg-ink" />{t("Black bar: more than 3 parcels in 10 come back.")}</p>
             </Panel>
           </>
         )}
       </div>
 
-      <MoreDetails id="dashboard" hint="Where the profit goes, the ads with the most returns, data health and every wilaya." className="mt-[18px]">
+      <MoreDetails id="dashboard" hint={t("Where the profit goes, the ads with the most returns, data health and every wilaya.")} className="mt-[18px]">
         <div className={cn("stagger grid grid-cols-1 gap-[18px] transition-opacity duration-300 lg:grid-cols-2 xl:grid-cols-3", report.isPlaceholderData && "opacity-60")}>
           <Card>
-            <CardHeader title="Profit breakdown" description={m ? `Revenue basis: ${m.revenueView === "DELIVERED" ? "delivered revenue" : "cash remitted"}` : undefined} />
+            <CardHeader title={t("Profit breakdown")} description={m ? t("Revenue basis: {basis}", { basis: basis(m.revenueView) }) : undefined} />
             <CardBody className="p-3 pt-0">
               {!m ? <Skeleton className="h-48" /> : (
                 <dl className="flex flex-col text-sm">
                   {[
-                    ["Revenue", m.revenue, DEF.deliveredRevenue],
-                    ["Ad spend", -m.adSpend, DEF.adSpend],
-                    ["COGS", -m.cogs, DEF.cogs],
-                    ["Outbound shipping", -m.outboundShipping, "Forward shipping on every shipped parcel (observed carrier fee when available)."],
-                    ["RTO fees", -m.rtoCost, "RTO fee on returned parcels."],
-                    ["Call center", -m.callCenterCost, "Call-center fee × the configured basis (lead, confirmed order or call attempt)."],
-                    ["Packaging", -m.packagingCost, "Packaging fee on every shipped parcel."],
-                    ["Overhead", -m.allocatedOverhead, DEF.overhead],
+                    [t("Revenue"), m.revenue, t(DEF.deliveredRevenue)],
+                    [t("Ad spend"), -m.adSpend, t(DEF.adSpend)],
+                    [t("COGS"), -m.cogs, t(DEF.cogs)],
+                    [t("Outbound shipping"), -m.outboundShipping, t("Forward shipping on every shipped parcel (observed carrier fee when available).")],
+                    [t("RTO fees"), -m.rtoCost, t("RTO fee on returned parcels.")],
+                    [t("Call center"), -m.callCenterCost, t("Call-center fee × the configured basis (lead, confirmed order or call attempt).")],
+                    [t("Packaging"), -m.packagingCost, t("Packaging fee on every shipped parcel.")],
+                    [t("Overhead"), -m.allocatedOverhead, t(DEF.overhead)],
                   ].map(([label, v, def]) => (
                     <div key={label as string} className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
                       <dt className="text-muted"><Term label={label as string} definition={def as string} /></dt>
-                      <dd className={cn("num text-right", (v as number) < 0 ? "text-fg" : "text-positive")}>{fmt(v as number)}</dd>
+                      <dd className={cn("num text-end", (v as number) < 0 ? "text-fg" : "text-positive")}>{fmt(v as number)}</dd>
                     </div>
                   ))}
                   <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-brand-soft px-2 py-2 font-bold">
-                    <dt>True net profit</dt>
-                    <dd className={cn("num text-right", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
+                    <dt>{t("True net profit")}</dt>
+                    <dd className={cn("num text-end", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3 px-2 pt-2 text-xs text-muted">
-                    <dt><Term label="Cost per delivered order" definition={DEF.cpdo} /></dt>
+                    <dt><Term label={t("Cost per delivered order")} definition={t(DEF.cpdo)} /></dt>
                     <dd><Money value={m.cpdo} currency={cur} /></dd>
                   </div>
                 </dl>
@@ -732,16 +758,16 @@ export function DashboardView() {
             </CardBody>
           </Card>
           <Card>
-            <CardHeader title="Worst RTO ads" description="Cheap orders that come back cost twice." />
-            {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title="No shipped parcels yet" /> : (
+            <CardHeader title={t("Worst RTO ads")} description={t("Cheap orders that come back cost twice.")} />
+            {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title={t("No shipped parcels yet")} /> : (
               <Table>
-                <THead><tr><Th>Ad</Th><Th className="text-right">RTO</Th><Th className="text-right">Returned</Th></tr></THead>
+                <THead><tr><Th>{t("Ad")}</Th><Th className="text-end">{t("RTO")}</Th><Th className="text-end">{t("Returned")}</Th></tr></THead>
                 <tbody>
                   {r.worstRtoCreatives.map((c) => (
                     <Tr key={c.key}>
-                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ml-1" title="Fewer shipped parcels than the BAD TRAFFIC threshold">small n</Badge> : null}</Td>
-                      <Td className="text-right"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
-                      <Td className="num text-right text-muted">{c.returned}/{c.shipped}</Td>
+                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ms-1" title={t("Fewer shipped parcels than the BAD TRAFFIC threshold")}>{t("small n")}</Badge> : null}</Td>
+                      <Td className="text-end"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
+                      <Td className="num text-end text-muted">{c.returned}/{c.shipped}</Td>
                     </Tr>
                   ))}
                 </tbody>
@@ -749,17 +775,17 @@ export function DashboardView() {
             )}
           </Card>
           <Card className="lg:col-span-2 xl:col-span-1">
-            <CardHeader title="Data health" description="What could make these numbers wrong." />
+            <CardHeader title={t("Data health")} description={t("What could make these numbers wrong.")} />
             <CardBody className="flex flex-col gap-0.5 p-3 pt-0">
               {!h ? <Skeleton className="h-40" /> : (
                 <>
-                  <HealthRow icon={<Link2Off />} label="MDM connection" value={h.connectionStatus === "CONNECTED" ? `synced ${timeAgo(h.lastSuccessfulSyncAt)}` : h.connectionStatus.replace("_", " ").toLowerCase()} href="/settings?tab=mdm" tone={h.connectionStatus === "CONNECTED" ? undefined : "warning"} />
-                  <HealthRow icon={<Unlink />} label="Unmatched records" value={h.unmatchedRecords} href="/syncs" tone={h.unmatchedRecords ? "negative" : undefined} />
-                  <HealthRow icon={<AlertTriangle />} label="Unknown parcel statuses" value={h.unknownStatusParcels} href="/orders?parcelStatus=UNKNOWN" tone={h.unknownStatusParcels ? "negative" : undefined} />
-                  <HealthRow icon={<FileWarning />} label="Import / sync errors" value={h.importRowErrors + h.failedSyncItems} href="/imports" tone={h.importRowErrors + h.failedSyncItems ? "warning" : undefined} />
-                  <HealthRow icon={<FileWarning />} label="Unmatched ad spend rows" value={h.unmatchedSpendRows} href="/creatives" tone={h.unmatchedSpendRows ? "warning" : undefined} />
-                  <HealthRow icon={<FileWarning />} label="Bank rows awaiting review" value={h.pendingBankRows} href="/expenses" tone={h.pendingBankRows ? "warning" : undefined} />
-                  <p className="px-2 pt-2 text-[11px] text-subtle">Last successful MDM sync: {formatDateTime(h.lastSuccessfulSyncAt)}</p>
+                  <HealthRow icon={<Link2Off />} label={t("MDM connection")} value={h.connectionStatus === "CONNECTED" ? t("synced {ago}", { ago: ago(h.lastSuccessfulSyncAt) }) : CONNECTION[h.connectionStatus] ? t(CONNECTION[h.connectionStatus]) : h.connectionStatus.replace("_", " ").toLowerCase()} href="/settings?tab=mdm" tone={h.connectionStatus === "CONNECTED" ? undefined : "warning"} />
+                  <HealthRow icon={<Unlink />} label={t("Unmatched records")} value={h.unmatchedRecords} href="/syncs" tone={h.unmatchedRecords ? "negative" : undefined} />
+                  <HealthRow icon={<AlertTriangle />} label={t("Unknown parcel statuses")} value={h.unknownStatusParcels} href="/orders?parcelStatus=UNKNOWN" tone={h.unknownStatusParcels ? "negative" : undefined} />
+                  <HealthRow icon={<FileWarning />} label={t("Import / sync errors")} value={h.importRowErrors + h.failedSyncItems} href="/imports" tone={h.importRowErrors + h.failedSyncItems ? "warning" : undefined} />
+                  <HealthRow icon={<FileWarning />} label={t("Unmatched ad spend rows")} value={h.unmatchedSpendRows} href="/creatives" tone={h.unmatchedSpendRows ? "warning" : undefined} />
+                  <HealthRow icon={<FileWarning />} label={t("Bank rows awaiting review")} value={h.pendingBankRows} href="/expenses" tone={h.pendingBankRows ? "warning" : undefined} />
+                  <p className="px-2 pt-2 text-[11px] text-subtle">{t("Last successful MDM sync: {when}", { when: dateTime(h.lastSuccessfulSyncAt) })}</p>
                 </>
               )}
             </CardBody>
@@ -767,20 +793,20 @@ export function DashboardView() {
         </div>
 
         <Card className="scroll-mt-24" id="wilayas">
-          <CardHeader title="By wilaya" description="Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya." />
-          {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title="No wilaya data" /> : (
+          <CardHeader title={t("By wilaya")} description={t("Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya.")} />
+          {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title={t("No wilaya data")} /> : (
             <Table>
-              <THead><tr><Th>Wilaya</Th><Th className="text-right">Placed</Th><Th className="text-right">Shipped</Th><Th className="text-right">Delivery rate</Th><Th className="text-right">RTO rate</Th><Th className="text-right">Delivered revenue</Th><Th className="text-right">Contribution before ads</Th></tr></THead>
+              <THead><tr><Th>{t("Wilaya")}</Th><Th className="text-end">{t("Placed")}</Th><Th className="text-end">{t("Shipped")}</Th><Th className="text-end">{t("Delivery rate")}</Th><Th className="text-end">{t("RTO rate")}</Th><Th className="text-end">{t("Delivered revenue")}</Th><Th className="text-end">{t("Contribution before ads")}</Th></tr></THead>
               <tbody>
                 {r.wilayas.map((w) => (
                   <Tr key={w.wilaya}>
                     <Td>{w.wilaya}</Td>
-                    <Td className="num text-right">{w.placed}</Td>
-                    <Td className="num text-right">{w.shipped}</Td>
-                    <Td className="text-right"><Rate value={w.deliveryRate} /></Td>
-                    <Td className="text-right"><Rate value={w.returnRate} className={(w.returnRate ?? 0) > 0.3 ? "text-negative" : undefined} /></Td>
-                    <Td className="text-right"><Money value={w.deliveredRevenue} currency={cur} /></Td>
-                    <Td className="text-right"><Money value={w.contributionBeforeAds} currency={cur} signed /></Td>
+                    <Td className="num text-end">{w.placed}</Td>
+                    <Td className="num text-end">{w.shipped}</Td>
+                    <Td className="text-end"><Rate value={w.deliveryRate} /></Td>
+                    <Td className="text-end"><Rate value={w.returnRate} className={(w.returnRate ?? 0) > 0.3 ? "text-negative" : undefined} /></Td>
+                    <Td className="text-end"><Money value={w.deliveredRevenue} currency={cur} /></Td>
+                    <Td className="text-end"><Money value={w.contributionBeforeAds} currency={cur} signed /></Td>
                   </Tr>
                 ))}
               </tbody>

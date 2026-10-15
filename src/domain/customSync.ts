@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { englishT, msg, type TFunction } from "@/i18n/core";
 import { shortDay } from "@/lib/dateRanges";
 import { STATUS_GROUPS, statusGroupLabel, type StatusGroupKey } from "./orderExport";
 import { providerStatusLabel } from "./statusMapping";
@@ -14,7 +15,7 @@ import { sameWilaya } from "./wilayas";
 export const CUSTOM_SYNC_MAX_ORDERS = 100;
 
 const STATUS_GROUP_KEYS = STATUS_GROUPS.map((g) => g.key) as [StatusGroupKey, ...StatusGroupKey[]];
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-09-30");
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, msg("Use a date like 2026-09-30"));
 const names = z.array(z.string().trim().min(1).max(120)).max(100);
 
 const choices = z.object({
@@ -38,7 +39,7 @@ const choices = z.object({
   parcels: z.boolean().default(true),
 });
 
-export const customSyncInput = choices.refine((f) => !f.from || !f.to || f.from <= f.to, { message: "The start date is after the end date", path: ["from"] });
+export const customSyncInput = choices.refine((f) => !f.from || !f.to || f.from <= f.to, { message: msg("The start date is after the end date"), path: ["from"] });
 export type CustomSyncChoices = z.output<typeof choices>;
 
 const stored = choices.extend({
@@ -117,28 +118,34 @@ export function matchesCustomSync(f: CustomSyncFilters, o: CustomSyncCandidate):
 
 // ---------------------------------------------------------------- describing
 
-function few(list: string[] | undefined, noun: string): string | null {
+function few(list: string[] | undefined, many: (n: number) => string): string | null {
   if (!list?.length) return null;
-  return list.length <= 2 ? list.join(", ") : `${list.length} ${noun}`;
+  return list.length <= 2 ? list.join(", ") : many(list.length);
 }
 
-/** Short phrases for a custom sync's choices, e.g. ["Placed 1 Sep 2026 to 30 Sep 2026", "Delivered, Returns", "Oran"]. Defaults are left out. */
-export function describeCustomSync(f: Pick<CustomSyncChoices, "from" | "to" | "dateField" | "groups" | "statuses" | "wilayas" | "deliveryType" | "stores" | "products" | "ad" | "orderIds" | "parcels">): string[] {
+/**
+ * Short phrases for a custom sync's choices, e.g. ["Placed 1 Sep 2026 to 30 Sep 2026", "Delivered, Returns", "Oran"]. Defaults are left out.
+ * `t` gives them in the picked language; the server's audit log keeps the English.
+ */
+export function describeCustomSync(f: Pick<CustomSyncChoices, "from" | "to" | "dateField" | "groups" | "statuses" | "wilayas" | "deliveryType" | "stores" | "products" | "ad" | "orderIds" | "parcels">, t: TFunction = englishT): string[] {
   const parts: string[] = [];
-  const what = f.dateField === "status" ? "Status changed" : "Placed";
+  const placed = f.dateField !== "status";
   parts.push(
-    f.from && f.to ? (f.from === f.to ? `${what} on ${shortDay(f.from)}` : `${what} ${shortDay(f.from)} to ${shortDay(f.to)}`)
-      : f.from ? `${what} from ${shortDay(f.from)}`
-        : f.to ? `${what} until ${shortDay(f.to)}`
-          : "All dates",
+    f.from && f.to ? (f.from === f.to
+      ? (placed ? t("Placed on {day}", { day: shortDay(f.from, t) }) : t("Status changed on {day}", { day: shortDay(f.from, t) }))
+      : (placed ? t("Placed {from} to {to}", { from: shortDay(f.from, t), to: shortDay(f.to, t) }) : t("Status changed {from} to {to}", { from: shortDay(f.from, t), to: shortDay(f.to, t) })))
+      : f.from ? (placed ? t("Placed from {day}", { day: shortDay(f.from, t) }) : t("Status changed from {day}", { day: shortDay(f.from, t) }))
+        : f.to ? (placed ? t("Placed until {day}", { day: shortDay(f.to, t) }) : t("Status changed until {day}", { day: shortDay(f.to, t) }))
+          : t("All dates"),
   );
-  const statuses = [...(f.groups ?? []).map(statusGroupLabel), ...(f.statuses ?? []).map(providerStatusLabel)];
-  if (statuses.length) parts.push(statuses.length <= 3 ? statuses.join(", ") : `${statuses.slice(0, 2).join(", ")} +${statuses.length - 2} more`);
-  for (const p of [few(f.wilayas, "wilayas"), few(f.stores, "stores"), few(f.products, "products")]) if (p) parts.push(p);
-  if (f.deliveryType) parts.push(f.deliveryType === "STOP_DESK" ? "Stop desk" : "Home delivery");
-  if (f.ad === "with") parts.push("With an ad ID");
-  if (f.ad === "without") parts.push("No ad ID");
-  if (f.orderIds?.length) parts.push(f.orderIds.length === 1 ? `Order ${f.orderIds[0]}` : `${f.orderIds.length} orders`);
-  if (!f.parcels) parts.push("Orders only");
+  // Group names are the app's words; single statuses are MDM's own, shown as MDM names them.
+  const statuses = [...(f.groups ?? []).map((g) => t(statusGroupLabel(g))), ...(f.statuses ?? []).map(providerStatusLabel)];
+  if (statuses.length) parts.push(statuses.length <= 3 ? statuses.join(", ") : t("{list} +{n} more", { list: statuses.slice(0, 2).join(", "), n: statuses.length - 2 }));
+  for (const p of [few(f.wilayas, (n) => t("{n} wilayas", { n })), few(f.stores, (n) => t("{n} stores", { n })), few(f.products, (n) => t("{n} products", { n }))]) if (p) parts.push(p);
+  if (f.deliveryType) parts.push(f.deliveryType === "STOP_DESK" ? t("Stop desk") : t("Home delivery"));
+  if (f.ad === "with") parts.push(t("With an ad ID"));
+  if (f.ad === "without") parts.push(t("No ad ID"));
+  if (f.orderIds?.length) parts.push(f.orderIds.length === 1 ? t("Order {id}", { id: f.orderIds[0] }) : t("{n} orders", { n: f.orderIds.length }));
+  if (!f.parcels) parts.push(t("Orders only"));
   return parts;
 }

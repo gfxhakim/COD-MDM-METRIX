@@ -41,11 +41,13 @@ import {
   type Seed,
   type StockSource,
 } from "@/domain/profitTracker";
+import { useT } from "@/i18n/client";
+import { msg } from "@/i18n/core";
 import { RANGES, rangeDays, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { offerLabel } from "@/domain/offers";
-import { cn, formatPercent, timeAgo } from "@/lib/utils";
+import { cn, formatPercent } from "@/lib/utils";
 import type { AppRouter } from "@/server/trpc/root";
 import { CostVersionDialog } from "../products/products-view";
 import { OrderProfitView, productLine } from "./order-view";
@@ -102,14 +104,14 @@ function parseForm(f: Form, row: Row, currency: string): Parsed {
       if (v < 0) throw new Error();
       return v;
     } catch {
-      problem ??= "One of the amounts isn't a number.";
+      problem ??= msg("One of the amounts isn't a number.");
       return 0;
     }
   };
   const p = (s: string) => {
     const v = Number.parseFloat((s || "0").replace(",", "."));
     if (!Number.isFinite(v) || v < 0 || v > 100) {
-      problem ??= "Rates go from 0 to 100%.";
+      problem ??= msg("Rates go from 0 to 100%.");
       return 0;
     }
     return roundRate(v / 100);
@@ -168,18 +170,18 @@ const samePlan = (a: ProfitPlan | null, b: ProfitPlan | null) => {
 // ─────────────────────────── Small pieces ───────────────────────────
 
 const SOURCE_TEXT: Record<FieldSource, string> = {
-  you: "Saved by you",
-  orders: "From your orders",
-  product: "From product details and your offer",
-  mdm: "From MDM stock",
-  default: "Default, no data yet",
+  you: msg("Saved by you"),
+  orders: msg("From your orders"),
+  product: msg("From product details and your offer"),
+  mdm: msg("From MDM stock"),
+  default: msg("Default, no data yet"),
 };
 
 function PctInput({ id, value, onChange, disabled }: { id: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
   return (
     <div className="relative">
-      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="num pr-8" />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span>
+      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="num pe-8" />
+      <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-subtle">%</span>
     </div>
   );
 }
@@ -205,13 +207,14 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 // ─────────────────────────── One product ───────────────────────────
 
 const TABS = [
-  { key: "potential", label: "1 · Before ads", short: "Before ads" },
-  { key: "real", label: "2 · With ads, rates and fees", short: "With ads & fees" },
-  { key: "actual", label: "3 · Real orders so far", short: "Real orders" },
+  { key: "potential", label: msg("1 · Before ads"), short: msg("Before ads") },
+  { key: "real", label: msg("2 · With ads, rates and fees"), short: msg("With ads & fees") },
+  { key: "actual", label: msg("3 · Real orders so far"), short: msg("Real orders") },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
 function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row: Row; data: Tracker; canSave: boolean; canEdit: boolean; onEditDetails: () => void }) {
+  const { t, tx, ago } = useT();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -248,7 +251,7 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
       onSuccess: async (_r, vars) => {
         await qc.invalidateQueries({ queryKey: trpc.profit.pathKey() });
         setEdits({});
-        toast("success", vars.plan ? `Saved for ${row.name}` : `${row.name} follows your data again`);
+        toast("success", vars.plan ? t("Saved for {name}", { name: row.name }) : t("{name} follows your data again", { name: row.name }));
       },
       onError: (e) => toast("error", errorMessage(e)),
     }),
@@ -258,11 +261,11 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
   const hint = (key: keyof ProjectionInput, formKey: keyof Form, show: (v: string) => string) => {
     const differs = form[formKey] !== dataForm[formKey];
     const source = fromData.sources[key] ?? "default";
-    if (!differs) return SOURCE_TEXT[source];
+    if (!differs) return t(SOURCE_TEXT[source]);
     return (
       <>
-        {SOURCE_TEXT[source]}: {show(String(dataForm[formKey]))}.{" "}
-        <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={() => set(formKey)(dataForm[formKey] as never)}>Use it</button>
+        {t(SOURCE_TEXT[source])}: {show(String(dataForm[formKey]))}.{" "}
+        <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={() => set(formKey)(dataForm[formKey] as never)}>{t("Use it")}</button>
       </>
     );
   };
@@ -277,24 +280,24 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 
   const stockField = (
     <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
-      <Field label="Stock to count" htmlFor="stock-src" hint={form.stockSource === "TYPED" ? (row.stock.read ? undefined : "MDM hasn't sent stock for this product yet. Type how many units you have.") : `${count(parsed.units)} units in MDM`}>
+      <Field label={t("Stock to count")} htmlFor="stock-src" hint={form.stockSource === "TYPED" ? (row.stock.read ? undefined : t("MDM hasn't sent stock for this product yet. Type how many units you have.")) : t("{n} units in MDM", { n: count(parsed.units) })}>
         <Select id="stock-src" value={form.stockSource} onChange={(e) => setEdits((x) => ({ ...x, stockSource: e.target.value as StockSource, stockUnits: e.target.value === "TYPED" ? form.stockUnits : String(stockUnitsFor(e.target.value as StockSource, row.stock, null)) }))}>
-          {STOCK_SOURCES.map((s) => <option key={s} value={s} disabled={s !== "TYPED" && !row.stock.read}>{STOCK_SOURCE_LABEL[s]}</option>)}
+          {STOCK_SOURCES.map((s) => <option key={s} value={s} disabled={s !== "TYPED" && !row.stock.read}>{t(STOCK_SOURCE_LABEL[s])}</option>)}
         </Select>
       </Field>
-      <Field label="Units" htmlFor="stock-units">
+      <Field label={t("Units")} htmlFor="stock-units">
         <Input id="stock-units" inputMode="numeric" className="num" value={form.stockSource === "TYPED" ? form.stockUnits : String(parsed.units)} disabled={form.stockSource !== "TYPED"} onChange={(e) => set("stockUnits")(e.target.value.replace(/[^\d]/g, ""))} />
       </Field>
     </div>
   );
   const priceFields = (
     <div className="grid grid-cols-2 gap-3">
-      <Field label="Sale price per piece" htmlFor="pt-price" hint={row.piecesPerOrder > 1 && form.salePrice === dataForm.salePrice ? `Your offer: the order price ÷ ${row.piecesPerOrder} pieces` : moneyHint("salePrice")}><MoneyInput id="pt-price" currency={cur} value={form.salePrice} onChange={set("salePrice")} /></Field>
-      <Field label="Cost per piece" htmlFor="pt-cost" hint={moneyHint("unitCost")}><MoneyInput id="pt-cost" currency={cur} value={form.unitCost} onChange={set("unitCost")} /></Field>
+      <Field label={t("Sale price per piece")} htmlFor="pt-price" hint={row.piecesPerOrder > 1 && form.salePrice === dataForm.salePrice ? t("Your offer: the order price ÷ {n} pieces", { n: row.piecesPerOrder }) : moneyHint("salePrice")}><MoneyInput id="pt-price" currency={cur} value={form.salePrice} onChange={set("salePrice")} /></Field>
+      <Field label={t("Cost per piece")} htmlFor="pt-cost" hint={moneyHint("unitCost")}><MoneyInput id="pt-cost" currency={cur} value={form.unitCost} onChange={set("unitCost")} /></Field>
     </div>
   );
   const unitsPerOrder = (
-    <Field label="Pieces per order" htmlFor="pt-upo" hint={hint("unitsPerOrder", "unitsPerOrder", (v) => v)}>
+    <Field label={t("Pieces per order")} htmlFor="pt-upo" hint={hint("unitsPerOrder", "unitsPerOrder", (v) => v)}>
       <Input id="pt-upo" inputMode="decimal" className="num" value={form.unitsPerOrder} onChange={(e) => set("unitsPerOrder")(e.target.value)} />
     </Field>
   );
@@ -304,27 +307,27 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
     <Card role="region" aria-labelledby="pt-name" className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
         <div className="min-w-0">
-          <h2 id="pt-name" className="text-[20px] font-extrabold tracking-[-0.02em]">Stock of {row.name}</h2>
+          <h2 id="pt-name" className="text-[20px] font-extrabold tracking-[-0.02em]">{t("Stock of {name}", { name: row.name })}</h2>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-            {row.fromMdm ? <Badge tone="brand">From MDM</Badge> : null}
-            {noCost ? <Badge tone="warning">No price or cost in product details</Badge> : null}
-            {row.plan ? <Badge tone="info">Your numbers saved</Badge> : null}
-            {row.stockDetail?.at ? <span>MDM stock read {timeAgo(row.stockDetail.at)}</span> : <span>No MDM stock yet</span>}
+            {row.fromMdm ? <Badge tone="brand">{t("From MDM")}</Badge> : null}
+            {noCost ? <Badge tone="warning">{t("No price or cost in product details")}</Badge> : null}
+            {row.plan ? <Badge tone="info">{t("Your numbers saved")}</Badge> : null}
+            {row.stockDetail?.at ? <span>{t("MDM stock read {ago}", { ago: ago(row.stockDetail.at) })}</span> : <span>{t("No MDM stock yet")}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canEdit ? <Button variant="ghost" className="-ml-3 sm:ml-0" onClick={onEditDetails}><Pencil /> {noCost ? "Add price and costs" : "Edit product details"}</Button> : null}
+          {canEdit ? <Button variant="ghost" className="-ms-3 sm:ms-0" onClick={onEditDetails}><Pencil /> {noCost ? t("Add price and costs") : t("Edit product details")}</Button> : null}
         </div>
       </div>
 
       {row.stock.read ? (
         <dl className="mx-5 mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
           {[
-            ["Available", row.stock.available],
-            ["On the way", row.stock.incoming],
-            ["Received in total", row.stock.received],
-            ["In delivery", row.stockDetail?.inDelivery ?? 0],
-            ["Coming back", row.stockDetail?.returning ?? 0],
+            [t("Available"), row.stock.available],
+            [t("On the way"), row.stock.incoming],
+            [t("Received in total"), row.stock.received],
+            [t("In delivery"), row.stockDetail?.inDelivery ?? 0],
+            [t("Coming back"), row.stockDetail?.returning ?? 0],
           ].map(([l, v]) => (
             <div key={l} className="rounded-2xl bg-surface-2 px-3 py-2.5">
               <dt className="text-[11px] text-subtle">{l}</dt>
@@ -334,56 +337,56 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
         </dl>
       ) : null}
 
-      <div ref={boxRef} data-slide="" role="tablist" aria-label="Calculation" className="no-scrollbar relative mx-5 mt-5 flex gap-0.5 overflow-x-auto rounded-[22px] bg-surface-2 p-1 sm:rounded-full">
+      <div ref={boxRef} data-slide="" role="tablist" aria-label={t("Calculation")} className="no-scrollbar relative mx-5 mt-5 flex gap-0.5 overflow-x-auto rounded-[22px] bg-surface-2 p-1 sm:rounded-full">
         {pill}
-        {TABS.map((t) => (
+        {TABS.map((tb) => (
           <button
-            key={t.key}
+            key={tb.key}
             type="button"
             role="tab"
-            id={`pt-tab-${t.key}`}
-            aria-selected={tab === t.key}
-            aria-controls={`pt-panel-${t.key}`}
-            data-active={tab === t.key}
-            onClick={() => setTab(t.key)}
-            className={cn("slide-item press min-h-9 flex-1 rounded-full px-2.5 py-1.5 text-[12px] font-semibold leading-tight sm:whitespace-nowrap sm:px-3.5 sm:text-[13px]", tab === t.key ? "bg-brand glow" : "text-muted hover:text-fg")}
+            id={`pt-tab-${tb.key}`}
+            aria-selected={tab === tb.key}
+            aria-controls={`pt-panel-${tb.key}`}
+            data-active={tab === tb.key}
+            onClick={() => setTab(tb.key)}
+            className={cn("slide-item press min-h-9 flex-1 rounded-full px-2.5 py-1.5 text-[12px] font-semibold leading-tight sm:whitespace-nowrap sm:px-3.5 sm:text-[13px]", tab === tb.key ? "bg-brand glow" : "text-muted hover:text-fg")}
           >
-            <span className="hidden sm:inline">{t.label}</span>
-            <span className="sm:hidden">{t.short}</span>
+            <span className="hidden sm:inline">{t(tb.label)}</span>
+            <span className="sm:hidden">{t(tb.short)}</span>
           </button>
         ))}
       </div>
 
       <div className="p-5">
-        {parsed.problem ? <p className="mb-4 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert">{parsed.problem}</p> : null}
+        {parsed.problem ? <p className="mb-4 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert">{t(parsed.problem)}</p> : null}
 
         {tab === "potential" ? (
           <div role="tabpanel" id="pt-panel-potential" aria-labelledby="pt-tab-potential" className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
             <div className="flex flex-col gap-4">
-              <p className="text-sm text-muted">Every unit sells at its price: no ads, no cancelled or returned orders. This is the most the stock can earn.</p>
+              <p className="text-sm text-muted">{t("Every unit sells at its price: no ads, no cancelled or returned orders. This is the most the stock can earn.")}</p>
               {stockField}
               {priceFields}
-              <Check checked={form.includeFees} onChange={set("includeFees")}>Also take off each order&apos;s delivery, packaging and call center fees</Check>
+              <Check checked={form.includeFees} onChange={set("includeFees")}>{t("Also take off each order's delivery, packaging and call center fees")}</Check>
               {form.includeFees ? unitsPerOrder : null}
             </div>
             <div className="flex min-w-0 flex-col gap-3">
-              <Hero label="Benefit before ads" def="Units × (sale price − cost per unit). What the stock earns if every unit sells at its price, before ads, rates and fees." value={potential.benefit} currency={cur} sub={`${count(potential.units)} units × ${fmt(potential.benefitPerUnit)} each`} />
+              <Hero label={t("Benefit before ads")} def={t("Units × (sale price − cost per unit). What the stock earns if every unit sells at its price, before ads, rates and fees.")} value={potential.benefit} currency={cur} sub={t("{n} units × {amount} each", { n: count(potential.units), amount: fmt(potential.benefitPerUnit) })} />
               <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
-                <Stat label="Sales" def="Units × sale price.">{fmt(potential.revenue)}</Stat>
-                <Stat label="Stock cost" def="Units × cost per unit.">{fmt(potential.purchaseCost)}</Stat>
-                <Stat label="Per unit">{fmt(potential.benefitPerUnit)}</Stat>
-                <Stat label="Margin" def="(Sale price − cost per unit) ÷ sale price.">{formatPercent(potential.margin)}</Stat>
+                <Stat label={t("Sales")} def={t("Units × sale price.")}>{fmt(potential.revenue)}</Stat>
+                <Stat label={t("Stock cost")} def={t("Units × cost per unit.")}>{fmt(potential.purchaseCost)}</Stat>
+                <Stat label={t("Per unit")}>{fmt(potential.benefitPerUnit)}</Stat>
+                <Stat label={t("Margin")} def={t("(Sale price − cost per unit) ÷ sale price.")}>{formatPercent(potential.margin)}</Stat>
               </div>
               {form.includeFees ? (
                 <div className="grid grid-cols-2 gap-3">
-                  <Stat label="Fees" sub={`${count(potential.orders)} orders × ${fmt(feesPerOrder(parsed.inputs))}`}>{fmt(potential.fees)}</Stat>
-                  <Stat label="Benefit after fees" tone={potential.benefitAfterFees < 0 ? "bad" : undefined}>{fmt(potential.benefitAfterFees)}</Stat>
+                  <Stat label={t("Fees")} sub={t("{n} orders × {amount}", { n: count(potential.orders), amount: fmt(feesPerOrder(parsed.inputs)) })}>{fmt(potential.fees)}</Stat>
+                  <Stat label={t("Benefit after fees")} tone={potential.benefitAfterFees < 0 ? "bad" : undefined}>{fmt(potential.benefitAfterFees)}</Stat>
                 </div>
               ) : null}
               {potential.units > 0 && parsed.inputs.salePrice > 0 ? (
                 <p className="text-sm text-muted">
-                  If all {count(potential.units)} units sell at {fmt(parsed.inputs.salePrice)}, you collect <b className="text-fg">{fmt(potential.revenue)}</b> for stock that cost <b className="text-fg">{fmt(potential.purchaseCost)}</b>.{" "}
-                  <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={() => setTab("real")}>See it with ads and rates</button>
+                  {tx("If all {n} units sell at {price}, you collect {revenue} for stock that cost {cost}.", { n: count(potential.units), price: fmt(parsed.inputs.salePrice), revenue: <b className="num text-fg">{fmt(potential.revenue)}</b>, cost: <b className="num text-fg">{fmt(potential.purchaseCost)}</b> })}{" "}
+                  <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={() => setTab("real")}>{t("See it with ads and rates")}</button>
                 </p>
               ) : null}
             </div>
@@ -393,54 +396,54 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
         {tab === "real" ? (
           <div role="tabpanel" id="pt-panel-real" aria-labelledby="pt-tab-real" className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
             <div className="flex flex-col gap-6">
-              <Group title="Stock and price">
+              <Group title={t("Stock and price")}>
                 {stockField}
                 {priceFields}
                 {unitsPerOrder}
               </Group>
               <div className="flex flex-col items-start gap-1.5">
-                <MoreDetailsButton open={ratesOpen} onToggle={setRatesOpen} labels={["Change rates and fees", "Hide rates and fees"]} controls="pt-rates" />
+                <MoreDetailsButton open={ratesOpen} onToggle={setRatesOpen} labels={[t("Change rates and fees"), t("Hide rates and fees")]} controls="pt-rates" />
                 {!ratesOpen ? (
                   <p className="text-xs text-subtle">
-                    Rates come from your orders, fees from the product details{adsMissing ? "" : " and ad spend from the campaigns linked to it"}.
-                    {ownRates ? ` ${ownRates} of them ${ownRates === 1 ? "is" : "are"} your own number${ownRates === 1 ? "" : "s"}.` : ""}
+                    {adsMissing ? t("Rates come from your orders, fees from the product details.") : t("Rates come from your orders, fees from the product details and ad spend from the campaigns linked to it.")}
+                    {ownRates ? ` ${ownRates === 1 ? t("1 of them is your own number.") : t("{n} of them are your own numbers.", { n: ownRates })}` : ""}
                   </p>
                 ) : null}
               </div>
               {ratesOpen ? (
                 <div id="pt-rates" className="flex flex-col gap-6">
-                  <Group title="Rates">
+                  <Group title={t("Rates")}>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Confirmed" htmlFor="pt-conf" hint={rateHint("confirmationRate")}><PctInput id="pt-conf" value={form.confirmationRate} onChange={set("confirmationRate")} /></Field>
-                      <Field label="Shipped (of confirmed)" htmlFor="pt-ship" hint={rateHint("shippingRate")}><PctInput id="pt-ship" value={form.shippingRate} onChange={set("shippingRate")} /></Field>
-                      <Field label="Delivered (of shipped)" htmlFor="pt-del" hint={rateHint("deliveryRate")}><PctInput id="pt-del" value={form.deliveryRate} onChange={set("deliveryRate")} /></Field>
-                      <Field label="Lost (of shipped)" htmlFor="pt-lost" hint={rateHint("lostRate")}><PctInput id="pt-lost" value={form.lostRate} onChange={set("lostRate")} /></Field>
-                      <Field label="Returned (of shipped)" htmlFor="pt-ret" hint={form.returnAuto ? "The rest of the shipped parcels" : undefined}>
+                      <Field label={t("Confirmed")} htmlFor="pt-conf" hint={rateHint("confirmationRate")}><PctInput id="pt-conf" value={form.confirmationRate} onChange={set("confirmationRate")} /></Field>
+                      <Field label={t("Shipped (of confirmed)")} htmlFor="pt-ship" hint={rateHint("shippingRate")}><PctInput id="pt-ship" value={form.shippingRate} onChange={set("shippingRate")} /></Field>
+                      <Field label={t("Delivered (of shipped)")} htmlFor="pt-del" hint={rateHint("deliveryRate")}><PctInput id="pt-del" value={form.deliveryRate} onChange={set("deliveryRate")} /></Field>
+                      <Field label={t("Lost (of shipped)")} htmlFor="pt-lost" hint={rateHint("lostRate")}><PctInput id="pt-lost" value={form.lostRate} onChange={set("lostRate")} /></Field>
+                      <Field label={t("Returned (of shipped)")} htmlFor="pt-ret" hint={form.returnAuto ? t("The rest of the shipped parcels") : undefined}>
                         <PctInput id="pt-ret" value={form.returnAuto && projection.ok ? pctText(projection.returnRateUsed) : form.returnRate} onChange={set("returnRate")} disabled={form.returnAuto} />
                       </Field>
                     </div>
-                    <Check checked={form.returnAuto} onChange={(v) => setEdits((x) => ({ ...x, returnAuto: v, returnRate: projection.ok ? pctText(projection.returnRateUsed) : form.returnRate }))}>Every parcel not delivered or lost comes back</Check>
+                    <Check checked={form.returnAuto} onChange={(v) => setEdits((x) => ({ ...x, returnAuto: v, returnRate: projection.ok ? pctText(projection.returnRateUsed) : form.returnRate }))}>{t("Every parcel not delivered or lost comes back")}</Check>
                     <p className="text-xs text-subtle">
-                      {row.sample.finished > 0 ? `Your orders in these days: ${count(row.sample.placed)} placed, ${count(row.sample.finished)} parcels finished.` : "No finished parcels for this product in these days."}
-                      {!data.minFinished || row.sample.finished >= data.minFinished ? "" : ` Rates come from your orders after ${data.minFinished} finished parcels.`}
+                      {row.sample.finished > 0 ? t("Your orders in these days: {placed} placed, {finished} parcels finished.", { placed: count(row.sample.placed), finished: count(row.sample.finished) }) : t("No finished parcels for this product in these days.")}
+                      {!data.minFinished || row.sample.finished >= data.minFinished ? "" : ` ${t("Rates come from your orders after {n} finished parcels.", { n: data.minFinished })}`}
                     </p>
                   </Group>
-                  <Group title="Ads and fees">
-                    <Field label="Ad spend per order placed" htmlFor="pt-cpa" hint={adsMissing ? "No campaign is linked to this product yet" : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
+                  <Group title={t("Ads and fees")}>
+                    <Field label={t("Ad spend per order placed")} htmlFor="pt-cpa" hint={adsMissing ? t("No campaign is linked to this product yet") : moneyHint("cpa")}><MoneyInput id="pt-cpa" currency={cur} value={form.cpa} onChange={set("cpa")} /></Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Delivery fee per parcel" htmlFor="pt-s" hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
-                      <Field label="Return fee per parcel" htmlFor="pt-r" hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
-                      <Field label="Call center fee" htmlFor="pt-k" hint={moneyHint("callCenterFee")}><MoneyInput id="pt-k" currency={cur} value={form.callCenterFee} onChange={set("callCenterFee")} /></Field>
-                      <Field label="Paid for each order" htmlFor="pt-kb">
+                      <Field label={t("Delivery fee per parcel")} htmlFor="pt-s" hint={moneyHint("forwardShippingFee")}><MoneyInput id="pt-s" currency={cur} value={form.forwardShippingFee} onChange={set("forwardShippingFee")} /></Field>
+                      <Field label={t("Return fee per parcel")} htmlFor="pt-r" hint={moneyHint("rtoFee")}><MoneyInput id="pt-r" currency={cur} value={form.rtoFee} onChange={set("rtoFee")} /></Field>
+                      <Field label={t("Call center fee")} htmlFor="pt-k" hint={moneyHint("callCenterFee")}><MoneyInput id="pt-k" currency={cur} value={form.callCenterFee} onChange={set("callCenterFee")} /></Field>
+                      <Field label={t("Paid for each order")} htmlFor="pt-kb">
                         <Select id="pt-kb" value={form.callCenterBasis} onChange={(e) => set("callCenterBasis")(e.target.value as CallCenterBasis)}>
-                          <option value="PLACED_LEAD">Placed</option>
-                          <option value="CONFIRMED_ORDER">Confirmed</option>
+                          <option value="PLACED_LEAD">{t("Placed")}</option>
+                          <option value="CONFIRMED_ORDER">{t("Confirmed")}</option>
                         </Select>
                       </Field>
-                      <Field label="Packaging per parcel" htmlFor="pt-g" hint={moneyHint("packagingFee")}><MoneyInput id="pt-g" currency={cur} value={form.packagingFee} onChange={set("packagingFee")} /></Field>
-                      <Field label="Other MDM fees per delivered order" htmlFor="pt-x" hint="COD or fulfilment fee, if MDM charges one"><MoneyInput id="pt-x" currency={cur} value={form.extraFeePerDelivered} onChange={set("extraFeePerDelivered")} /></Field>
+                      <Field label={t("Packaging per parcel")} htmlFor="pt-g" hint={moneyHint("packagingFee")}><MoneyInput id="pt-g" currency={cur} value={form.packagingFee} onChange={set("packagingFee")} /></Field>
+                      <Field label={t("Other MDM fees per delivered order")} htmlFor="pt-x" hint={t("COD or fulfilment fee, if MDM charges one")}><MoneyInput id="pt-x" currency={cur} value={form.extraFeePerDelivered} onChange={set("extraFeePerDelivered")} /></Field>
                     </div>
-                    <Field label="Other costs for this stock" htmlFor="pt-o" hint="Transport to MDM, a designer, anything paid once"><MoneyInput id="pt-o" currency={cur} value={form.otherCosts} onChange={set("otherCosts")} /></Field>
+                    <Field label={t("Other costs for this stock")} htmlFor="pt-o" hint={t("Transport to MDM, a designer, anything paid once")}><MoneyInput id="pt-o" currency={cur} value={form.otherCosts} onChange={set("otherCosts")} /></Field>
                   </Group>
                 </div>
               ) : null}
@@ -449,41 +452,46 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
             <div className="flex min-w-0 flex-col gap-4">
               {adsMissing ? (
                 <div className="flex flex-col gap-1.5 rounded-2xl bg-warning-soft px-4 py-3 text-sm" role="note">
-                  <p className="flex items-start gap-2 font-semibold text-warning"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />No ads are linked to {row.name} yet</p>
-                  <p className="text-muted">This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>, or <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={typeAdSpend}>type an ad spend per order</button> under Ads and fees.</p>
+                  <p className="flex items-start gap-2 font-semibold text-warning"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{t("No ads are linked to {name} yet", { name: row.name })}</p>
+                  <p className="text-muted">
+                    {tx("This calculation only counts ads from the campaigns you link to this product. Link them at the top of this page or in {campaigns}, or {type} under Ads and fees.", {
+                      campaigns: <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">{t("Campaigns")}</Link>,
+                      type: <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={typeAdSpend}>{t("type an ad spend per order")}</button>,
+                    })}
+                  </p>
                 </div>
               ) : !projection.ok ? (
-                <p className="flex items-start gap-2 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{projection.reason}</p>
+                <p className="flex items-start gap-2 rounded-2xl bg-warning-soft px-4 py-3 text-sm text-warning" role="alert"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{t(projection.reason)}</p>
               ) : (
                 <>
                   <Hero
-                    label="Real benefit"
-                    def="What the stock earns once every unit is delivered or lost, after ad spend, cancelled and returned orders, and every fee."
+                    label={t("Real benefit")}
+                    def={t("What the stock earns once every unit is delivered or lost, after ad spend, cancelled and returned orders, and every fee.")}
                     value={projection.benefit}
                     currency={cur}
-                    sub={`${fmt(projection.benefitPerUnit)} per unit · ${formatPercent(projection.potential > 0 ? projection.benefit / projection.potential : null, 0)} of the benefit before ads`}
+                    sub={t("{amount} per unit · {pct} of the benefit before ads", { amount: fmt(projection.benefitPerUnit), pct: formatPercent(projection.potential > 0 ? projection.benefit / projection.potential : null, 0) })}
                   />
                   <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
-                    <Stat label="Missing benefit" def="Benefit before ads − real benefit: what ads, rates and fees take." tone="bad">{fmt(projection.missing)}</Stat>
-                    <Stat label="Breakeven CPA" def="The most you can pay in ads per order placed before this stock loses money." sub="per order placed">{fmt(projection.breakevenCpa)}</Stat>
-                    <Stat label="POAS" def="Real benefit ÷ ad spend.">{projection.poas === null ? "—" : projection.poas.toFixed(2)}</Stat>
-                    <Stat label="Return on stock" def="Real benefit ÷ what the stock cost.">{formatPercent(projection.returnOnStock, 0)}</Stat>
+                    <Stat label={t("Missing benefit")} def={t("Benefit before ads − real benefit: what ads, rates and fees take.")} tone="bad">{fmt(projection.missing)}</Stat>
+                    <Stat label={t("Breakeven CPA")} def={t("The most you can pay in ads per order placed before this stock loses money.")} sub={t("per order placed")}>{fmt(projection.breakevenCpa)}</Stat>
+                    <Stat label={t("POAS")} def={t("Real benefit ÷ ad spend.")}>{projection.poas === null ? "—" : projection.poas.toFixed(2)}</Stat>
+                    <Stat label={t("Return on stock")} def={t("Real benefit ÷ what the stock cost.")}>{formatPercent(projection.returnOnStock, 0)}</Stat>
                   </div>
                   {projection.benefit < 0 ? (
                     <p className="rounded-2xl border border-negative/30 bg-negative-soft px-4 py-3 text-sm text-negative">
-                      This stock loses money at these numbers. Keep ad spend under <b>{fmt(projection.breakevenCpa)}</b> per order placed, or raise the delivery rate.
+                      {tx("This stock loses money at these numbers. Keep ad spend under {amount} per order placed, or raise the delivery rate.", { amount: <b>{fmt(projection.breakevenCpa)}</b> })}
                     </p>
                   ) : null}
                   <div className="rounded-2xl bg-surface-2 p-4">
-                    <h3 className="text-sm font-bold">To sell {count(parsed.units)} units you need about</h3>
+                    <h3 className="text-sm font-bold">{t("To sell {n} units you need about", { n: count(parsed.units) })}</h3>
                     <ol className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
                       {[
-                        ["Orders placed", projection.flow.leads],
-                        ["Confirmed", projection.flow.confirmed],
-                        ["Shipped", projection.flow.shipped],
-                        ["Delivered", projection.flow.delivered],
-                        ["Returned", projection.flow.returned],
-                        ["Lost", projection.flow.lost],
+                        [t("Orders placed"), projection.flow.leads],
+                        [t("Confirmed"), projection.flow.confirmed],
+                        [t("Shipped"), projection.flow.shipped],
+                        [t("Delivered"), projection.flow.delivered],
+                        [t("Returned"), projection.flow.returned],
+                        [t("Lost"), projection.flow.lost],
                       ].map(([l, v]) => (
                         <li key={l as string} className="flex flex-col rounded-xl bg-surface px-3 py-2">
                           <span className="num text-base font-bold">{count(v as number)}</span>
@@ -491,17 +499,17 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
                         </li>
                       ))}
                     </ol>
-                    <p className="mt-3 text-xs text-subtle">Ad spend for them: {fmt(projection.adSpend)}. Returned parcels come back to stock and are sent again.</p>
+                    <p className="mt-3 text-xs text-subtle">{t("Ad spend for them: {amount}. Returned parcels come back to stock and are sent again.", { amount: fmt(projection.adSpend) })}</p>
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-bold">Where the benefit goes</h3>
+                    <h3 className="mb-3 text-sm font-bold">{t("Where the benefit goes")}</h3>
                     <Bridge
-                      label="From the benefit before ads to the real benefit"
+                      label={t("From the benefit before ads to the real benefit")}
                       currency={cur}
                       steps={[
-                        { label: "Benefit before ads", amount: projection.potential, kind: "start", note: "Every unit sold at its price" },
-                        ...projection.gap.map((g) => ({ label: GAP_LABEL[g.key], amount: g.amount, kind: "cost" as const, note: projection.potential > 0 ? `${formatPercent(g.amount / projection.potential, 0)} of it` : undefined })),
-                        { label: "Real benefit", amount: projection.benefit, kind: "end" },
+                        { label: t("Benefit before ads"), amount: projection.potential, kind: "start", note: t("Every unit sold at its price") },
+                        ...projection.gap.map((g) => ({ label: t(GAP_LABEL[g.key]), amount: g.amount, kind: "cost" as const, note: projection.potential > 0 ? t("{pct} of it", { pct: formatPercent(g.amount / projection.potential, 0) }) : undefined })),
+                        { label: t("Real benefit"), amount: projection.benefit, kind: "end" },
                       ]}
                     />
                   </div>
@@ -513,37 +521,37 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 
         {tab === "actual" ? (
           <div role="tabpanel" id="pt-panel-actual" aria-labelledby="pt-tab-actual" className="flex flex-col gap-4">
-            <p className="text-sm text-muted">Your real orders for {row.name} placed in the days picked above: what their delivered units should have made at your sale price, and what each cost took from it.</p>
+            <p className="text-sm text-muted">{t("Your real orders for {name} placed in the days picked above: what their delivered units should have made at your sale price, and what each cost took from it.", { name: row.name })}</p>
             {row.actual.deliveredUnits === 0 && row.actual.adSpend === 0 ? (
-              <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-muted">No delivered parcels or ad spend for this product in these days.</p>
+              <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-muted">{t("No delivered parcels or ad spend for this product in these days.")}</p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                  <Stat label="Units delivered" sub={`${count(row.sample.delivered)} parcels`}>{count(row.actual.deliveredUnits)}</Stat>
-                  <Stat label="Collected" def="Cash on delivery of the delivered parcels.">{fmt(row.actual.deliveredRevenue)}</Stat>
-                  <Stat label="Real profit" def="Collected − ad spend − cost of the units − delivery and return fees − call center − packaging − this product's expenses." tone={actual.profit < 0 ? "bad" : "good"}>{fmt(actual.profit)}</Stat>
-                  <Stat label="Missing benefit" def="What the delivered units should have made at your sale price − real profit.">{fmt(actual.missing)}</Stat>
+                  <Stat label={t("Units delivered")} sub={t("{n} parcels", { n: count(row.sample.delivered) })}>{count(row.actual.deliveredUnits)}</Stat>
+                  <Stat label={t("Collected")} def={t("Cash on delivery of the delivered parcels.")}>{fmt(row.actual.deliveredRevenue)}</Stat>
+                  <Stat label={t("Real profit")} def={t("Collected − ad spend − cost of the units − delivery and return fees − call center − packaging − this product's expenses.")} tone={actual.profit < 0 ? "bad" : "good"}>{fmt(actual.profit)}</Stat>
+                  <Stat label={t("Missing benefit")} def={t("What the delivered units should have made at your sale price − real profit.")}>{fmt(actual.missing)}</Stat>
                 </div>
                 <Bridge
-                  label="From the benefit at your price to the real profit"
+                  label={t("From the benefit at your price to the real profit")}
                   currency={cur}
                   steps={[
-                    { label: "Delivered units at your price", amount: actual.expected, kind: "start", note: `${count(row.actual.deliveredUnits)} × ${fmt(parsed.inputs.salePrice)} − their cost` },
+                    { label: t("Delivered units at your price"), amount: actual.expected, kind: "start", note: t("{n} × {price} − their cost", { n: count(row.actual.deliveredUnits), price: fmt(parsed.inputs.salePrice) }) },
                     ...actual.parts.map((p) => ({
-                      label: ACTUAL_LABEL[p.key],
+                      label: t(ACTUAL_LABEL[p.key]),
                       amount: Math.abs(p.amount),
                       kind: p.amount < 0 ? ("cost" as const) : ("gain" as const),
-                      note: p.key === "priceGap" ? (p.amount > 0 ? "Parcels collected more than the price (delivery paid by customers, upsells)" : "Parcels collected less than the price (discounts)") : undefined,
+                      note: p.key === "priceGap" ? (p.amount > 0 ? t("Parcels collected more than the price (delivery paid by customers, upsells)") : t("Parcels collected less than the price (discounts)")) : undefined,
                     })),
-                    { label: "Real profit", amount: actual.profit, kind: "end" },
+                    { label: t("Real profit"), amount: actual.profit, kind: "end" },
                   ]}
                 />
               </>
             )}
             <ul className="flex flex-col gap-1.5 text-xs text-subtle">
-              {row.sample.inTransit > 0 ? <li>• {count(row.sample.inTransit)} parcels are still with the carrier ({fmt(row.actual.cashInTransit)}). They count once delivered or returned.</li> : null}
-              {row.actual.missingCostOrders > 0 ? <li className="text-warning">• {count(row.actual.missingCostOrders)} orders have no cost for this product on their date, so their units cost nothing here. Add a cost version that starts earlier.</li> : null}
-              {data.unlinked.total > 0 ? <li>• {fmt(data.unlinked.total)} of ad spend isn&apos;t linked to any product, so it isn&apos;t counted here. Link its campaigns at the top of this page.</li> : null}
+              {row.sample.inTransit > 0 ? <li>• {t("{n} parcels are still with the carrier ({amount}). They count once delivered or returned.", { n: count(row.sample.inTransit), amount: fmt(row.actual.cashInTransit) })}</li> : null}
+              {row.actual.missingCostOrders > 0 ? <li className="text-warning">• {t("{n} orders have no cost for this product on their date, so their units cost nothing here. Add a cost version that starts earlier.", { n: count(row.actual.missingCostOrders) })}</li> : null}
+              {data.unlinked.total > 0 ? <li>• {t("{amount} of ad spend isn't linked to any product, so it isn't counted here. Link its campaigns at the top of this page.", { amount: fmt(data.unlinked.total) })}</li> : null}
             </ul>
           </div>
         ) : null}
@@ -551,16 +559,16 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 
       {canSave && tab !== "actual" ? (
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/70 bg-surface-2/60 px-5 py-3">
-          <span className="mr-auto text-xs text-subtle">{changed ? "Not saved yet. Saving keeps these numbers for this product." : row.plan ? "These numbers are saved for this product." : "Using your data. Change any number to try it."}</span>
+          <span className="me-auto text-xs text-subtle">{changed ? t("Not saved yet. Saving keeps these numbers for this product.") : row.plan ? t("These numbers are saved for this product.") : t("Using your data. Change any number to try it.")}</span>
           {row.plan || changed ? (
-            <Button variant="ghost" disabled={save.isPending} onClick={() => (row.plan ? save.mutate({ productId: row.id, plan: null }) : setEdits({}))}><RotateCcw /> Back to my data</Button>
+            <Button variant="ghost" disabled={save.isPending} onClick={() => (row.plan ? save.mutate({ productId: row.id, plan: null }) : setEdits({}))}><RotateCcw /> {t("Back to my data")}</Button>
           ) : null}
-          <Button variant="primary" disabled={!changed || save.isPending || !!parsed.problem} onClick={() => save.mutate({ productId: row.id, plan })}><Save /> Save for this product</Button>
+          <Button variant="primary" disabled={!changed || save.isPending || !!parsed.problem} onClick={() => save.mutate({ productId: row.id, plan })}><Save /> {t("Save for this product")}</Button>
         </div>
       ) : !canSave && changed && tab !== "actual" ? (
         <div className="flex items-center justify-end gap-2 border-t border-border/70 px-5 py-3">
-          <span className="mr-auto text-xs text-subtle">Only for you, not saved.</span>
-          <Button variant="ghost" onClick={() => setEdits({})}><RotateCcw /> Back to the saved numbers</Button>
+          <span className="me-auto text-xs text-subtle">{t("Only for you, not saved.")}</span>
+          <Button variant="ghost" onClick={() => setEdits({})}><RotateCcw /> {t("Back to the saved numbers")}</Button>
         </div>
       ) : null}
     </Card>
@@ -570,22 +578,23 @@ function ProductCalculator({ row, data, canSave, canEdit, onEditDetails }: { row
 // ─────────────────────────── Every product ───────────────────────────
 
 function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selected: string; onSelect: (id: string) => void }) {
+  const { t } = useT();
   const money = useMoney();
   const cur = data.currency;
   const fmt = (v: number) => money.fmt(v, cur, { decimals: false });
   const rows = data.products.map((p) => ({ p, ...productLine(p, data) }));
   return (
     <Card className="min-w-0">
-      <CardHeader title="Your products" description="What a delivered order of each product really earns, with its ads, and its real profit in these days. Pick one to see how." />
+      <CardHeader title={t("Your products")} description={t("What a delivered order of each product really earns, with its ads, and its real profit in these days. Pick one to see how.")} />
       <div className="hidden px-2 pb-3 md:block">
         <Table>
           <THead>
             <tr>
-              <Th>Product</Th>
-              <Th>Offer</Th>
-              <Th className="text-end"><Term label="Per delivered order" definition="Profit of one delivered order after ads, returns and every fee." /></Th>
-              <Th className="text-end"><Term label="Ads per delivered order" definition="Ad spend per order ÷ confirmation rate ÷ delivery rate." /></Th>
-              <Th className="text-end"><Term label="Real profit" definition="The orders placed in these days, after everything." /></Th>
+              <Th>{t("Product")}</Th>
+              <Th>{t("Offer")}</Th>
+              <Th className="text-end"><Term label={t("Per delivered order")} definition={t("Profit of one delivered order after ads, returns and every fee.")} /></Th>
+              <Th className="text-end"><Term label={t("Ads per delivered order")} definition={t("Ad spend per order ÷ confirmation rate ÷ delivery rate.")} /></Th>
+              <Th className="text-end"><Term label={t("Real profit")} definition={t("The orders placed in these days, after everything.")} /></Th>
             </tr>
           </THead>
           <tbody>
@@ -594,13 +603,13 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
                 <Td className="whitespace-normal">
                   <button type="button" className="text-start font-semibold hover:text-brand-strong" aria-pressed={selected === p.id} onClick={(e) => { e.stopPropagation(); onSelect(p.id); }}>{p.name}</button>
                   <span className="mt-0.5 flex flex-wrap gap-1">
-                    {!p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}
-                    {!p.adsLinked ? <Badge tone="warning">No ads linked</Badge> : null}
+                    {!p.cost ? <Badge tone="warning">{t("Needs price and cost")}</Badge> : null}
+                    {!p.adsLinked ? <Badge tone="warning">{t("No ads linked")}</Badge> : null}
                   </span>
                 </Td>
-                <Td className="text-[13px] text-muted">{offerLabel(input.pieces)}</Td>
-                <Td className={cn("num text-end font-bold", r.ok && r.profit < 0 ? "text-negative" : "text-positive")} title={r.ok ? undefined : r.reason}>{r.ok ? fmt(r.profit) : "—"}</Td>
-                <Td className="num text-end">{r.ok && r.adCostPerDelivered !== null ? fmt(r.adCostPerDelivered) : <span className="text-xs font-semibold text-subtle">{p.adsLinked ? "—" : "Link ads"}</span>}</Td>
+                <Td className="text-[13px] text-muted">{offerLabel(input.pieces, t)}</Td>
+                <Td className={cn("num text-end font-bold", r.ok && r.profit < 0 ? "text-negative" : "text-positive")} title={r.ok ? undefined : t(r.reason)}>{r.ok ? fmt(r.profit) : "—"}</Td>
+                <Td className="num text-end">{r.ok && r.adCostPerDelivered !== null ? fmt(r.adCostPerDelivered) : <span className="text-xs font-semibold text-subtle">{p.adsLinked ? "—" : t("Link ads")}</span>}</Td>
                 <Td className={cn("num text-end font-semibold", p.actual.trueNetProfit < 0 && "text-negative")}>{fmt(p.actual.trueNetProfit)}</Td>
               </Tr>
             ))}
@@ -611,10 +620,10 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
         {rows.map(({ p, result: r }) => (
           <li key={p.id}>
             <button type="button" aria-pressed={selected === p.id} onClick={() => onSelect(p.id)} className={cn("press flex w-full min-w-0 flex-col gap-2 rounded-2xl p-3 text-start", selected === p.id ? "bg-brand-soft ring-1 ring-brand/30" : "bg-surface-2")}>
-              <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">{p.name}{!p.cost ? <Badge tone="warning">Needs price and cost</Badge> : null}{!p.adsLinked ? <Badge tone="warning">No ads linked</Badge> : null}</span>
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">{p.name}{!p.cost ? <Badge tone="warning">{t("Needs price and cost")}</Badge> : null}{!p.adsLinked ? <Badge tone="warning">{t("No ads linked")}</Badge> : null}</span>
               <span className="grid grid-cols-2 gap-2 text-[11px] text-subtle">
-                <span className="min-w-0">Per delivered order<b className={cn("num block truncate text-[13px]", r.ok && r.profit < 0 ? "text-negative" : "text-positive")}>{r.ok ? fmt(r.profit) : "—"}</b></span>
-                <span className="min-w-0">Real profit<b className={cn("num block truncate text-[13px] text-fg", p.actual.trueNetProfit < 0 && "text-negative")}>{fmt(p.actual.trueNetProfit)}</b></span>
+                <span className="min-w-0">{t("Per delivered order")}<b className={cn("num block truncate text-[13px]", r.ok && r.profit < 0 ? "text-negative" : "text-positive")}>{r.ok ? fmt(r.profit) : "—"}</b></span>
+                <span className="min-w-0">{t("Real profit")}<b className={cn("num block truncate text-[13px] text-fg", p.actual.trueNetProfit < 0 && "text-negative")}>{fmt(p.actual.trueNetProfit)}</b></span>
               </span>
             </button>
           </li>
@@ -629,6 +638,7 @@ function ProductsOverview({ data, selected, onSelect }: { data: Tracker; selecte
  * What nobody linked is listed here with a product picker per campaign, so it can be linked at once.
  */
 function UnlinkedAds({ data, canLink }: { data: Tracker; canLink: boolean }) {
+  const { t, tx } = useT();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const toast = useToast();
@@ -640,42 +650,54 @@ function UnlinkedAds({ data, canLink }: { data: Tracker; canLink: boolean }) {
       onSuccess: async (_r, vars) => {
         await Promise.all([qc.invalidateQueries({ queryKey: trpc.profit.pathKey() }), qc.invalidateQueries({ queryKey: trpc.campaigns.pathKey() })]);
         const product = data.products.find((p) => p.id === vars.productId);
-        toast("success", product ? `Its ad spend now counts for ${product.name}` : "Campaign unlinked");
+        toast("success", product ? t("Its ad spend now counts for {name}", { name: product.name }) : t("Campaign unlinked"));
       },
       onError: (e) => toast("error", errorMessage(e)),
     }),
   );
   const { total, campaigns, other } = data.unlinked;
   if (total <= 0) return null;
+  const campaignsLink = <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">{t("Campaigns")}</Link>;
   const shown = all ? campaigns : campaigns.slice(0, 5);
   return (
     <Card className="min-w-0 border border-warning/30">
       <CardHeader
-        title={<span className="flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />Ads not linked to a product</span>}
-        description={`${fmt(total)} of ad spend counts for no product, so no product's profit includes it. Your business's total profit still does.${campaigns.length ? " Pick the product each campaign sells." : ""}`}
+        title={<span className="flex items-center gap-2"><AlertTriangle className="size-4 text-warning" aria-hidden="true" />{t("Ads not linked to a product")}</span>}
+        description={
+          campaigns.length
+            ? t("{amount} of ad spend counts for no product, so no product's profit includes it. Your business's total profit still does. Pick the product each campaign sells.", { amount: fmt(total) })
+            : t("{amount} of ad spend counts for no product, so no product's profit includes it. Your business's total profit still does.", { amount: fmt(total) })
+        }
       />
       <ul className="flex flex-col gap-2 px-4 pb-4">
         {shown.map((c) => (
           <li key={c.id} className="flex flex-col gap-2 rounded-2xl bg-surface-2 p-3 sm:flex-row sm:items-center">
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{c.name}</span>
-              <span className="num text-xs text-muted">{fmt(c.spend)} spent</span>
+              <span className="num text-xs text-muted">{t("{amount} spent", { amount: fmt(c.spend) })}</span>
             </span>
             {canLink ? (
-              <Select aria-label={`Product for ${c.name}`} value="" disabled={link.isPending} onChange={(e) => e.target.value && link.mutate({ id: c.id, productId: e.target.value })} className="h-9 w-full text-sm sm:w-56">
-                <option value="">Link to a product…</option>
+              <Select aria-label={t("Product for {name}", { name: c.name })} value="" disabled={link.isPending} onChange={(e) => e.target.value && link.mutate({ id: c.id, productId: e.target.value })} className="h-9 w-full text-sm sm:w-56">
+                <option value="">{t("Link to a product…")}</option>
                 {data.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </Select>
             ) : null}
           </li>
         ))}
         {campaigns.length > 5 ? (
-          <li><Button size="sm" variant="ghost" onClick={() => setAll((v) => !v)}>{all ? "Show fewer" : `Show all ${campaigns.length} campaigns`}</Button></li>
+          <li><Button size="sm" variant="ghost" onClick={() => setAll((v) => !v)}>{all ? t("Show fewer") : t("Show all {n} campaigns", { n: campaigns.length })}</Button></li>
         ) : null}
-        {other > 0 ? <li className="text-xs text-subtle">{campaigns.length ? `${fmt(other)} more` : fmt(other)} comes from ads with no known campaign, such as imported rows without a campaign ID, so it can&apos;t be linked here.</li> : null}
+        {other > 0 ? (
+          <li className="text-xs text-subtle">
+            {campaigns.length
+              ? t("{amount} more comes from ads with no known campaign, such as imported rows without a campaign ID, so it can't be linked here.", { amount: fmt(other) })
+              : t("{amount} comes from ads with no known campaign, such as imported rows without a campaign ID, so it can't be linked here.", { amount: fmt(other) })}
+          </li>
+        ) : null}
         <li className="text-xs text-subtle">
-          {canLink ? "You can also link a whole ad account, or several campaigns at once, " : "The owner or an admin can link them "}
-          in <Link href="/campaigns" className="font-semibold text-brand-strong hover:underline">Campaigns</Link>.
+          {canLink
+            ? tx("You can also link a whole ad account, or several campaigns at once, in {campaigns}.", { campaigns: campaignsLink })
+            : tx("The owner or an admin can link them in {campaigns}.", { campaigns: campaignsLink })}
         </li>
       </ul>
     </Card>
@@ -685,6 +707,7 @@ function UnlinkedAds({ data, canLink }: { data: Tracker; canLink: boolean }) {
 // ─────────────────────────── Page ───────────────────────────
 
 export function ProfitView({ initialProductId }: { initialProductId: string }) {
+  const { t } = useT();
   const trpc = useTRPC();
   const qc = useQueryClient();
   const workspace = useQuery(trpc.workspace.getCurrent.queryOptions());
@@ -715,8 +738,8 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
   if (workspace.data && !canRead) {
     return (
       <>
-        <PageHeader title="Profit tracker" />
-        <Card><EmptyState icon={<Lock className="size-6" />} title="Owners, admins and analysts see this page" description="Ask the owner of this business if you need to see its profit." /></Card>
+        <PageHeader title={t("Profit tracker")} />
+        <Card><EmptyState icon={<Lock className="size-6" />} title={t("Owners, admins and analysts see this page")} description={t("Ask the owner of this business if you need to see its profit.")} /></Card>
       </>
     );
   }
@@ -724,52 +747,52 @@ export function ProfitView({ initialProductId }: { initialProductId: string }) {
   return (
     <>
       <PageHeader
-        title="Profit tracker"
-        description="What one delivered order really leaves you once the product, delivery, ads and returns are paid, and your real profit by day."
+        title={t("Profit tracker")}
+        description={t("What one delivered order really leaves you once the product, delivery, ads and returns are paid, and your real profit by day.")}
         actions={
           data && data.products.length > 1 ? (
-            <Select aria-label="Product" value={selected?.id ?? ""} onChange={(e) => select(e.target.value)} className="w-full sm:w-56">
+            <Select aria-label={t("Product")} value={selected?.id ?? ""} onChange={(e) => select(e.target.value)} className="w-full sm:w-56">
               {data.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           ) : undefined
         }
       />
       <div className="mb-5 flex flex-col gap-2">
-        <span className="text-xs font-semibold text-muted">Rates, ad spend and real orders from</span>
+        <span className="text-xs font-semibold text-muted">{t("Rates, ad spend and real orders from")}</span>
         <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-          {RANGES.map((r) => <Chip key={r.key} active={range === r.key} onClick={() => setRange(r.key)} className="shrink-0">{r.label}</Chip>)}
+          {RANGES.map((r) => <Chip key={r.key} active={range === r.key} onClick={() => setRange(r.key)} className="shrink-0">{t(r.label)}</Chip>)}
         </div>
         {range === "custom" ? (
           <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-            <Input type="date" aria-label="From" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
-            <Input type="date" aria-label="To" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+            <Input type="date" aria-label={t("From")} value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+            <Input type="date" aria-label={t("To")} value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
           </div>
         ) : null}
-        {bad ? <p className="text-sm text-negative">The start day must be before the end day.</p> : null}
+        {bad ? <p className="text-sm text-negative">{t("The start day must be before the end day.")}</p> : null}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
           <AdsFilter />
-          {ads ? <span className="text-xs text-muted">Only the orders and ad spend of these ads count. Stock and product details stay the same.</span> : null}
+          {ads ? <span className="text-xs text-muted">{t("Only the orders and ad spend of these ads count. Stock and product details stay the same.")}</span> : null}
         </div>
       </div>
 
       {tracker.isError ? (
         <ErrorState message={errorMessage(tracker.error)} />
       ) : !data ? (
-        <Loading label="Loading your products" />
+        <Loading label={t("Loading your products")} />
       ) : data.products.length === 0 ? (
         <Card>
-          <EmptyState icon={<PackageOpen className="size-6" />} title="No products yet" description="Products appear here once MDM sends orders, or when you add one." action={<Button asChild variant="primary"><Link href="/products">Open Products</Link></Button>} />
+          <EmptyState icon={<PackageOpen className="size-6" />} title={t("No products yet")} description={t("Products appear here once MDM sends orders, or when you add one.")} action={<Button asChild variant="primary"><Link href="/products">{t("Open Products")}</Link></Button>} />
         </Card>
       ) : (
         <div className="flex min-w-0 flex-col gap-[18px]">
-          {data.demo ? <div><Badge tone="brand">Demo data</Badge></div> : null}
+          {data.demo ? <div><Badge tone="brand">{t("Demo data")}</Badge></div> : null}
           <UnlinkedAds data={data} canLink={canEdit} />
           {data.products.length > 1 ? <ProductsOverview data={data} selected={selected?.id ?? ""} onSelect={select} /> : null}
           <div ref={detailRef} className="scroll-mt-24">
             {selected ? <OrderProfitView key={selected.id} row={selected} data={data} canEdit={canEdit && !!editRow} onEditDetails={() => setEditing(true)} days={days} /> : null}
           </div>
           {selected ? (
-            <MoreDetails id="profit-stock" hint="Your stock: what the units MDM holds can earn, before ads and after them, and your real orders against your price.">
+            <MoreDetails id="profit-stock" hint={t("Your stock: what the units MDM holds can earn, before ads and after them, and your real orders against your price.")}>
               <ProductCalculator key={selected.id} row={selected} data={data} canSave={canSave} canEdit={canEdit && !!editRow} onEditDetails={() => setEditing(true)} />
             </MoreDetails>
           ) : null}

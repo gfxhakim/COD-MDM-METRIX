@@ -3,10 +3,12 @@
 import * as React from "react";
 import { Input, Select } from "@/components/ui/form";
 import { MAX_PIECES_PER_ORDER, OFFER_PRESETS } from "@/domain/offers";
+import { useT } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 
 /** Pick a product's offer: a preset, or any number of pieces per order. */
 export function OfferPicker({ id, label, value, onChange, disabled, className }: { id?: string; label?: string; value: number; onChange: (pieces: number) => void; disabled?: boolean; className?: string }) {
+  const { t } = useT();
   const preset = OFFER_PRESETS.some((p) => p.pieces === value);
   const [other, setOther] = React.useState(!preset);
   const [typed, setTyped] = React.useState(String(value));
@@ -28,12 +30,12 @@ export function OfferPicker({ id, label, value, onChange, disabled, className }:
           onChange(Number(e.target.value));
         }}
       >
-        {OFFER_PRESETS.map((p) => <option key={p.pieces} value={p.pieces}>{p.label} · {p.detail}</option>)}
-        <option value="other">Another number of pieces…</option>
+        {OFFER_PRESETS.map((p) => <option key={p.pieces} value={p.pieces}>{t(p.label)} · {t(p.detail)}</option>)}
+        <option value="other">{t("Another number of pieces…")}</option>
       </Select>
       {other ? (
         <Input
-          aria-label="Pieces per order"
+          aria-label={t("Pieces per order")}
           inputMode="numeric"
           className="num w-20"
           disabled={disabled}

@@ -10,10 +10,13 @@
  * (a few hours either side of UTC midnight) pick the right days.
  */
 
+import { msg } from "@/i18n/core";
+
 export const FREQUENCIES = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;
 export type Frequency = (typeof FREQUENCIES)[number];
-export const FREQUENCY_LABEL: Record<Frequency, string> = { DAILY: "Every day", WEEKLY: "Every week", MONTHLY: "Every month", YEARLY: "Every year" };
-export const FREQUENCY_UNIT: Record<Frequency, string> = { DAILY: "day", WEEKLY: "week", MONTHLY: "month", YEARLY: "year" };
+/** English, shown through `t()`. */
+export const FREQUENCY_LABEL: Record<Frequency, string> = { DAILY: msg("Every day"), WEEKLY: msg("Every week"), MONTHLY: msg("Every month"), YEARLY: msg("Every year") };
+export const FREQUENCY_UNIT: Record<Frequency, string> = { DAILY: msg("day"), WEEKLY: msg("week"), MONTHLY: msg("month"), YEARLY: msg("year") };
 
 export type RecurringLike = { amount: number; frequency: Frequency; startDate: Date; endDate: Date | null };
 

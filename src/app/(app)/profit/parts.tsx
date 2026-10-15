@@ -24,7 +24,7 @@ export function Stat({ label, def, children, sub, tone }: { label: string; def?:
 export function Hero({ label, def, value, currency, sub }: { label: string; def: string; value: number; currency: string; sub: React.ReactNode }) {
   return (
     <section className="relative flex min-w-0 flex-col gap-4 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)]">
-      <span className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
+      <span className="pointer-events-none absolute -end-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
       <span className="relative text-[15px] font-semibold"><Term label={label} definition={def} iconClassName="text-white/70 hover:text-white" /></span>
       <div className="relative min-w-0">
         <FitMoney value={Math.round(value / 10 ** currencyExponent(currency)) * 10 ** currencyExponent(currency)} currency={currency} max={38} signed codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" />
@@ -71,7 +71,7 @@ export function Bridge({ steps, currency, label }: { steps: Step[]; currency: st
               {s.label}
               {s.note ? <span className="block text-[11px] text-subtle">{s.note}</span> : null}
             </span>
-            <span className={cn("num whitespace-nowrap text-right text-[13px] sm:order-3", total ? "font-extrabold" : "font-semibold", s.kind === "cost" && "text-negative", s.kind === "gain" && "text-positive", total && s.amount < 0 && "text-negative")}>
+            <span className={cn("num whitespace-nowrap text-end text-[13px] sm:order-3", total ? "font-extrabold" : "font-semibold", s.kind === "cost" && "text-negative", s.kind === "gain" && "text-positive", total && s.amount < 0 && "text-negative")}>
               {s.kind === "cost" || (total && s.amount < 0) ? "−" : s.kind === "gain" ? "+" : ""}
               {money.fmt(Math.abs(s.amount), currency, { decimals: false })}
             </span>

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { Select } from "@/components/ui/form";
+import { useT } from "@/i18n/client";
 import { convertWithRates, formatMoney } from "@/lib/money";
 import { useTRPC } from "@/lib/trpc/client";
 
@@ -112,20 +113,24 @@ export function useMoney() {
 /** Header picker: show every amount in another currency, for this browser only. */
 export function CurrencyPicker() {
   const router = useRouter();
+  const { t } = useT();
   const v = useCurrencyView();
   if (!v.ready) return null;
-  const title = v.view === v.book ? `Amounts are kept in ${v.book}.` : `Converted from ${v.book} at your Settings rate: 1 ${v.view} = ${v.rates[v.view]} ${v.book}. Stored amounts don't change.`;
+  const title =
+    v.view === v.book
+      ? t("Amounts are kept in {book}.", { book: v.book })
+      : t("Converted from {book} at your Settings rate: 1 {view} = {rate} {book}. Stored amounts don't change.", { book: v.book, view: v.view, rate: String(v.rates[v.view]) });
   return (
     <label className="flex items-center gap-2 text-xs text-muted" title={title}>
-      <span className="hidden whitespace-nowrap 2xl:inline">Show in</span>
+      <span className="hidden whitespace-nowrap 2xl:inline">{t("Show in")}</span>
       <Select
-        aria-label="Show amounts in"
+        aria-label={t("Show amounts in")}
         value={v.view}
         onChange={(e) => (e.target.value === "__add" ? router.push("/settings?tab=economics") : v.setView(e.target.value))}
         className={v.view !== v.report ? "h-9 w-24 rounded-full border-brand/40 bg-brand-soft font-semibold text-brand-strong" : "h-9 w-24 rounded-full shadow-card"}
       >
         {v.available.map((c) => <option key={c} value={c}>{c}</option>)}
-        <option value="__add">Add a rate…</option>
+        <option value="__add">{t("Add a rate…")}</option>
       </Select>
     </label>
   );

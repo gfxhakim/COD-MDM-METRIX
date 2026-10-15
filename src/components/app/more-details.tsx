@@ -2,6 +2,8 @@
 
 import { ChevronDown } from "lucide-react";
 import * as React from "react";
+import { useT } from "@/i18n/client";
+import { msg } from "@/i18n/core";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,8 +45,16 @@ export function useMoreDetails(id: string): [boolean, (open: boolean) => void] {
   return [open, set];
 }
 
-/** "More details" / "Fewer details" by default; `labels` gives other words, folded first. */
+/** The words for the `what`s pages use, folded first, so they can be translated whole. */
+const WHAT: Record<string, [string, string]> = {
+  details: [msg("More details"), msg("Fewer details")],
+  filters: [msg("More filters"), msg("Fewer filters")],
+};
+
+/** "More details" / "Fewer details" by default; `labels` gives other words (already translated), folded first. */
 export function MoreDetailsButton({ open, onToggle, what = "details", labels, controls, className }: { open: boolean; onToggle: (open: boolean) => void; what?: string; labels?: [string, string]; controls?: string; className?: string }) {
+  const { t } = useT();
+  const words = WHAT[what];
   return (
     <button
       type="button"
@@ -53,7 +63,7 @@ export function MoreDetailsButton({ open, onToggle, what = "details", labels, co
       onClick={() => onToggle(!open)}
       className={cn("press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border-strong bg-surface px-4 text-sm font-semibold text-muted shadow-card transition-colors hover:text-fg", open && "text-fg", className)}
     >
-      {labels ? labels[open ? 1 : 0] : open ? `Fewer ${what}` : `More ${what}`}
+      {labels ? labels[open ? 1 : 0] : words ? t(words[open ? 1 : 0]) : open ? t("Fewer {what}", { what }) : t("More {what}", { what })}
       <ChevronDown className={cn("size-4 transition-transform duration-300", open && "rotate-180")} aria-hidden="true" />
     </button>
   );

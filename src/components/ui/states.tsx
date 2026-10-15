@@ -1,5 +1,8 @@
+"use client";
+
 import { AlertTriangle, Loader2 } from "lucide-react";
 import * as React from "react";
+import { useT } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 
 export function EmptyState({ icon, title, description, action, className }: { icon?: React.ReactNode; title: string; description?: React.ReactNode; action?: React.ReactNode; className?: string }) {
@@ -15,10 +18,11 @@ export function EmptyState({ icon, title, description, action, className }: { ic
   );
 }
 
-export function Loading({ label = "Loading" }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const { t } = useT();
   return (
     <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted" role="status">
-      <Loader2 className="size-4 animate-spin" /> {label}…
+      <Loader2 className="size-4 animate-spin" /> {label ?? t("Loading")}…
     </div>
   );
 }

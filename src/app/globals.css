@@ -69,6 +69,12 @@ p {
   letter-spacing: -0.02em;
 }
 
+/* In Arabic a number keeps its minus, plus and % where they belong ("-826", "21.6%", not "826-"):
+   the invisible left-to-right mark in front makes the number one left-to-right piece. */
+[dir="rtl"] .num:not(.flex, .grid, .inline-flex)::before {
+  content: "\200E";
+}
+
 /* Brand surfaces: red gradients, glow and shine. */
 @utility bg-brand {
   background-image: linear-gradient(135deg, #f23446 0%, #c9111f 100%);
@@ -208,28 +214,41 @@ p {
   }
 }
 
+/* "left" and "right" are the start and end sides: in Arabic (right to left) they swap. */
+:root {
+  --flip: 1;
+}
+[dir="rtl"] {
+  --flip: -1;
+}
+
 @keyframes slide-in-right {
   from {
-    transform: translateX(100%);
+    transform: translateX(calc(100% * var(--flip)));
   }
 }
 
 @keyframes slide-out-right {
   to {
-    transform: translateX(100%);
+    transform: translateX(calc(100% * var(--flip)));
   }
 }
 
 @keyframes slide-in-left {
   from {
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% * var(--flip)));
   }
 }
 
 @keyframes slide-out-left {
   to {
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% * var(--flip)));
   }
+}
+
+/* Arrows that point forward or back turn around in Arabic. */
+[dir="rtl"] :is(.lucide-chevron-right, .lucide-chevron-left, .lucide-arrow-right, .lucide-arrow-left, .lucide-arrow-up-right, .lucide-undo-2) {
+  transform: scaleX(-1);
 }
 
 @keyframes toast-in {
@@ -288,7 +307,8 @@ p {
 }
 
 @utility animate-grow-x {
-  transform-origin: left;
+  /* Bars grow from the start side: the left, or the right in Arabic. */
+  transform-origin: calc(50% - 50% * var(--flip)) 50%;
   animation: grow-x 900ms var(--ease-out) backwards;
 }
 

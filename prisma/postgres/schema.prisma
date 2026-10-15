@@ -186,6 +186,8 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
+  /// "en" or "ar" once the person picks a language (src/i18n); null until then.
+  locale       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -8,6 +8,7 @@
  * placed, and what the others cost (their ads, calls, returns and lost parcels) is carried by
  * the orders that are delivered. Every amount below is per delivered order, and they add up.
  */
+import { msg } from "@/i18n/core";
 import type { CallCenterBasis } from "./profitTracker";
 
 export type OrderProfitInput = {
@@ -67,11 +68,12 @@ export type OrderProfit =
       margin: number | null;
     };
 
+/** Why the numbers can't give a profit, in English: the page shows it through `t()`. */
 export function validateOrderProfit(i: OrderProfitInput): string | null {
-  if (!(i.confirmationRate > 0)) return "With a 0% confirmation rate no order is ever sent.";
-  if (!(i.shippingRate > 0)) return "With a 0% shipping rate no order is ever sent.";
-  if (!(i.deliveryRate > 0)) return "With a 0% delivery rate no order is ever delivered.";
-  if (i.deliveryRate + i.lostRate > 1.000001) return "Delivered + lost can't be more than 100%.";
+  if (!(i.confirmationRate > 0)) return msg("With a 0% confirmation rate no order is ever sent.");
+  if (!(i.shippingRate > 0)) return msg("With a 0% shipping rate no order is ever sent.");
+  if (!(i.deliveryRate > 0)) return msg("With a 0% delivery rate no order is ever delivered.");
+  if (i.deliveryRate + i.lostRate > 1.000001) return msg("Delivered + lost can't be more than 100%.");
   return null;
 }
 

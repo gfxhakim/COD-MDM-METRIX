@@ -1,7 +1,8 @@
 import type { CostType, ExpenseCategory } from "@prisma/client";
+import { msg } from "@/i18n/core";
 import { convertMinor } from "@/lib/money";
 import type { ParsedCsv } from "./csv";
-import { cell, currencyOf, money, occurrenceKeys, RowError, type Mapping, type RowIssue } from "./common";
+import { cell, currencyOf, issueOf, money, occurrenceKeys, RowError, rowIssue, type Mapping, type RowIssue } from "./common";
 import { parseDate, type DateFormat } from "./dates";
 
 const CATEGORY_WORDS: [RegExp, ExpenseCategory][] = [
@@ -65,21 +66,21 @@ export function validateExpenses(
     try {
       const dateRaw = cell(row, mapping, "date");
       const date = parseDate(dateRaw, opts.dateFormat);
-      if (!date) throw new RowError("date", dateRaw ? `Invalid date "${dateRaw}"` : "Missing date");
+      if (!date) throw new RowError("date", dateRaw ? msg('Invalid date "{raw}"') : msg("Missing date"), { raw: dateRaw });
       const currency = currencyOf(cell(row, mapping, "currency"), opts.currency);
       const fxRate = currency === opts.currency ? null : opts.rates?.[currency] ?? null;
-      if (currency !== opts.currency && !fxRate) throw new RowError("currency", `Expense is in ${currency}; set a ${currency} exchange rate in Settings → Economics & currencies first`);
+      if (currency !== opts.currency && !fxRate) throw new RowError("currency", msg("Expense is in {currency}; set a {currency} exchange rate in Settings → Economics & currencies first"), { currency });
       const amountRaw = cell(row, mapping, "amount");
-      if (!amountRaw) throw new RowError("amount", "Missing amount");
+      if (!amountRaw) throw new RowError("amount", msg("Missing amount"));
       const original = money(amountRaw, currency, "amount");
-      if (original === 0) throw new RowError("amount", "Amount is zero");
+      if (original === 0) throw new RowError("amount", msg("Amount is zero"));
       const amount = fxRate ? convertMinor(original, currency, opts.currency, fxRate) : original;
       const catRaw = cell(row, mapping, "category");
       const { category, recognized } = parseCategory(catRaw);
-      if (!recognized) warnings.push({ line: row.line, field: "category", message: `Unknown category "${catRaw}" imported as Other` });
+      if (!recognized) warnings.push(rowIssue(row.line, "category", msg('Unknown category "{category}" imported as Other'), { category: catRaw }));
       const sku = cell(row, mapping, "productSku");
       const productId = sku ? bySku.get(sku.toLowerCase()) ?? null : null;
-      if (sku && !productId) throw new RowError("productSku", `Unknown product SKU "${sku}"`);
+      if (sku && !productId) throw new RowError("productSku", msg('Unknown product SKU "{sku}"'), { sku });
       const description = cell(row, mapping, "description") || null;
       pending.push({
         line: row.line, date, category, amount, description, productId, costType: parseCostType(cell(row, mapping, "costType")),
@@ -88,7 +89,7 @@ export function validateExpenses(
       // Foreign rows are identified by what the file says, so a new rate doesn't make a re-import look new.
       ids.push([date.toISOString().slice(0, 10), category, fxRate ? `${original}${currency}` : amount, description ?? "", sku.toLowerCase()].join("|"));
     } catch (e) {
-      if (e instanceof RowError) issues.push({ line: row.line, field: e.field, message: e.message });
+      if (e instanceof RowError) issues.push(issueOf(row.line, e));
       else throw e;
     }
   }
@@ -106,25 +107,25 @@ export function validateBank(csv: ParsedCsv, mapping: Mapping, opts: { dateForma
     try {
       const dateRaw = cell(row, mapping, "date");
       const date = parseDate(dateRaw, opts.dateFormat);
-      if (!date) throw new RowError("date", dateRaw ? `Invalid date "${dateRaw}"` : "Missing date");
+      if (!date) throw new RowError("date", dateRaw ? msg('Invalid date "{raw}"') : msg("Missing date"), { raw: dateRaw });
       const currency = currencyOf(cell(row, mapping, "currency"), opts.currency);
-      if (currency !== opts.currency) throw new RowError("currency", `Row is in ${currency}; this workspace uses ${opts.currency}`);
+      if (currency !== opts.currency) throw new RowError("currency", msg("Row is in {currency}; this workspace uses {workspaceCurrency}"), { currency, workspaceCurrency: opts.currency });
       let amount: number;
       const amountRaw = cell(row, mapping, "amount");
       if (amountRaw) amount = money(amountRaw, currency, "amount", { allowNegative: true });
       else {
         const debit = cell(row, mapping, "debit");
         const credit = cell(row, mapping, "credit");
-        if (!debit && !credit) throw new RowError("amount", "Missing amount");
+        if (!debit && !credit) throw new RowError("amount", msg("Missing amount"));
         amount = (credit ? money(credit, currency, "credit", { allowNegative: true }) : 0) - (debit ? Math.abs(money(debit, currency, "debit", { allowNegative: true })) : 0);
       }
-      if (amount === 0) throw new RowError("amount", "Amount is zero");
+      if (amount === 0) throw new RowError("amount", msg("Amount is zero"));
       const description = cell(row, mapping, "description") || null;
       const reference = cell(row, mapping, "reference") || null;
       pending.push({ line: row.line, date, description, amount, reference });
       ids.push([date.toISOString().slice(0, 10), amount, description ?? "", reference ?? ""].join("|"));
     } catch (e) {
-      if (e instanceof RowError) issues.push({ line: row.line, field: e.field, message: e.message });
+      if (e instanceof RowError) issues.push(issueOf(row.line, e));
       else throw e;
     }
   }

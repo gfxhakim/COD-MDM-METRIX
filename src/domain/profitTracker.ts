@@ -18,6 +18,7 @@
  * The difference between the two, by cause, is the "missing benefit": its parts add up exactly.
  */
 import { z } from "zod";
+import { msg } from "@/i18n/core";
 
 const money = z.number().int().min(0).max(1_000_000_000_00);
 const prob = z.number().min(0).max(1);
@@ -28,10 +29,10 @@ export type CallCenterBasis = "PLACED_LEAD" | "CONFIRMED_ORDER";
 export const STOCK_SOURCES = ["MDM_AVAILABLE", "MDM_WITH_INCOMING", "MDM_RECEIVED", "TYPED"] as const;
 export type StockSource = (typeof STOCK_SOURCES)[number];
 export const STOCK_SOURCE_LABEL: Record<StockSource, string> = {
-  MDM_AVAILABLE: "Available at MDM",
-  MDM_WITH_INCOMING: "Available + on the way",
-  MDM_RECEIVED: "Everything MDM received",
-  TYPED: "A number I type",
+  MDM_AVAILABLE: msg("Available at MDM"),
+  MDM_WITH_INCOMING: msg("Available + on the way"),
+  MDM_RECEIVED: msg("Everything MDM received"),
+  TYPED: msg("A number I type"),
 };
 
 /** Values someone typed over the ones read from the data, saved per product. Missing = read from the data. */
@@ -144,15 +145,15 @@ export type ProjectionInput = {
 export const GAP_KEYS = ["adSpend", "deliveryFees", "returnShipping", "returnFees", "lostParcels", "callCenter", "packaging", "extraFees", "otherCosts"] as const;
 export type GapKey = (typeof GAP_KEYS)[number];
 export const GAP_LABEL: Record<GapKey, string> = {
-  adSpend: "Ad spend",
-  deliveryFees: "Delivery fees on delivered parcels",
-  returnShipping: "Shipping paid on returned and lost parcels",
-  returnFees: "Return fees",
-  lostParcels: "Goods in lost parcels",
-  callCenter: "Call center",
-  packaging: "Packaging",
-  extraFees: "Other MDM fees",
-  otherCosts: "Other costs",
+  adSpend: msg("Ad spend"),
+  deliveryFees: msg("Delivery fees on delivered parcels"),
+  returnShipping: msg("Shipping paid on returned and lost parcels"),
+  returnFees: msg("Return fees"),
+  lostParcels: msg("Goods in lost parcels"),
+  callCenter: msg("Call center"),
+  packaging: msg("Packaging"),
+  extraFees: msg("Other MDM fees"),
+  otherCosts: msg("Other costs"),
 };
 
 export type Flow = { leads: number; confirmed: number; shipped: number; delivered: number; returned: number; lost: number; deliveredUnits: number; lostUnits: number };
@@ -184,13 +185,14 @@ export type ProjectionResult =
       breakevenCpaDelivered: number;
     };
 
+/** Why the numbers can't give a benefit, in English: the page shows it through `t()`. */
 export function validateProjection(i: ProjectionInput): string | null {
-  if (!(i.units > 0)) return "Enter how many units of stock to count.";
-  if (!(i.confirmationRate > 0)) return "With a 0% confirmation rate no order is ever sent.";
-  if (!(i.shippingRate > 0)) return "With a 0% shipping rate no order is ever sent.";
-  if (!(i.deliveryRate + i.lostRate > 0)) return "With a 0% delivery rate the stock never sells.";
+  if (!(i.units > 0)) return msg("Enter how many units of stock to count.");
+  if (!(i.confirmationRate > 0)) return msg("With a 0% confirmation rate no order is ever sent.");
+  if (!(i.shippingRate > 0)) return msg("With a 0% shipping rate no order is ever sent.");
+  if (!(i.deliveryRate + i.lostRate > 0)) return msg("With a 0% delivery rate the stock never sells.");
   const q = i.returnRate ?? 0;
-  if (i.deliveryRate + q + i.lostRate > 1.000001) return "Delivered + returned + lost can't be more than 100%.";
+  if (i.deliveryRate + q + i.lostRate > 1.000001) return msg("Delivered + returned + lost can't be more than 100%.");
   return null;
 }
 
@@ -263,13 +265,13 @@ export type ActualInput = {
 export const ACTUAL_KEYS = ["priceGap", "adSpend", "deliveryFees", "returnFees", "callCenter", "packaging", "expenses"] as const;
 export type ActualKey = (typeof ACTUAL_KEYS)[number];
 export const ACTUAL_LABEL: Record<ActualKey, string> = {
-  priceGap: "Collected vs your sale price",
-  adSpend: "Ad spend",
-  deliveryFees: "Delivery fees",
-  returnFees: "Return fees",
-  callCenter: "Call center",
-  packaging: "Packaging",
-  expenses: "Expenses for this product",
+  priceGap: msg("Collected vs your sale price"),
+  adSpend: msg("Ad spend"),
+  deliveryFees: msg("Delivery fees"),
+  returnFees: msg("Return fees"),
+  callCenter: msg("Call center"),
+  packaging: msg("Packaging"),
+  expenses: msg("Expenses for this product"),
 };
 
 /**

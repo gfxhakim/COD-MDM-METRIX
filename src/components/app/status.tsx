@@ -1,5 +1,9 @@
+"use client";
+
 import type { NormalizedStatus, OrderStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/i18n/client";
+import { msg } from "@/i18n/core";
 
 const PARCEL_TONE: Record<NormalizedStatus, "neutral" | "positive" | "warning" | "negative" | "info" | "mint"> = {
   PENDING: "neutral",
@@ -13,17 +17,32 @@ const PARCEL_TONE: Record<NormalizedStatus, "neutral" | "positive" | "warning" |
   UNKNOWN: "negative",
 };
 
+const PARCEL_LABEL: Record<NormalizedStatus, string> = {
+  PENDING: msg("Pending"),
+  CONFIRMED: msg("Confirmed"),
+  SHIPPED: msg("Shipped"),
+  DELIVERED: msg("Delivered"),
+  RETURNED: msg("Returned"),
+  LOST: msg("Lost"),
+  CANCELED: msg("Canceled"),
+  EXCHANGED: msg("Exchanged"),
+  UNKNOWN: msg("Unknown ⚠"),
+};
+
 export function ParcelStatusBadge({ status }: { status: NormalizedStatus | null | undefined }) {
+  const { t } = useT();
   if (!status) return <span className="text-subtle">—</span>;
   return (
     <Badge tone={PARCEL_TONE[status]} className={status === "UNKNOWN" ? "border-dashed" : undefined}>
-      {status === "UNKNOWN" ? "Unknown ⚠" : status.charAt(0) + status.slice(1).toLowerCase()}
+      {t(PARCEL_LABEL[status])}
     </Badge>
   );
 }
 
 const ORDER_TONE: Record<OrderStatus, "neutral" | "info" | "negative"> = { PENDING: "neutral", CONFIRMED: "info", CANCELED: "negative" };
+const ORDER_LABEL: Record<OrderStatus, string> = { PENDING: msg("Pending"), CONFIRMED: msg("Confirmed"), CANCELED: msg("Canceled") };
 
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
-  return <Badge tone={ORDER_TONE[status]}>{status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
+  const { t } = useT();
+  return <Badge tone={ORDER_TONE[status]}>{t(ORDER_LABEL[status])}</Badge>;
 }
