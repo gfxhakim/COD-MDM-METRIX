@@ -19,6 +19,7 @@ import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import { describeCustomSync, readCustomFilters } from "@/domain/customSync";
 import { useT } from "@/i18n/client";
 import { msg, type TFunction } from "@/i18n/core";
@@ -103,14 +104,25 @@ function JobDialog({ id, onClose }: { id: string; onClose: () => void }) {
             ) : null}
             <p className="text-xs font-medium text-muted">{t("Orders")}</p>
             <div className="grid grid-cols-3 gap-2">
-              {[[t("New"), d.job.ordersAddedCount], [t("Updated"), d.job.ordersUpdatedCount], [t("With a content ID"), d.job.ordersWithContentCount]].map(([l, v]) => (
-                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted">{l}</p><p className="num text-lg font-semibold">{v}</p></div>
+              {([
+                [t("New"), d.job.ordersAddedCount, t("MDM orders this sync saved in the app for the first time.")],
+                [t("Updated"), d.job.ordersUpdatedCount, t("Orders already in the app that this sync changed, e.g. a new MDM status or customer details.")],
+                [t("With a content ID"), d.job.ordersWithContentCount, t("Orders read in this sync that carry a content ID (the Meta ad ID from utm_content), so they count under that ad in Creatives.")],
+              ] as const).map(([l, v, h]) => (
+                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted"><Term label={l} definition={h} /></p><p className="num text-lg font-semibold">{v}</p></div>
               ))}
             </div>
             <p className="text-xs font-medium text-muted">{t("Parcels")}</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {[[t("Added"), d.job.addedCount], [t("Updated"), d.job.updatedCount], [t("Unchanged"), d.job.unchangedCount], [t("Failed"), d.job.failedCount], [t("Unknown status"), d.job.unknownStatusCount], [t("Unmatched"), d.job.unmatchedCount]].map(([l, v]) => (
-                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted">{l}</p><p className="num text-lg font-semibold">{v}</p></div>
+              {([
+                [t("Added"), d.job.addedCount, t("Parcels the app had never seen before.")],
+                [t("Updated"), d.job.updatedCount, t("Parcels already in the app with a new status, amount or fee, or a new step in their history.")],
+                [t("Unchanged"), d.job.unchangedCount, t("Parcels read again with nothing new.")],
+                [t("Failed"), d.job.failedCount, t("Orders or parcels this sync could not save. The list below gives the reason for each.")],
+                [t("Unknown status"), d.job.unknownStatusCount, t("Parcels with an MDM status the app can't sort yet. They count as neither delivered nor returned until you map it in Settings > Status mappings.")],
+                [t("Unmatched"), d.job.unmatchedCount, t("Parcels that could not be tied to an order. They wait under Unmatched parcels for you to link or ignore.")],
+              ] as const).map(([l, v, h]) => (
+                <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted"><Term label={l} definition={h} /></p><p className="num text-lg font-semibold">{v}</p></div>
               ))}
             </div>
             {d.items.length ? (
@@ -156,7 +168,7 @@ function LinkDialog({ trackingId, reference, onClose }: { trackingId: string; re
           ? tx("Parcel {id} · MDM reference {reference}. Manual links are kept by future syncs.", { id: <span className="font-mono">{trackingId}</span>, reference })
           : tx("Parcel {id}. Manual links are kept by future syncs.", { id: <span className="font-mono">{trackingId}</span> })}
       >
-        <Field label={t("Find order")} htmlFor="lk"><Input id="lk" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Order number or tracking ID")} autoFocus /></Field>
+        <Field label={t("Find order")} htmlFor="lk" help={t("Search by order number, MDM order ID, tracking ID or the customer's phone, then press Link beside the right order. Syncs keep a link made by hand.")}><Input id="lk" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Order number or tracking ID")} autoFocus /></Field>
         <div className="mt-3 max-h-72 overflow-auto">
           {search.trim().length < 2 ? <p className="text-sm text-muted">{t("Type at least 2 characters.")}</p> : !orders.data ? <Loading /> : !orders.data.items.length ? <p className="text-sm text-muted">{t("No matching orders.")}</p> : (
             <Table>
@@ -190,7 +202,7 @@ function UnmatchedQueue() {
   const ignore = useMutation(trpc.sync.ignoreUnmatched.mutationOptions({ onSuccess: () => invalidate(), onError: (e) => toast("error", errorMessage(e)) }));
   return (
     <Card id="unmatched" className="scroll-mt-24">
-      <CardHeader title={t("Unmatched parcels")} description={t("Parcels MDM knows about that could not be tied to an order by order reference, earlier tracking-ID link or store order ID. They are never guessed.")} />
+      <CardHeader title={t("Unmatched parcels")} help={t("Until linked, a parcel's COD and fees count in no order's profit. Link picks its order by hand; Ignore only takes it off this list.")} description={t("Parcels MDM knows about that could not be tied to an order by order reference, earlier tracking-ID link or store order ID. They are never guessed.")} />
       <Tabs value={status} onValueChange={(v) => setStatus(v as typeof status)}>
         <TabsList className="px-3"><TabsTrigger value="OPEN">{t("To review")}</TabsTrigger><TabsTrigger value="IGNORED">{t("Ignored")}</TabsTrigger><TabsTrigger value="RESOLVED">{t("Resolved")}</TabsTrigger></TabsList>
       </Tabs>
@@ -292,7 +304,7 @@ export function SyncView() {
 
       <div className={`mb-6 grid gap-4 ${unknownCount ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         <Card className="p-4">
-          <p className="text-xs text-muted">{t("Connection")}</p>
+          <p className="text-xs text-muted"><Term label={t("Connection")} definition={t("Whether the app can read your MDM Express account with the workspace's API key. It only reads and never changes anything in MDM. Connected means the last connection test worked.")} /></p>
           {!c ? <Loading /> : (
             <>
               <p className="mt-1 flex items-center gap-2 text-lg font-semibold">{connected ? t("Connected") : c.status === "ERROR" ? t("Error") : c.hasCredential ? t("Not verified") : t("Not connected")}{c.adapter === "mock" ? <Badge tone="info"><FlaskConical className="size-3" /> {t("Demo fixtures")}</Badge> : null}</p>
@@ -302,14 +314,14 @@ export function SyncView() {
           )}
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-muted">{t("Last successful sync")}</p>
+          <p className="text-xs text-muted"><Term label={t("Last successful sync")} definition={t("When the last regular sync that finished began (custom syncs don't count). The next sync reads what changed in MDM since then, plus the 24 hours before.")} /></p>
           <p className="mt-1 text-lg font-semibold">{c?.lastSuccessfulSyncAt ? ago(c.lastSuccessfulSyncAt) : t("Never")}</p>
           <p className="mt-1 text-xs text-muted">{c?.lastSuccessfulSyncAt ? dateTime(c.lastSuccessfulSyncAt) : t("Parcel data shown in reports may be missing.")}</p>
           {c?.status === "CONNECTED" ? <p className="mt-1 text-xs text-muted">{c.syncIntervalMinutes < 60 ? t("Syncs automatically every {n} min.", { n: c.syncIntervalMinutes }) : t("Syncs automatically every {n} h.", { n: c.syncIntervalMinutes / 60 })}</p> : null}
         </Card>
         {unknownCount ? (
           <Card className="p-4">
-            <p className="text-xs text-muted">{t("Unknown MDM statuses")}</p>
+            <p className="text-xs text-muted"><Term label={t("Unknown MDM statuses")} definition={t("Worked out as: parcels whose MDM status has no match in the app yet. Map each status once in Settings > Status mappings and they count as delivered, returned and so on.")} /></p>
             <p className="num mt-1 text-lg font-semibold text-warning">{unknownCount === 1 ? t("1 parcel") : t("{n} parcels", { n: unknownCount })}</p>
             <p className="mt-1 text-xs text-muted">{t("Counted as neither delivered nor returned.")} <Link href="/settings?tab=mappings" className="font-semibold text-brand-strong hover:underline">{t("Map statuses")}</Link></p>
           </Card>
@@ -384,7 +396,7 @@ export function SyncView() {
         <MoreDetails id="syncs" hint={t("Parcels to review, and every past sync with what it brought in.")}>
           <UnmatchedQueue />
           <Card>
-            <CardHeader title={t("Sync history")} />
+            <CardHeader title={t("Sync history")} help={t("The last 30 syncs, newest first. Tap a row to see what it brought in and what failed; a failed or partial sync can be retried there.")} />
             {jobs.error ? <ErrorState message={errorMessage(jobs.error)} /> : !jobs.data ? <Loading /> : !jobs.data.length ? (
               <EmptyState icon={<History />} title={t("No syncs yet")} description={connected ? t("Run your first sync with Sync now.") : t("Connect MDM Express in Settings, then run a sync.")} />
             ) : (

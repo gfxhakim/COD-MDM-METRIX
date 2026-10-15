@@ -65,14 +65,14 @@ function CategorizeDialog({ row, onClose }: { row: BankRow; onClose: () => void 
           }}
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t("Category")} htmlFor="bc"><Select id="bc" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value as ExpenseCategoryKey })}>{EXPENSE_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}</Select></Field>
-            <Field label={t("Type")} htmlFor="bt"><Select id="bt" value={f.costType} onChange={(e) => setF({ ...f, costType: e.target.value as CostType })}><option value="FIXED">{t("Fixed")}</option><option value="VARIABLE">{t("Variable")}</option></Select></Field>
-            <Field label={t("Allocation")} htmlFor="ba"><Select id="ba" value={f.allocation} onChange={(e) => setF({ ...f, allocation: e.target.value as ExpenseAllocation })}><option value="GLOBAL">{t("Global (unallocated)")}</option><option value="PRODUCT">{t("Specific product")}</option></Select></Field>
+            <Field label={t("Category")} htmlFor="bc" help={t("The kind of cost, used to group your expenses, e.g. Software. It is guessed from the bank label; change it when the guess is wrong.")}><Select id="bc" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value as ExpenseCategoryKey })}>{EXPENSE_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}</Select></Field>
+            <Field label={t("Type")} htmlFor="bt" help={t("Fixed: the same each month, like rent. Variable: grows with orders, like packaging. It is a label for your lists; profit counts both.")}><Select id="bt" value={f.costType} onChange={(e) => setF({ ...f, costType: e.target.value as CostType })}><option value="FIXED">{t("Fixed")}</option><option value="VARIABLE">{t("Variable")}</option></Select></Field>
+            <Field label={t("Allocation")} htmlFor="ba" help={t("Global: shared across products by Overhead allocation in Settings > Economics & currencies. Specific product: counts only against that product's profit.")}><Select id="ba" value={f.allocation} onChange={(e) => setF({ ...f, allocation: e.target.value as ExpenseAllocation })}><option value="GLOBAL">{t("Global (unallocated)")}</option><option value="PRODUCT">{t("Specific product")}</option></Select></Field>
             {f.allocation === "PRODUCT" ? (
-              <Field label={t("Product")} htmlFor="bp"><Select id="bp" required value={f.productId} onChange={(e) => setF({ ...f, productId: e.target.value })}><option value="">{t("Choose product…")}</option>{products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+              <Field label={t("Product")} htmlFor="bp" help={t("The product this cost belongs to. It comes off that product's profit only.")}><Select id="bp" required value={f.productId} onChange={(e) => setF({ ...f, productId: e.target.value })}><option value="">{t("Choose product…")}</option>{products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             ) : null}
           </div>
-          <Field label={t("Description")} htmlFor="bd"><Input id="bd" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={500} /></Field>
+          <Field label={t("Description")} htmlFor="bd" help={t("How the expense is named on the Expenses page. It starts as the bank label.")}><Input id="bd" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={500} /></Field>
           {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button>
@@ -109,6 +109,7 @@ export function BankReview() {
     <Card>
       <CardHeader
         title={t("Bank review queue")}
+        help={t("Categorize makes a row an expense on the Expenses page. Exclude keeps it out of profit. Both can be undone from the Categorized and Excluded tabs.")}
         description={t("Money going out can become an expense. Incoming transfers (such as courier remittances) and personal or duplicate rows should be excluded. Nothing here affects profit until you decide.")}
         actions={canWrite && status === "PENDING" && selected.size ? <Button size="sm" variant="outline" onClick={() => exclude.mutate({ ids: [...selected] })}><Ban /> {t("Exclude {n}", { n: selected.size })}</Button> : null}
       />

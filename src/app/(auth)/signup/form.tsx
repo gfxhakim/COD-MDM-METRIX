@@ -16,10 +16,10 @@ export function SignupForm() {
       <h1 className="text-2xl font-extrabold tracking-tight">{t("Create your workspace")}</h1>
       <p className="mt-1 text-sm text-muted">{t("One workspace per business. You become its owner.")}</p>
       <form action={action} className="mt-6 flex flex-col gap-4">
-        <Field label={t("Your name")} htmlFor="name"><Input id="name" name="name" autoComplete="name" required /></Field>
-        <Field label={t("Email")} htmlFor="email"><Input id="email" name="email" type="email" autoComplete="email" required /></Field>
-        <Field label={t("Password")} htmlFor="password" hint={t("At least 10 characters.")}><Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required /></Field>
-        <Field label={t("Business name")} htmlFor="workspaceName"><Input id="workspaceName" name="workspaceName" required /></Field>
+        <Field label={t("Your name")} htmlFor="name" help={t("Your own name, as your team sees it in Settings > Members & roles. Example: Amine.")}><Input id="name" name="name" autoComplete="name" required /></Field>
+        <Field label={t("Email")} htmlFor="email" help={t("You sign in with it. A workspace owner also uses it to add you to their workspace.")}><Input id="email" name="email" type="email" autoComplete="email" required /></Field>
+        <Field label={t("Password")} htmlFor="password" help={t("You type it with your email to sign in. Pick one you don't use on other sites.")} hint={t("At least 10 characters.")}><Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required /></Field>
+        <Field label={t("Business name")} htmlFor="workspaceName" help={t("Your business or store name, e.g. Dz Shop. It names your workspace; you can rename it later in Settings > Workspace.")}><Input id="workspaceName" name="workspaceName" required /></Field>
         {state?.error ? <p className="text-sm text-negative" role="alert">{state.error}</p> : null}
         <Button variant="primary" type="submit" disabled={pending}>{pending ? t("Creating…") : t("Create workspace")}</Button>
       </form>

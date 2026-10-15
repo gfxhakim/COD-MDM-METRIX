@@ -22,7 +22,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading, Skeleton } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { FREQUENCIES, FREQUENCY_LABEL, FREQUENCY_UNIT, monthlyEquivalent, type Frequency } from "@/domain/recurring";
 import { useT } from "@/i18n/client";
 import { msg, type TFunction } from "@/i18n/core";
@@ -185,7 +185,7 @@ function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, 
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             {!expense ? (
-              <Field label={t("Repeats")} htmlFor="erep" className="sm:col-span-2">
+              <Field label={t("Repeats")} htmlFor="erep" help={t("Once counts on its date only. A repeating one counts a share every day from its first day to its last day, never past today. Example: rent every month.")} className="sm:col-span-2">
                 <Select id="erep" value={f.repeats} onChange={(e) => setF({ ...f, repeats: e.target.value as Repeats })}>
                   {!recurring ? <option value="ONCE">{t("Once")}</option> : null}
                   {FREQUENCIES.map((k) => <option key={k} value={k}>{t(FREQUENCY_LABEL[k])}</option>)}
@@ -193,41 +193,41 @@ function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, 
               </Field>
             ) : null}
             {repeating ? (
-              <Field label={f.category === "SALARIES" ? t("Who is paid") : t("Name")} htmlFor="ename" className="sm:col-span-2">
+              <Field label={f.category === "SALARIES" ? t("Who is paid") : t("Name")} htmlFor="ename" help={f.category === "SALARIES" ? t("Who gets this pay, so each person has a line of their own. Add one repeating expense per employee.") : t("A short name to find it in Repeating expenses and in the search. Example: Shop rent.")} className="sm:col-span-2">
                 <Input id="ename" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={f.category === "SALARIES" ? t("Confirmation agent, driver, designer…") : t("Rent, confirmation agent, Shopify…")} maxLength={120} required />
               </Field>
             ) : null}
-            <Field label={repeating ? t("First day") : t("Date")} htmlFor="ed"><Input id="ed" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} required /></Field>
+            <Field label={repeating ? t("First day") : t("Date")} htmlFor="ed" help={repeating ? t("The first day it counts. A past day adds what it cost since then, for example the day you started paying rent.") : t("The day you paid it. It counts in the profit of any days that include this date.")}><Input id="ed" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} required /></Field>
             {repeating ? (
-              <Field label={t("Last day")} htmlFor="eend" hint={t("Leave empty while it goes on.")}>
+              <Field label={t("Last day")} htmlFor="eend" help={t("The last day it counts, that day included. Example: the last day of a rental contract.")} hint={t("Leave empty while it goes on.")}>
                 <Input id="eend" type="date" value={f.endDate} min={f.date} onChange={(e) => setF({ ...f, endDate: e.target.value })} />
               </Field>
             ) : null}
-            <Field label={repeating ? t("Amount each {unit}", { unit: t(FREQUENCY_UNIT[f.repeats as Frequency]) }) : t("Amount")} htmlFor="ea" hint={perMonth ? t("About {amount} a month, spread over every day.", { amount: perMonth }) : undefined} className={repeating ? "sm:col-span-2" : undefined}>
+            <Field label={repeating ? t("Amount each {unit}", { unit: t(FREQUENCY_UNIT[f.repeats as Frequency]) }) : t("Amount")} htmlFor="ea" help={repeating ? t("What you pay each time. It is spread over the days: a monthly amount ÷ the days of that month, a weekly one ÷ 7, a yearly one ÷ the days of the year.") : t("What you paid. Paid in another currency? Pick it beside the amount and check the exchange rate: profit uses the converted amount. Example: 15000.")} hint={perMonth ? t("About {amount} a month, spread over every day.", { amount: perMonth }) : undefined} className={repeating ? "sm:col-span-2" : undefined}>
               <CurrencyAmountInput id="ea" value={f.amount} onChange={(v) => setF({ ...f, amount: v })} workspaceCurrency={currency} rates={rates} required />
             </Field>
-            <Field label={t("Category")} htmlFor="ec">
+            <Field label={t("Category")} htmlFor="ec" help={t("Groups your costs in the By category totals and the export. Pick ＋ New category… to make your own, such as Influencers.")}>
               <Select id="ec" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
                 <CategoryOptions categories={categories.data ?? []} />
                 <option value="__new">{t("＋ New category…")}</option>
               </Select>
             </Field>
-            <Field label={t("Type")} htmlFor="et" hint={t("Fixed: the same each month. Variable: grows with orders.")}>
+            <Field label={t("Type")} htmlFor="et" help={t("A label to sort and filter your expenses. Profit counts fixed and variable expenses the same way.")} hint={t("Fixed: the same each month. Variable: grows with orders.")}>
               <Select id="et" value={f.costType} onChange={(e) => setF({ ...f, costType: e.target.value as CostType })}><option value="FIXED">{t("Fixed")}</option><option value="VARIABLE">{t("Variable")}</option></Select>
             </Field>
             {f.category === "__new" ? (
               <div className="flex items-end gap-2 sm:col-span-2">
-                <Field label={t("New category")} htmlFor="ecat-new" className="flex-1">
+                <Field label={t("New category")} htmlFor="ecat-new" help={t("Your own category, for costs the built-in list doesn't cover. Press Add and it shows in every category list. Example: Fuel.")} className="flex-1">
                   <Input id="ecat-new" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder={t("Influencers, Fuel, Photographer…")} maxLength={60} autoFocus />
                 </Field>
                 <Button type="button" variant="secondary" disabled={!newCategory.trim() || addCategory.isPending} onClick={() => addCategory.mutate({ name: newCategory })}>{t("Add")}</Button>
               </div>
             ) : null}
-            <Field label={t("Counts for")} htmlFor="eal">
+            <Field label={t("Counts for")} htmlFor="eal" help={t("The whole business: shared across your products by the Overhead allocation rule in Settings > Economics & currencies. One product: counted only in that product's profit.")}>
               <Select id="eal" value={f.allocation} onChange={(e) => setF({ ...f, allocation: e.target.value as ExpenseAllocation })}><option value="GLOBAL">{t("The whole business")}</option><option value="PRODUCT">{t("One product")}</option></Select>
             </Field>
             {f.allocation === "PRODUCT" ? (
-              <Field label={t("Product")} htmlFor="ep">
+              <Field label={t("Product")} htmlFor="ep" help={t("The product this cost belongs to, for example a photo shoot for it. Products you stopped selling are in the list too.")}>
                 <Select id="ep" value={f.productId} onChange={(e) => setF({ ...f, productId: e.target.value })} required>
                   <option value="">{t("Choose product…")}</option>
                   {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -235,7 +235,7 @@ function ExpenseDialog({ expense, recurring, initialRepeats, onClose, currency, 
               </Field>
             ) : null}
           </div>
-          {!repeating ? <Field label={t("Description")} htmlFor="edesc"><Textarea id="edesc" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field> : null}
+          {!repeating ? <Field label={t("Description")} htmlFor="edesc" help={t("A note to recognise it later, such as the supplier or the invoice number. The search box finds expenses by these words.")}><Textarea id="edesc" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field> : null}
           {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button>
@@ -263,7 +263,7 @@ function CategoriesDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent title={t("Your categories")} description={t("Add the categories your business needs. Deleting one moves its expenses to Other.")}>
         <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate({ name }); }}>
-          <Field label={t("New category")} htmlFor="cat-name" className="flex-1">
+          <Field label={t("New category")} htmlFor="cat-name" help={t("Your own category, for costs the built-in list doesn't cover. Press Add and it shows in every category list. Example: Fuel.")} className="flex-1">
             <Input id="cat-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Influencers, Fuel, Photographer…")} maxLength={60} />
           </Field>
           <Button type="submit" variant="primary" disabled={!name.trim() || add.isPending}><Plus /> {t("Add")}</Button>
@@ -371,6 +371,7 @@ function RepeatingCard({ rows, currency, canWrite, today, onAdd, onEdit, periodL
       <CardHeader
         title={<span className="inline-flex items-center gap-2"><Repeat className="size-4 text-brand-strong" /> {t("Repeating expenses")}</span>}
         description={t("Rent, your pay, employee pay, subscriptions: added once, they count a share every day.")}
+        help={t("Each row's big number is its share of the days you picked, counted day by day up to today. ≈ /month is its cost in an average month.")}
         actions={canWrite ? <Button size="sm" variant="secondary" onClick={onAdd}><Plus /> {t("Add repeating")}</Button> : null}
       />
       {!rows ? <Skeleton className="mx-5 mb-5 h-20" /> : rows.length === 0 ? (
@@ -516,7 +517,10 @@ export function ExpensesView() {
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4">
         <section className="relative col-span-2 flex min-w-0 flex-col gap-3 overflow-hidden rounded-[22px] bg-brand-hero p-5 text-white shine shadow-[0_16px_34px_rgb(204_19_37/0.35),inset_0_1px_0_rgb(255_255_255/0.35)] sm:col-span-3 xl:col-span-1">
           <span className="pointer-events-none absolute -end-12 -top-16 size-44 rounded-full border-[20px] border-white/10" aria-hidden="true" />
-          <span className="relative text-[15px] font-semibold">{t("Expenses · {period}", { period: periodLabel.toLowerCase() })}</span>
+          <span className="relative text-[15px] font-semibold">
+            {t("Expenses · {period}", { period: periodLabel.toLowerCase() })}
+            <HelpTip label={t("Expenses")} className="ms-1.5 align-middle text-white/70 hover:text-white">{t("Everything the business spent in these days, with your filters. Worked out as: one-off expenses dated in these days + each repeating expense's share of them, up to today.")}</HelpTip>
+          </span>
           <div className="relative min-w-0">{s ? <FitMoney value={whole(s.total, currency)} currency={currency} max={34} codeClassName="text-white/85" className="[text-shadow:0_2px_14px_rgb(255_170_178/0.55)]" /> : <Skeleton className="h-9 w-40 bg-white/25" />}</div>
           <span className="relative text-xs text-white/85">{s ? t("{once} once · {repeating} repeating", { once: money.fmt(s.total - s.repeating, currency, { decimals: false }), repeating: money.fmt(s.repeating, currency, { decimals: false }) }) : " "}</span>
         </section>
@@ -541,7 +545,7 @@ export function ExpensesView() {
           <RepeatingCard rows={recurring.data} currency={currency} canWrite={canWrite} today={today} periodLabel={periodLabel} onAdd={() => setDialog({ kind: "new", repeats: true })} onEdit={(row) => setDialog({ kind: "recurring", row })} />
 
           <Card className="min-w-0">
-            <CardHeader title={t("One-off expenses")} description={list.data && list.data.length >= 500 ? t("The latest 500. Pick fewer days to see the rest, or export.") : undefined} />
+            <CardHeader title={t("One-off expenses")} help={t("Expenses entered once, newest first, each counted on its own date. An amount paid in another currency shows the original under the converted one.")} description={list.data && list.data.length >= 500 ? t("The latest 500. Pick fewer days to see the rest, or export.") : undefined} />
             {list.error ? <ErrorState message={errorMessage(list.error)} /> : !list.data ? <Loading /> : !list.data.length ? (
               filtered || range !== "all" ? (
                 <EmptyState icon={<Receipt />} title={t("Nothing matches")} description={t("No one-off expense in these days with these filters.")} action={filtered ? <Button variant="secondary" onClick={clear}>{t("Clear filters")}</Button> : undefined} />
@@ -603,21 +607,21 @@ export function ExpensesView() {
       <MoreDetails id="expenses" hint={t("Totals by category, by product and for each month.")} className="mt-6">
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
           <Card>
-            <CardHeader title={t("By category")} description={t("One-off and repeating together.")} />
+            <CardHeader title={t("By category")} help={t("Worked out as: one-off expenses + repeating shares in these days, added up per category. The % is each category's part of the total.")} description={t("One-off and repeating together.")} />
             {!s ? <Skeleton className="mx-5 mb-5 h-32" /> : <Bars rows={s.byCategory.map((c) => ({ key: c.category, label: c.name ?? t(categoryLabel(c.category)), amount: c.amount }))} total={s.total} currency={currency} empty={t("No expenses in these days.")} />}
           </Card>
           {s && s.byProduct.length ? (
             <Card>
-              <CardHeader title={t("By product")} description={t("Expenses tied to one product.")} />
+              <CardHeader title={t("By product")} help={t("Only expenses set to count for one product, added up per product in these days. The % is each product's part of these product expenses.")} description={t("Expenses tied to one product.")} />
               <Bars rows={s.byProduct.map((p) => ({ key: p.productId, label: p.name, amount: p.amount }))} total={s.total - s.unallocated} currency={currency} empty="" />
             </Card>
           ) : null}
           <Card>
-            <CardHeader title={t("Each month")} />
+            <CardHeader title={t("Each month")} help={t("Your expenses month by month, newest first, to spot a month that cost more than usual.")} />
             <CardBody className="p-0">
               {!s ? <Skeleton className="m-4 h-32" /> : s.months.length === 0 ? <p className="px-5 pb-5 text-sm text-muted">{t("No expenses in these days.")}</p> : (
                 <Table>
-                  <THead><tr><Th>{t("Month")}</Th><Th className="text-end">{t("Repeating")}</Th><Th className="text-end">{t("Total")}</Th></tr></THead>
+                  <THead><tr><Th>{t("Month")}</Th><Th className="text-end"><Term label={t("Repeating")} definition={t("The repeating expenses' share of that month: a share for each day of it inside your days, up to today.")} /></Th><Th className="text-end"><Term label={t("Total")} definition={t("Worked out as: one-off expenses dated in that month + the repeating share.")} /></Th></tr></THead>
                   <tbody>
                     {s.months.map((m) => (
                       <Tr key={m.month}>

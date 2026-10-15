@@ -43,7 +43,7 @@ const ar: Dict = {
   "Edit product": "تعديل المنتج",
   "New product": "منتج جديد",
   "Cost assumptions are versioned separately so history is never overwritten.": "تُحفَظ التكاليف في إصدارات منفصلة، فلا يُمحى السجل السابق أبدًا.",
-  "Set the unit economics that apply from today.": "حدّد سعر القطعة وتكاليفها التي تُطبَّق ابتداءً من اليوم.",
+  "Set the price and costs. The first ones also count for orders placed before today.": "حدّد السعر والتكاليف. الأولى منها تُحتسب أيضًا للطلبيات الواردة قبل اليوم.",
   "Product name": "اسم المنتج",
   SKU: "رمز المنتج (SKU)",
   Offer: "العرض",

@@ -16,7 +16,7 @@ import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
 import { DEF } from "@/lib/definitions";
@@ -147,7 +147,10 @@ export function CampaignsView() {
 
         {selected?.id && canLink ? (
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 text-sm">
-            <label htmlFor="acct-product" className="text-muted">{t("Campaigns in this account count for")}</label>
+            <span className="flex items-center gap-1">
+              <label htmlFor="acct-product" className="text-muted">{t("Campaigns in this account count for")}</label>
+              <HelpTip label={t("Campaigns in this account count for")}>{t("The product this ad account sells. Its campaigns' spend then counts for that product, new campaigns too, so the product's profit and POAS include them.")}</HelpTip>
+            </span>
             <Select id="acct-product" value={selected.defaultProductId ?? ""} disabled={setAccountProduct.isPending} onChange={(e) => setAccountProduct.mutate({ id: selected.id!, productId: e.target.value || null })} className="w-56">
               <option value="">{t("No default product")}</option>
               {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -161,7 +164,7 @@ export function CampaignsView() {
         {m ? (
           <div className="grid grid-cols-2 border-b border-border sm:grid-cols-3 lg:grid-cols-5">
             <Stat label={t("Ad spend")} def={t(DEF.adSpend)}>{money.fmt(m.adSpend, cur)}</Stat>
-            <Stat label={t("Orders placed")} def={t("Orders whose ad (utm_content) belongs to these campaigns, placed in the period.")}>{m.placed.toLocaleString("en-US")}</Stat>
+            <Stat label={t("Orders placed")} def={t("Orders placed in this period from the ads of these campaigns, running or not. With all ad accounts, orders not linked to a campaign count too.")}>{m.placed.toLocaleString("en-US")}</Stat>
             <Stat label={t("Delivered")} def={t(DEF.deliveryRate)} sub={m.deliveryRate === null ? t("No finished parcels yet") : t("{pct}% delivery rate", { pct: Math.round(m.deliveryRate * 100) })}>{m.delivered.toLocaleString("en-US")}</Stat>
             <Stat label={t("True net profit")} def={t(DEF.trueNetProfit)} tone={m.trueNetProfit < 0 ? "text-negative" : "text-positive"}>{money.fmt(m.trueNetProfit, cur)}</Stat>
             <Stat label="POAS" def={t(DEF.truePoas)} tone={m.truePoas !== null && m.truePoas < 0 ? "text-negative" : undefined} sub={account ? t("Whole account, this period") : t("All campaigns, this period")}>{m.truePoas === null ? "—" : m.truePoas.toFixed(2)}</Stat>
@@ -178,7 +181,7 @@ export function CampaignsView() {
           <Table>
             <THead>
               <tr>
-                <Th>{t("Campaign")}</Th>
+                <Th>{phone ? <Term label={t("Campaign")} definition={`${t("Under each campaign: what it spent, its orders and its true net profit in this period, its verdict, and the product its spend counts for.")} ${t(DEF.verdict)}`} /> : t("Campaign")}</Th>
                 {phone ? null : <>
                 <Th><Term label={t("Product")} definition={t("The product this campaign's spend and ads count for. A campaign's own link comes first, then its ad account's default, then the product of its ads.")} /></Th>
                 <Th className="text-end">{t("Spend")}</Th>
@@ -232,9 +235,12 @@ export function CampaignsView() {
                               </>
                             ) : null}
                             {c.otherProductOrders > 0 ? (
-                              <Badge tone="warning" className="w-fit" title={t("These orders came from this campaign's ads, but their own products don't include the campaign's product. Check the campaign's product link.")}>
-                                {c.otherProductOrders === 1 ? t("1 order for another product") : t("{n} orders for another product", { n: c.otherProductOrders })}
-                              </Badge>
+                              <span className="flex items-center gap-1">
+                                <Badge tone="warning" className="w-fit" title={t("These orders came from this campaign's ads, but their own products don't include the campaign's product. Check the campaign's product link.")}>
+                                  {c.otherProductOrders === 1 ? t("1 order for another product") : t("{n} orders for another product", { n: c.otherProductOrders })}
+                                </Badge>
+                                <HelpTip label={c.otherProductOrders === 1 ? t("1 order for another product") : t("{n} orders for another product", { n: c.otherProductOrders })}>{t("These orders came from this campaign's ads, but their own products don't include the campaign's product. Check the campaign's product link.")}</HelpTip>
+                              </span>
                             ) : null}
                           </div>
                         </div>

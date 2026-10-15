@@ -15,6 +15,7 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import { DEFAULT_MDM_STATUS_MAP } from "@/domain/statusMapping";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
@@ -73,13 +74,13 @@ export function MdmTab() {
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <Card>
-        <CardHeader title={t("MDM Express connection")} description={t("This workspace's own MDM account. The key is encrypted on the server before it is stored, and the browser never sees it again.")} />
+        <CardHeader title={t("MDM Express connection")} description={t("This workspace's own MDM account. The key is encrypted on the server before it is stored, and the browser never sees it again.")} help={t("MDM Express holds your orders and parcels. Once connected, MDM sync brings them in, so delivery rate and profit fill in by themselves, without files.")} />
         <CardBody className="flex flex-col gap-5 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><p className="text-xs text-muted">{t("Status")}</p><Badge tone={STATUS_TONE[c.status]} className="mt-1">{t(STATUS_LABEL[c.status])}</Badge></div>
-            <div><p className="text-xs text-muted">{t("API key")}</p><p className="mt-1 font-mono text-xs">{c.maskedLabel ?? t("None saved")}{c.credentialUpdatedAt ? <span className="ms-2 font-sans text-muted">{t("updated {ago}", { ago: ago(c.credentialUpdatedAt) })}</span> : null}</p></div>
-            <div><p className="text-xs text-muted">{t("Last connection test")}</p><p className="mt-1">{c.lastTestedAt ? dateTime(c.lastTestedAt) : t("Never")}</p></div>
-            <div><p className="text-xs text-muted">{t("Last successful sync")}</p><p className="mt-1">{c.lastSuccessfulSyncAt ? dateTime(c.lastSuccessfulSyncAt) : t("Never")}</p></div>
+            <div><p className="text-xs text-muted"><Term label={t("Status")} definition={t("Connected: MDM accepted the key and syncs run. Saved, not verified: press Test connection. Error: read the message below, then check or replace the key.")} /></p><Badge tone={STATUS_TONE[c.status]} className="mt-1">{t(STATUS_LABEL[c.status])}</Badge></div>
+            <div><p className="text-xs text-muted"><Term label={t("API key")} definition={t("Your saved key with all but its last 4 characters hidden, so you can check which key is in use.")} /></p><p className="mt-1 font-mono text-xs">{c.maskedLabel ?? t("None saved")}{c.credentialUpdatedAt ? <span className="ms-2 font-sans text-muted">{t("updated {ago}", { ago: ago(c.credentialUpdatedAt) })}</span> : null}</p></div>
+            <div><p className="text-xs text-muted"><Term label={t("Last connection test")} definition={t("When Test connection last ran. Run it again after you replace the key, or when syncs start failing.")} /></p><p className="mt-1">{c.lastTestedAt ? dateTime(c.lastTestedAt) : t("Never")}</p></div>
+            <div><p className="text-xs text-muted"><Term label={t("Last successful sync")} definition={t("When MDM sync last finished with no error. Orders and statuses that changed in MDM after that are not in your numbers yet.")} /></p><p className="mt-1">{c.lastSuccessfulSyncAt ? dateTime(c.lastSuccessfulSyncAt) : t("Never")}</p></div>
           </div>
 
           {c.adapter === "mock" ? (
@@ -104,12 +105,12 @@ export function MdmTab() {
                 save.mutate({ credential, baseUrl: baseUrl || undefined });
               }}
             >
-              <Field label={c.hasCredential ? t("Replace API key") : t("MDM Express API key")} htmlFor="mdm-key" hint={t("Find it in your MDM Express account. It is sent once over HTTPS, encrypted with AES-256-GCM, and never shown again.")}>
+              <Field label={c.hasCredential ? t("Replace API key") : t("MDM Express API key")} htmlFor="mdm-key" help={t("The secret code that lets this app read your MDM orders, parcels and statuses, never change them. Paste it only in this field, never in a chat.")} hint={t("Find it in your MDM Express account. It is sent once over HTTPS, encrypted with AES-256-GCM, and never shown again.")}>
                 <Input id="mdm-key" name="mdm-key" type="password" autoComplete="new-password" spellCheck={false} value={credential} onChange={(e) => setCredential(e.target.value)} required minLength={8} maxLength={512} placeholder={t("Paste your key")} />
               </Field>
               <details className="text-xs text-muted">
                 <summary className="cursor-pointer">{t("Advanced")}</summary>
-                <Field label={t("API base URL")} htmlFor="mdm-url" hint={t("Only allowlisted MDM hosts over https are accepted.")} className="mt-3">
+                <Field label={t("API base URL")} htmlFor="mdm-url" help={t("Leave it empty to use the normal MDM address. Fill it in only if MDM tells you to use another one.")} hint={t("Only allowlisted MDM hosts over https are accepted.")} className="mt-3">
                   <Input id="mdm-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={c.baseUrl} />
                 </Field>
               </details>
@@ -133,7 +134,7 @@ export function MdmTab() {
 
       <div className="flex flex-col gap-6">
         <Card>
-          <CardHeader title={t("How your key is protected")} />
+          <CardHeader title={t("How your key is protected")} help={t("Only owners and admins can save, test or remove the key. Remove key stops every sync at once; what was already synced stays.")} />
           <CardBody className="flex flex-col gap-2 text-xs text-muted">
             {[
               t("Each workspace uses its own key. There is no shared key."),
@@ -147,7 +148,7 @@ export function MdmTab() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title={t("Sync interval")} description={t("Once the connection test passes, an incremental sync runs automatically at this interval.")} />
+          <CardHeader title={t("Sync interval")} description={t("Once the connection test passes, an incremental sync runs automatically at this interval.")} help={t("How often new and changed MDM orders are read by themselves. Shorter keeps statuses fresher. Sync now on the MDM sync page still works at any time.")} />
           <CardBody>
             <Select aria-label={t("Sync interval")} disabled={!canManage || interval.isPending} value={String(c.syncIntervalMinutes)} onChange={(e) => interval.mutate({ minutes: Number(e.target.value) })}>
               {[15, 30, 45, 60, 120, 240, 720, 1440].map((m) => <option key={m} value={m}>{m < 60 ? t("Every {n} minutes", { n: m }) : m === 60 ? t("Every 1 hour") : t("Every {n} hours", { n: m / 60 })}</option>)}
@@ -193,10 +194,10 @@ export function StatusMappingsTab() {
     <div className="grid gap-6 xl:grid-cols-2">
       <div className="flex min-w-0 flex-col gap-6">
         <Card>
-          <CardHeader title={t("Unknown MDM statuses")} description={t("Parcels with these statuses count as UNKNOWN: never delivered or returned. Map each one once and existing parcels update immediately.")} />
+          <CardHeader title={t("Unknown MDM statuses")} description={t("Parcels with these statuses count as UNKNOWN: never delivered or returned. Map each one once and existing parcels update immediately.")} help={t("Pick what each status really means. Example: one saying the customer paid → delivered, one saying the parcel is on its way back → returned.")} />
           {!unknown.data ? <Loading /> : !unknown.data.length ? <p className="p-4 text-sm text-muted">{t("No unknown statuses.")}</p> : (
             <Table>
-              <THead><tr><Th>{t("MDM status")}</Th><Th className="text-end">{t("Parcels")}</Th><Th>{t("Map to")}</Th><Th><span className="sr-only">{t("Save")}</span></Th></tr></THead>
+              <THead><tr><Th>{t("MDM status")}</Th><Th className="text-end"><Term label={t("Parcels")} definition={t("How many of your parcels have this MDM status now. They all change at once when you save its mapping.")} /></Th><Th><Term label={t("Map to")} definition={t("The status this app counts it as. Delivered and returned change your delivery rate and profit; shipped counts as on the road.")} /></Th><Th><span className="sr-only">{t("Save")}</span></Th></tr></THead>
               <tbody>
                 {unknown.data.map((u) => {
                   const key = u.providerStatus ?? "";
@@ -219,7 +220,7 @@ export function StatusMappingsTab() {
           )}
         </Card>
         <Card>
-          <CardHeader title={t("Workspace overrides")} />
+          <CardHeader title={t("Workspace overrides")} help={t("Statuses this workspace has its own mapping for, including the ones you mapped above. When a status is in both lists, this one wins.")} />
           {!overrides.data?.length ? <p className="p-4 text-sm text-muted">{t("None yet.")}</p> : (
             <Table>
               <THead><tr><Th>{t("MDM status")}</Th><Th>{t("Normalized")}</Th><Th>{t("Updated")}</Th></tr></THead>
@@ -229,7 +230,7 @@ export function StatusMappingsTab() {
         </Card>
       </div>
       <Card>
-        <CardHeader title={t("Default mapping")} description={t("Applied when no workspace override exists.")} />
+        <CardHeader title={t("Default mapping")} description={t("Applied when no workspace override exists.")} help={t("The built-in meaning of each MDM status name. A status that is in neither list counts as unknown until you map it.")} />
         <Table>
           <THead><tr><Th>{t("MDM status")}</Th><Th>{t("Normalized")}</Th></tr></THead>
           <tbody>{Object.entries(DEFAULT_MDM_STATUS_MAP).map(([k, v]) => <Tr key={k}><Td className="font-mono text-xs">{k}</Td><Td><ParcelStatusBadge status={v} /></Td></Tr>)}</tbody>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import { WILAYAS, wilayaLabel } from "@/domain/wilayas";
 import { useT } from "@/i18n/client";
 import { parseToMinor } from "@/lib/money";
@@ -76,14 +77,14 @@ export function NewOrderDialog({ onClose }: { onClose: () => void }) {
       <DialogContent title={t("Manual order")} description={t("For orders that did not come through an import. The phone number is hashed and masked; the raw number is never stored.")} className="max-w-2xl">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label={t("Order number")} htmlFor="on"><Input id="on" value={f.orderNumber} onChange={set("orderNumber")} required className="font-mono" /></Field>
-            <Field label={t("Placed on")} htmlFor="pa"><Input id="pa" type="date" value={f.placedAt} onChange={set("placedAt")} required /></Field>
-            <Field label={t("Status")} htmlFor="st">
+            <Field label={t("Order number")} htmlFor="on" help={t("Your number for the order, e.g. #1001. An MDM parcel with the same reference links to this order by itself.")}><Input id="on" value={f.orderNumber} onChange={set("orderNumber")} required className="font-mono" /></Field>
+            <Field label={t("Placed on")} htmlFor="pa" help={t("The day the customer ordered. Reports count the order on this day.")}><Input id="pa" type="date" value={f.placedAt} onChange={set("placedAt")} required /></Field>
+            <Field label={t("Status")} htmlFor="st" help={t("The call center's result. Confirmed orders count in the confirmation rate; pending ones still wait for a call.")}>
               <Select id="st" value={f.status} onChange={set("status")}><option value="PENDING">{t("Pending")}</option><option value="CONFIRMED">{t("Confirmed")}</option><option value="CANCELED">{t("Canceled")}</option></Select>
             </Field>
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-xs font-medium text-muted">{t("Lines")}</legend>
+            <legend className="mb-1 text-xs font-medium text-muted"><Term label={t("Lines")} definition={t("One line per product: pick it, type the pieces and the price of one piece. The price fills in from the product's sale price.")} /></legend>
             {lines.map((l, i) => (
               <div key={i} className="grid grid-cols-[1fr_5rem_8rem_2rem] items-center gap-2">
                 <Select aria-label={t("Product")} value={l.productId} onChange={(e) => setLine(i, { productId: e.target.value })} required>
@@ -98,19 +99,19 @@ export function NewOrderDialog({ onClose }: { onClose: () => void }) {
             <Button type="button" size="sm" variant="ghost" className="self-start" onClick={() => setLines((ls) => [...ls, { productId: "", quantity: "1", unitPrice: "" }])}><Plus /> {t("Add line")}</Button>
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label={t("COD amount")} htmlFor="cod" hint={t("Defaults to the line total")}><MoneyInput id="cod" currency={currency} value={f.cod} onChange={(v) => setF({ ...f, cod: v })} /></Field>
-            <Field label={t("Wilaya")} htmlFor="wi">
+            <Field label={t("COD amount")} htmlFor="cod" hint={t("Defaults to the line total")} help={t("Everything the customer pays the delivery person for this order. Example: 3900.")}><MoneyInput id="cod" currency={currency} value={f.cod} onChange={(v) => setF({ ...f, cod: v })} /></Field>
+            <Field label={t("Wilaya")} htmlFor="wi" help={t("Where the parcel goes. The dashboard uses wilayas to show where parcels come back from.")}>
               <Select id="wi" value={f.wilaya} onChange={set("wilaya")}>
                 <option value="">{t("Pick a wilaya")}</option>
                 {WILAYAS.map((w) => <option key={w.code} value={w.ar}>{wilayaLabel(w.ar)}</option>)}
               </Select>
             </Field>
-            <Field label={t("City")} htmlFor="ci"><Input id="ci" value={f.city} onChange={set("city")} /></Field>
-            <Field label={t("Phone")} htmlFor="ph" hint={t("Stored only as a hash + mask")}><Input id="ph" type="tel" value={f.phone} onChange={set("phone")} autoComplete="off" /></Field>
-            <Field label={t("UTM campaign")} htmlFor="uc"><Input id="uc" value={f.utmCampaign} onChange={set("utmCampaign")} /></Field>
-            <Field label={t("UTM content (creative ID)")} htmlFor="ut"><Input id="ut" value={f.utmContent} onChange={set("utmContent")} className="font-mono" /></Field>
+            <Field label={t("City")} htmlFor="ci" help={t("The customer's commune or city, shown on the order.")}><Input id="ci" value={f.city} onChange={set("city")} /></Field>
+            <Field label={t("Phone")} htmlFor="ph" hint={t("Stored only as a hash + mask")} help={t("The customer's number. You can then find this order by phone in the Orders search.")}><Input id="ph" type="tel" value={f.phone} onChange={set("phone")} autoComplete="off" /></Field>
+            <Field label={t("UTM campaign")} htmlFor="uc" help={t("The campaign name from the ad link (utm_campaign), kept on the order for your records.")}><Input id="uc" value={f.utmCampaign} onChange={set("utmCampaign")} /></Field>
+            <Field label={t("UTM content (creative ID)")} htmlFor="ut" help={t("The Meta ad ID from the ad link (utm_content). It links the order to its ad, so the ad's results count it.")}><Input id="ut" value={f.utmContent} onChange={set("utmContent")} className="font-mono" /></Field>
           </div>
-          <Field label={t("Notes")} htmlFor="no"><Textarea id="no" value={f.notes} onChange={set("notes")} /></Field>
+          <Field label={t("Notes")} htmlFor="no" help={t("Anything to remember about this order. Shown when you open it.")}><Textarea id="no" value={f.notes} onChange={set("notes")} /></Field>
           {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>{t("Cancel")}</Button>

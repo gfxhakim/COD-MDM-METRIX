@@ -5,6 +5,7 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/form";
 import { Loading } from "@/components/ui/states";
+import { Term } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
 import { useTRPC } from "@/lib/trpc/client";
@@ -57,7 +58,7 @@ export function AdLinksPicker({ productId, value, onChange, products }: { produc
     <div className="flex flex-col gap-3">
       {data.accounts.length ? (
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle">{t("Whole ad accounts")}</legend>
+          <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle"><Term label={t("Whole ad accounts")} definition={t("Tick an account to count every campaign in it for this product, new ones too. Ticking one marked with another product moves it here.")} /></legend>
           {data.accounts.map((a) => (
             <label key={a.id} className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#e1182c]" checked={current.adAccountIds.includes(a.id)} onChange={(e) => onChange({ ...current, adAccountIds: toggle(current.adAccountIds, a.id, e.target.checked) })} />
@@ -72,7 +73,7 @@ export function AdLinksPicker({ productId, value, onChange, products }: { produc
       ) : null}
       {data.campaigns.length ? (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle">{t("Campaigns")}</legend>
+          <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle"><Term label={t("Campaigns")} definition={t("Tick the campaigns that sell this product. Their spend and ads count for it, even when their ad account counts for another product.")} /></legend>
           {data.campaigns.length > 8 ? <Input aria-label={t("Search campaigns")} placeholder={t("Search campaigns")} value={search} onChange={(e) => setSearch(e.target.value)} className="h-8" /> : null}
           <div className="flex max-h-64 flex-col gap-3 overflow-y-auto rounded-lg border border-border p-2">
             {[...groups].map(([acct, list]) => (

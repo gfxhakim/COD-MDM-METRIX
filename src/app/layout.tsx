@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Alexandria, Geist_Mono } from "next/font/google";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nProvider } from "@/i18n/client";
 import { dirOf } from "@/i18n/core";
 import { dictFor, getLocale } from "@/i18n/server";
@@ -18,7 +19,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={locale} dir={dirOf(locale)} className={`${alexandria.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <I18nProvider locale={locale} dict={dictFor(locale)}>{children}</I18nProvider>
+        <I18nProvider locale={locale} dict={dictFor(locale)}>
+          {/* Every page, sign-in included, has ⓘ explanations (HelpTip). */}
+          <TooltipProvider>{children}</TooltipProvider>
+        </I18nProvider>
       </body>
     </html>
   );

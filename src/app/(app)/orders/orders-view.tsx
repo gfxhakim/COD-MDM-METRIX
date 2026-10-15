@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
+import { HelpTip } from "@/components/ui/tooltip";
 import { wilayaLabel } from "@/domain/wilayas";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
@@ -117,33 +118,51 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
             <Input id="order-search" placeholder={t("Order number, tracking ID or phone")} value={search} onChange={(e) => setSearch(e.target.value)} className="ps-9" />
           </div>
           <AdsFilter className="col-span-2 sm:col-span-1" />
-          <Select aria-label={t("Order status")} value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full">
-            <option value="">{t("All orders")}</option>
-            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{t(ORDER_STATUS_WORD[s])}</option>)}
-          </Select>
-          <Select aria-label={t("Wilaya")} value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full">
-            <option value="">{t("All wilayas")}</option>
-            {facets.data?.wilayas.map((w) => <option key={w} value={w}>{wilayaLabel(w)}</option>)}
-          </Select>
-          <Select aria-label={t("Product")} value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full">
-            <option value="">{t("All products")}</option>
-            {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
+          <div className="flex min-w-0 items-center gap-1">
+            <Select aria-label={t("Order status")} value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full min-w-0">
+              <option value="">{t("All orders")}</option>
+              {ORDER_STATUSES.map((s) => <option key={s} value={s}>{t(ORDER_STATUS_WORD[s])}</option>)}
+            </Select>
+            <HelpTip label={t("Order status")}>{t("The call center's result for the order: pending, confirmed or canceled. The parcel status filter is about delivery instead.")}</HelpTip>
+          </div>
+          <div className="flex min-w-0 items-center gap-1">
+            <Select aria-label={t("Wilaya")} value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full min-w-0">
+              <option value="">{t("All wilayas")}</option>
+              {facets.data?.wilayas.map((w) => <option key={w} value={w}>{wilayaLabel(w)}</option>)}
+            </Select>
+            <HelpTip label={t("Wilaya")}>{t("Only orders going to this wilaya.")}</HelpTip>
+          </div>
+          <div className="flex min-w-0 items-center gap-1">
+            <Select aria-label={t("Product")} value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full min-w-0">
+              <option value="">{t("All products")}</option>
+              {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+            <HelpTip label={t("Product")}>{t("Only orders with this product on one of their lines.")}</HelpTip>
+          </div>
           {more ? (
             <>
-              <Select aria-label={t("Parcel status")} value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full">
-                <option value="">{t("All parcels")}</option>
-                {PARCEL_STATUSES.map((s) => <option key={s} value={s}>{t(PARCEL_STATUS_WORD[s])}</option>)}
-              </Select>
-              <Select aria-label={t("Creative")} value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full">
-                <option value="">{t("All creatives")}</option>
-                {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
-              </Select>
-              <Select aria-label={t("Upsell")} value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full">
-                <option value="">{t("Upsell or not")}</option>
-                <option value="yes">{t("Upsold")}</option>
-                <option value="no">{t("No upsell")}</option>
-              </Select>
+              <div className="flex min-w-0 items-center gap-1">
+                <Select aria-label={t("Parcel status")} value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full min-w-0">
+                  <option value="">{t("All parcels")}</option>
+                  {PARCEL_STATUSES.map((s) => <option key={s} value={s}>{t(PARCEL_STATUS_WORD[s])}</option>)}
+                </Select>
+                <HelpTip label={t("Parcel status")}>{t("Only orders with a parcel in this status, as MDM reports it: shipped, delivered, returned and so on.")}</HelpTip>
+              </div>
+              <div className="flex min-w-0 items-center gap-1">
+                <Select aria-label={t("Creative")} value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full min-w-0">
+                  <option value="">{t("All creatives")}</option>
+                  {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
+                </Select>
+                <HelpTip label={t("Creative")}>{t("Only orders linked to this Meta ad, by the ad ID in their utm_content.")}</HelpTip>
+              </div>
+              <div className="flex min-w-0 items-center gap-1">
+                <Select aria-label={t("Upsell")} value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full min-w-0">
+                  <option value="">{t("Upsell or not")}</option>
+                  <option value="yes">{t("Upsold")}</option>
+                  <option value="no">{t("No upsell")}</option>
+                </Select>
+                <HelpTip label={t("Upsell")}>{t("Only the orders MDM marked as upsold by its call center, or only the others.")}</HelpTip>
+              </div>
             </>
           ) : null}
           <MoreDetailsButton open={more} onToggle={(o) => { setMore(o); if (!o) { setParcelStatus(""); setCreativeId(""); setUpsell(""); } }} className="col-span-2 justify-self-start self-center sm:col-span-1" />

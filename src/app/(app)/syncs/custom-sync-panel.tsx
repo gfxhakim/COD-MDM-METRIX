@@ -8,6 +8,7 @@ import { Check3, Chip, Section } from "@/components/ui/choice";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
+import { HelpTip } from "@/components/ui/tooltip";
 import { CUSTOM_SYNC_MAX_ORDERS, describeCustomSync, parseOrderIds, type CustomSyncChoices } from "@/domain/customSync";
 import { STATUS_GROUPS, type StatusGroupKey } from "@/domain/orderExport";
 import { wilayaLabel } from "@/domain/wilayas";
@@ -52,21 +53,21 @@ function save(workspaceId: string, v: Saved) {
   }
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, help, children }: { label: string; help?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="grid gap-1.5 sm:grid-cols-[5rem_minmax(0,1fr)] sm:items-start sm:gap-2">
-      <span className="text-xs text-muted sm:leading-8">{label}</span>
+      <span className="text-xs text-muted sm:leading-8">{label}{help ? <HelpTip label={label} className="ms-1 align-middle">{help}</HelpTip> : null}</span>
       <div className="flex min-w-0 flex-wrap gap-1.5">{children}</div>
     </div>
   );
 }
 
 /** Pick several names from a list: a native select to add one, removable pills for those picked. */
-function MultiPick({ label, addLabel, all, picked, onChange, placeholder, show = (v) => v }: { label: string; addLabel: string; all: string[]; picked: string[]; onChange: (v: string[]) => void; placeholder: string; show?: (v: string) => string }) {
+function MultiPick({ label, help, addLabel, all, picked, onChange, placeholder, show = (v) => v }: { label: string; help?: React.ReactNode; addLabel: string; all: string[]; picked: string[]; onChange: (v: string[]) => void; placeholder: string; show?: (v: string) => string }) {
   const { t } = useT();
   const left = all.filter((v) => !picked.includes(v));
   return (
-    <Row label={label}>
+    <Row label={label} help={help}>
       <div className="flex w-full min-w-0 flex-col gap-1.5">
         <Select aria-label={addLabel} value="" disabled={!left.length} onChange={(e) => e.target.value && onChange([...picked, e.target.value])} className="h-8 text-[13px]">
           <option value="">{picked.length ? t("Add another ({n} picked)", { n: picked.length }) : placeholder}</option>
@@ -163,7 +164,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
       <DialogContent title={t("Custom sync")} description={t("Bring in only the MDM orders you pick, and their parcels. Matching orders are added or updated; nothing is deleted, and the regular sync carries on as usual.")} className="max-w-2xl">
         <div className="flex flex-col gap-6">
           {demo ? <p className="rounded-xl bg-info-soft px-3 py-2 text-xs text-info">{t("The demo workspace's simulated MDM has parcels but no orders, so there is nothing to pick here. Custom sync works with a real MDM account.")}</p> : null}
-          <Section title={t("Dates")}>
+          <Section title={t("Dates")} help={t("The days to sync, counted in the workspace's time zone, first and last day included. Pick Custom to type your own first and last day.")}>
             <div className="flex flex-wrap gap-1.5">
               {RANGES.map((r) => (
                 <Chip key={r.key} active={s.range === r.key} onClick={() => setS((p) => ({ ...p, range: r.key, from: p.from || days.from || addDays(today, -29), to: p.to || days.to || today }))}>{t(r.label)}</Chip>
@@ -179,7 +180,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
               {badRange ? <span className="text-negative">{t("The start date is after the end date.")}</span> : days.from || days.to ? t("{from} to {to}", { from: days.from ? shortDay(days.from, t) : t("The start"), to: days.to ? shortDay(days.to, t) : t("today") }) : t("Every order, whatever its date")}
             </p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <span>{t("Dates of")}</span>
+              <span>{t("Dates of")} <HelpTip label={t("Dates of")} className="align-middle">{t("Order date picks orders placed on those days. Latest status change picks orders whose MDM status last changed on those days, e.g. delivered last week.")}</HelpTip></span>
               <div className="flex gap-1.5">
                 <Chip active={s.dateField === "placed"} onClick={() => set("dateField", "placed")}>{t("Order date")}</Chip>
                 <Chip active={s.dateField === "status"} onClick={() => set("dateField", "status")}>{t("Latest status change")}</Chip>
@@ -189,6 +190,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
 
           <Section
             title={t("Statuses")}
+            help={t("Tick a group for all its MDM statuses, or open it to pick single ones. With every status ticked, statuses MDM adds later are synced too.")}
             aside={(
               <span className="flex gap-3 text-xs font-medium">
                 <button type="button" className="text-brand-strong hover:underline" onClick={() => setS((p) => ({ ...p, offGroups: [], offStatuses: [] }))}>{t("All")}</button>
@@ -231,25 +233,25 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
             </ul>
           </Section>
 
-          <Section title={t("More filters")}>
+          <Section title={t("More filters")} help={t("Each filter is optional. An order is synced only when it matches every filter you set here.")}>
             <div className="flex flex-col gap-3 rounded-2xl border border-border p-3">
-              <MultiPick label={t("Wilaya")} addLabel={t("Add a wilaya")} all={options.data?.wilayas ?? []} picked={s.wilayas} onChange={(v) => set("wilayas", v)} placeholder={t("Every wilaya")} show={wilayaLabel} />
-              <Row label={t("Delivery")}>
+              <MultiPick label={t("Wilaya")} help={t("Only orders going to the wilayas you add. Leave it empty for every wilaya.")} addLabel={t("Add a wilaya")} all={options.data?.wilayas ?? []} picked={s.wilayas} onChange={(v) => set("wilayas", v)} placeholder={t("Every wilaya")} show={wilayaLabel} />
+              <Row label={t("Delivery")} help={t("Home: delivered to the customer's address. Stop desk: the customer collects the parcel at the carrier's desk. Any: both.")}>
                 <Chip active={!s.deliveryType} onClick={() => set("deliveryType", "")}>{t("Any")}</Chip>
                 <Chip active={s.deliveryType === "HOME"} onClick={() => set("deliveryType", "HOME")}>{t("Home")}</Chip>
                 <Chip active={s.deliveryType === "STOP_DESK"} onClick={() => set("deliveryType", "STOP_DESK")}>{t("Stop desk")}</Chip>
               </Row>
-              <Row label={t("Ad ID")}>
+              <Row label={t("Ad ID")} help={t("With an ad ID: orders whose link carried a Meta ad ID (utm_content). Without: orders with none. Any: both.")}>
                 <Chip active={s.ad === "any"} onClick={() => set("ad", "any")}>{t("Any")}</Chip>
                 <Chip active={s.ad === "with"} onClick={() => set("ad", "with")}>{t("With an ad ID")}</Chip>
                 <Chip active={s.ad === "without"} onClick={() => set("ad", "without")}>{t("Without")}</Chip>
               </Row>
-              {options.data?.stores.length ? <MultiPick label={t("Store")} addLabel={t("Add a store")} all={options.data.stores} picked={s.stores} onChange={(v) => set("stores", v)} placeholder={t("Every store")} /> : null}
-              {options.data?.products.length ? <MultiPick label={t("Product")} addLabel={t("Add a product")} all={options.data.products} picked={s.products} onChange={(v) => set("products", v)} placeholder={t("Every product")} /> : null}
+              {options.data?.stores.length ? <MultiPick label={t("Store")} help={t("Only orders from the stores you add, as MDM names them. Leave it empty for every store.")} addLabel={t("Add a store")} all={options.data.stores} picked={s.stores} onChange={(v) => set("stores", v)} placeholder={t("Every store")} /> : null}
+              {options.data?.products.length ? <MultiPick label={t("Product")} help={t("Only orders holding at least one of the products you add, by their MDM name. Leave it empty for every product.")} addLabel={t("Add a product")} all={options.data.products} picked={s.products} onChange={(v) => set("products", v)} placeholder={t("Every product")} /> : null}
             </div>
           </Section>
 
-          <Section title={t("Specific orders")} aside={orderIds.length ? <span className={cn("num text-xs", tooManyOrders ? "text-negative" : "text-muted")}>{t("{n} of {max} max", { n: orderIds.length, max: CUSTOM_SYNC_MAX_ORDERS })}</span> : null}>
+          <Section title={t("Specific orders")} help={t("Paste up to {max} MDM order IDs or store order numbers to sync just those. Capitals and a leading # don't matter, e.g. #1043 or 1043.", { max: CUSTOM_SYNC_MAX_ORDERS })} aside={orderIds.length ? <span className={cn("num text-xs", tooManyOrders ? "text-negative" : "text-muted")}>{t("{n} of {max} max", { n: orderIds.length, max: CUSTOM_SYNC_MAX_ORDERS })}</span> : null}>
             <Textarea value={orderText} onChange={(e) => setOrderText(e.target.value)} placeholder={t("Optional: MDM order IDs or store order numbers, separated by commas or one per line")} aria-invalid={tooManyOrders} className="min-h-16 font-mono text-[13px]" />
             {orderIds.length && s.range !== "all" ? (
               <p className="text-xs text-muted">{tx("The dates above still apply. {button} to sync these orders whatever their date.", { button: <button type="button" className="font-semibold text-brand-strong hover:underline" onClick={() => set("range", "all")}>{t("Use all dates")}</button> })}</p>
@@ -259,7 +261,7 @@ export function CustomSyncPanel({ workspaceId, timezone, demo, onClose, onStarte
           <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border p-3 text-sm">
             <input type="checkbox" className="mt-0.5 size-4 accent-[#e1182c]" checked={s.parcels} onChange={(e) => set("parcels", e.target.checked)} />
             <span>
-              <span className="block font-medium">{t("Also update their parcels")}</span>
+              <span className="block font-medium">{t("Also update their parcels")} <HelpTip label={t("Also update their parcels")} className="align-middle">{t("On: after the orders, the sync re-reads their parcels too. Off: only the orders are updated, which is quicker when you only need order details.")}</HelpTip></span>
               <span className="block text-xs text-muted">{t("Delivery status, COD amount and fees of the picked orders' parcels.")}</span>
             </span>
           </label>

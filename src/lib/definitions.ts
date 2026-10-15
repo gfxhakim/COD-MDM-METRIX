@@ -12,9 +12,9 @@ export const DEF = {
   cpco: msg("Cost per confirmed order: ad spend ÷ confirmed orders."),
   cpdo: msg("Cost per delivered order: ad spend ÷ delivered parcels."),
   confirmationRate: msg("Confirmed ÷ placed orders."),
-  deliveryRate: msg("Delivered ÷ parcels whose delivery is finished (delivered, returned or lost). Parcels still with the carrier are left out until they finish."),
+  deliveryRate: msg("Delivered ÷ parcels whose delivery is finished (delivered, returned, lost or exchanged). Parcels still with the carrier are left out until they finish."),
   returnRate: msg("Returned (RTO) ÷ parcels whose delivery is finished. Parcels still with the carrier are left out until they finish."),
   cogs: msg("Delivered quantity × sourcing cost from the cost version in effect on the order date. Returned goods go back to stock."),
   overhead: msg("Expenses in the period. At business level all of them count; per product/creative they are allocated by your overhead policy."),
-  verdict: msg("KILL: losing money with enough data. BAD TRAFFIC: cheap orders that don't deliver. SCALE: POAS at or above target with enough orders. WATCH: enough data, below target. INSUFFICIENT DATA: too few orders."),
+  verdict: msg("Kill: losing money with enough data. Bad traffic: cheap orders that don't deliver. Scale: POAS at or above target with enough orders. Watch: enough data, below target. Not enough data: too few orders."),
 } as const;

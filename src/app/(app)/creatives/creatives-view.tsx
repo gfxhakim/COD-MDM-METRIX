@@ -17,7 +17,7 @@ import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { MATRIX_COLUMNS, type MatrixColumnKey } from "@/domain/matrixColumns";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
@@ -63,7 +63,13 @@ function Cell({ row, col, currency }: { row: Row; col: (typeof MATRIX_COLUMNS)[n
     case "creative":
       return row.kind === "CREATIVE" ? (
         <span className="flex flex-col"><span className="font-mono text-xs">{row.externalCreativeId}</span><span className="max-w-48 truncate text-[11px] text-subtle">{row.name}</span></span>
-      ) : <Badge tone={row.kind === "UNMATCHED_SPEND" ? "warning" : "neutral"}>{row.kind === "UNATTRIBUTED" ? t("Unattributed orders") : row.kind === "UNMATCHED_SPEND" ? t("Unmatched spend") : row.name}</Badge>;
+      ) : (
+        <span className="inline-flex items-center gap-1">
+          <Badge tone={row.kind === "UNMATCHED_SPEND" ? "warning" : "neutral"}>{row.kind === "UNATTRIBUTED" ? t("Unattributed orders") : row.kind === "UNMATCHED_SPEND" ? t("Unmatched spend") : row.name}</Badge>
+          {row.kind === "UNATTRIBUTED" ? <HelpTip label={t("Unattributed orders")}>{t("Orders with no ad ID (utm_content), or one that matches no ad yet, so no ad can claim them. They still count in your totals.")}</HelpTip> : null}
+          {row.kind === "UNMATCHED_SPEND" ? <HelpTip label={t("Unmatched spend")}>{t("Ad spend whose ad ID matches no ad you know, so no ad's profit includes it. It still counts in your totals; match it on the Imports page.")}</HelpTip> : null}
+        </span>
+      );
     case "campaign": return <span className="max-w-48 truncate text-xs text-muted">{row.campaignName ?? "—"}</span>;
     case "verdict": return <VerdictBadge verdict={row.verdict} />;
     default: {
@@ -160,7 +166,7 @@ export function CreativesView() {
             <option value="">{t("All verdicts")}</option><option value="SCALE">{t(VERDICT_LABEL.SCALE)}</option><option value="WATCH">{t(VERDICT_LABEL.WATCH)}</option><option value="BAD_TRAFFIC">{t(VERDICT_LABEL.BAD_TRAFFIC)}</option><option value="KILL">{t(VERDICT_LABEL.KILL)}</option><option value="INSUFFICIENT_DATA">{t(VERDICT_LABEL.INSUFFICIENT_DATA)}</option>
           </Select>
           <label className="flex items-center justify-between gap-2 text-xs text-muted sm:justify-start">
-            {t("Min. placed")}
+            <Term label={t("Min. placed")} definition={t("Hides ads with fewer orders placed in this period than this number, here and in the CSV export. Example: 5 hides ads with 0 to 4 orders.")} />
             <Input type="number" min={0} value={minSample} onChange={(e) => setMinSample(Math.max(0, Number.parseInt(e.target.value || "0", 10)))} className="w-20" />
           </label>
           <Select aria-label={t("Revenue basis")} value={view || data?.revenueView || "DELIVERED"} onChange={(e) => setView(e.target.value as "DELIVERED" | "REMITTED")} className="col-span-2 w-full sm:w-52">

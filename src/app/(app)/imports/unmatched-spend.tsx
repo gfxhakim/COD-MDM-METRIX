@@ -12,6 +12,7 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 
@@ -50,14 +51,14 @@ function ResolveDialog({ group, currency, onClose }: { group: Group & { external
             m.mutate(mode === "create" ? { externalCreativeId: group.externalCreativeId, create: { name, productId: productId || null } } : { externalCreativeId: group.externalCreativeId, creativeId });
           }}
         >
-          <Field label={t("Action")} htmlFor="um"><Select id="um" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}><option value="create">{t("Create a creative for this ID")}</option><option value="link">{t("Link to an existing creative")}</option></Select></Field>
+          <Field label={t("Action")} htmlFor="um" help={t("Create: this ID becomes a new creative (one Meta ad), and orders carrying this ID in utm_content link to it. Link: its spend joins a creative you already have.")}><Select id="um" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}><option value="create">{t("Create a creative for this ID")}</option><option value="link">{t("Link to an existing creative")}</option></Select></Field>
           {mode === "create" ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={t("Name")} htmlFor="un"><Input id="un" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} /></Field>
-              <Field label={t("Product")} htmlFor="up"><Select id="up" value={productId} onChange={(e) => setProductId(e.target.value)}><option value="">{t("Assign later")}</option>{products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+              <Field label={t("Name")} htmlFor="un" help={t("A name you will recognise for this ad on the Creatives page. It starts as the ad name from the export.")}><Input id="un" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} /></Field>
+              <Field label={t("Product")} htmlFor="up" help={t("The product this ad sells, so its spend counts in that product's profit. Assign later leaves it without a product.")}><Select id="up" value={productId} onChange={(e) => setProductId(e.target.value)}><option value="">{t("Assign later")}</option>{products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
             </div>
           ) : (
-            <Field label={t("Creative")} htmlFor="uc" hint={t("Use this when the ad was renamed or the ID differs from the utm_content on orders.")}>
+            <Field label={t("Creative")} htmlFor="uc" help={t("The creative this spend belongs to. Every unmatched row with this ID moves to it, and counts for that ad from then on.")} hint={t("Use this when the ad was renamed or the ID differs from the utm_content on orders.")}>
               <Select id="uc" required value={creativeId} onChange={(e) => setCreativeId(e.target.value)}>
                 <option value="">{t("Choose creative…")}</option>
                 {options.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.externalCreativeId} ({c.externalCreativeId})</option>)}
@@ -90,11 +91,12 @@ export function UnmatchedSpend({ currency }: { currency: string }) {
     <Card>
       <CardHeader
         title={t("Unmatched spend")}
+        help={t("Match each ID so its spend counts for the right ad and product. The total is worked out as: the sum of the Spend column.")}
         description={tx("Spend whose creative ID matches no creative. It still counts against business profit, but not against any creative. Total: {total}", { total: <Money value={total} currency={currency} className="text-warning" /> })}
       />
       <div className="overflow-x-auto">
         <Table>
-          <THead><tr><Th>{t("Creative / ad ID")}</Th><Th>{t("Ad")}</Th><Th>{t("Campaign")}</Th><Th>{t("Dates")}</Th><Th className="text-end">{t("Rows")}</Th><Th className="text-end">{t("Spend")}</Th><Th><span className="sr-only">{t("Actions")}</span></Th></tr></THead>
+          <THead><tr><Th>{t("Creative / ad ID")}</Th><Th>{t("Ad")}</Th><Th>{t("Campaign")}</Th><Th>{t("Dates")}</Th><Th className="text-end">{t("Rows")}</Th><Th className="text-end"><Term label={t("Spend")} definition={t("Worked out as: the sum of this ID's spend rows between the dates shown.")} /></Th><Th><span className="sr-only">{t("Actions")}</span></Th></tr></THead>
           <tbody>
             {groups.map((g) => (
               <Tr key={g.externalCreativeId ?? "none"}>

@@ -6,6 +6,7 @@
  * text next to the chart, so color is never the only clue.
  */
 import * as React from "react";
+import { HelpTip } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import type { TFunction } from "@/i18n/core";
 import { cn, formatPercent } from "@/lib/utils";
@@ -301,7 +302,13 @@ export function CampaignBars({ rows, limit, fmt }: { rows: CampaignBar[]; limit:
       <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-full bg-brand-bar" aria-hidden="true" />{t("Earns money")}</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-full bg-ink" aria-hidden="true" />{t("Loses money on each delivered order")}</span>
-        {limit !== null && limit > 0 ? <span className="flex items-center gap-1.5"><span className="h-3 border-s-2 border-dashed border-ink/60" aria-hidden="true" />{tx("Most a delivered order can pay: {amount}", { amount: <b className="num text-fg">{fmt(limit)}</b> })}</span> : null}
+        {limit !== null && limit > 0 ? (
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 border-s-2 border-dashed border-ink/60" aria-hidden="true" />
+            {tx("Most a delivered order can pay: {amount}", { amount: <b className="num text-fg">{fmt(limit)}</b> })}
+            <HelpTip label={t("Most a delivered order can pay: {amount}", { amount: fmt(limit) })}>{t("Profit of one delivered order before ads: profit per delivered order + its ads. A campaign whose ads cost more than this per delivered order loses money.")}</HelpTip>
+          </span>
+        ) : null}
         {unknown.length ? <span>{unknown.length === 1 ? t("1 campaign has no confirmed or delivered orders yet.") : t("{n} campaigns have no confirmed or delivered orders yet.", { n: unknown.length })}</span> : null}
       </figcaption>
     </figure>

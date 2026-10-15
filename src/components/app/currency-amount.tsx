@@ -1,6 +1,7 @@
 "use client";
 
 import { Input, Select } from "@/components/ui/form";
+import { HelpTip } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { englishT, type TFunction } from "@/i18n/core";
 import { CURRENCIES, convertMinor, formatMoney, parseToMinor } from "@/lib/money";
@@ -68,6 +69,7 @@ export function CurrencyAmountInput({ id, value, onChange, workspaceCurrency, ra
           <label htmlFor={`${id}-rate`}>1 {value.currency} =</label>
           <Input id={`${id}-rate`} inputMode="decimal" className="num h-8 w-24" value={value.rate} onChange={(e) => onChange({ ...value, rate: e.target.value.replace(/[^\d.]/g, "") })} placeholder={t("e.g. 250")} required disabled={disabled} />
           <span>{workspaceCurrency}</span>
+          <HelpTip label={t("Exchange rate")}>{t("How many {book} one {currency} cost you for this amount. Filled from Settings > Economics & currencies; change it if you paid at another rate. Reports use the amount in {book}.", { book: workspaceCurrency, currency: value.currency })}</HelpTip>
           {converted ? <span className="num ms-auto text-fg">= {converted}</span> : null}
         </div>
       ) : null}

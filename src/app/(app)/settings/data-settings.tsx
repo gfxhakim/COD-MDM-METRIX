@@ -12,6 +12,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { msg, type TFunction } from "@/i18n/core";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
@@ -23,19 +24,21 @@ const n = (v: number) => v.toLocaleString("en-US");
 /** "1 order" or "1,234 orders": `one` and `many` are texts marked with msg(), `many` with an {n}. */
 const plural = (t: TFunction, v: number, one: string, many: string) => (v === 1 ? t(one) : t(many, { n: n(v) }));
 
-/** What the dialog says goes, and what stays, for each kind. */
-const DETAILS: Record<Target, { title: string; goes: string[]; stays: string[]; stopLabel?: string }> = {
+/** What the dialog says goes, and what stays, for each kind; `stopHelp` is the ⓘ beside `stopLabel`. */
+const DETAILS: Record<Target, { title: string; goes: string[]; stays: string[]; stopLabel?: string; stopHelp?: string }> = {
   mdm: {
     title: msg("everything from MDM"),
     goes: [msg("Orders and parcels read from MDM, with their status history"), msg("Money and stock copied from MDM, and the sync history"), msg("Customer details MDM added to imported orders")],
     stays: [msg("Your MDM key and your choices of what to bring from MDM"), msg("Your products and their costs"), msg("The next sync brings back what MDM still has")],
     stopLabel: msg("Also remove my MDM key, so syncs stop"),
+    stopHelp: msg("Ticked: the key is deleted too, and no sync runs until you save a key again. Not ticked: the next sync brings back what MDM still has."),
   },
   meta: {
     title: msg("the ad spend from Meta"),
     goes: [msg("Every day of spend, impressions and clicks read from Meta")],
     stays: [msg("Your Meta tokens, ad accounts and the campaigns linked to products"), msg("Ad spend from imported files, which counts again"), msg("The next spend sync reads the last 180 days again")],
     stopLabel: msg("Also remove my Meta tokens, so spend syncs stop"),
+    stopHelp: msg("Ticked: the tokens are deleted too, and no spend sync runs until you add one again. Not ticked: the next spend sync reads the last 180 days again."),
   },
   imports: {
     title: msg("every imported file"),
@@ -57,6 +60,7 @@ const DETAILS: Record<Target, { title: string; goes: string[]; stays: string[]; 
     goes: [msg("Every order, parcel, ad spend, import, expense, product, creative and campaign"), msg("Money and stock copied from MDM, and the sync history")],
     stays: [msg("Members and roles, settings, exchange rates and status mappings"), msg("Your choices of what to bring from MDM, and the audit log")],
     stopLabel: msg("Also remove my MDM key and Meta tokens, so syncs stop"),
+    stopHelp: msg("Ticked: the MDM key and Meta tokens are deleted too, so nothing comes back by itself. Not ticked: the next syncs bring back what MDM and Meta still have."),
   },
 };
 
@@ -89,11 +93,12 @@ export function DataTab() {
     .map(([v, one, many]) => count(v, one, many))
     .join(locale === "ar" ? "، " : ", ");
   const mdmParts = { orders: count(s.mdm.orders, msg("1 order"), msg("{n} orders")), parcels: count(s.mdm.parcels, msg("1 parcel"), msg("{n} parcels")), syncs: count(s.mdm.syncs, msg("1 sync"), msg("{n} syncs")) };
-  const rows: { target: Exclude<Target, "everything">; icon: LucideIcon; title: string; what: string; count: number; note?: React.ReactNode; busy?: string }[] = [
+  const rows: { target: Exclude<Target, "everything">; icon: LucideIcon; title: string; help: string; what: string; count: number; note?: React.ReactNode; busy?: string }[] = [
     {
       target: "mdm",
       icon: Truck,
       title: t("From MDM Express"),
+      help: t("Orders and parcels MDM sync brought in, plus the wallet, payouts and stock shown on Money & stock. Orders from imported files are not part of it."),
       count: s.mdm.orders + s.mdm.parcels + s.mdm.syncs + (s.mdm.money ? 1 : 0),
       what: s.mdm.money ? t("{orders}, {parcels}, money and stock, {syncs} in the history", mdmParts) : t("{orders}, {parcels}, {syncs} in the history", mdmParts),
       note: s.mdm.keySaved ? t("The next sync brings back what MDM still has.") : undefined,
@@ -103,6 +108,7 @@ export function DataTab() {
       target: "meta",
       icon: Megaphone,
       title: t("From Meta ads"),
+      help: t("Ad spend the Meta spend sync read, one row per ad per day. Spend from imported files is not part of it."),
       count: s.meta.spendRows,
       what: s.meta.spendRows
         ? t("{days} of spend for {ads}, {from} to {to}", { days: count(s.meta.spendRows, msg("1 day"), msg("{n} days")), ads: count(s.meta.ads, msg("1 ad"), msg("{n} ads")), from: s.meta.from ?? "", to: s.meta.to ?? "" })
@@ -114,6 +120,7 @@ export function DataTab() {
       target: "imports",
       icon: FileUp,
       title: t("Imported files"),
+      help: t("Files you uploaded on the Imports page. Data synced from MDM or Meta and what you typed in yourself are not part of it."),
       count: s.imports.files,
       what: s.imports.files
         ? s.imports.files === 1
@@ -126,6 +133,7 @@ export function DataTab() {
       target: "expenses",
       icon: Receipt,
       title: t("Expenses you added"),
+      help: t("Expenses you typed on the Expenses page, repeating ones like rent included. Profit subtracts them, so deleting them makes profit higher."),
       count: s.expenses.expenses + s.expenses.recurring + s.expenses.categories,
       what: t("{expenses}, {recurring}, {categories} of your own", {
         expenses: count(s.expenses.expenses, msg("1 expense"), msg("{n} expenses")),
@@ -137,6 +145,7 @@ export function DataTab() {
       target: "products",
       icon: Package,
       title: t("Products and costs"),
+      help: t("Each price and cost version holds a product's prices and costs from one date on, so old orders keep the costs of their day. Profit needs them."),
       count: s.products.products,
       what: t("{products} with {versions}", { products: count(s.products.products, msg("1 product"), msg("{n} products")), versions: count(s.products.costVersions, msg("1 price and cost version"), msg("{n} price and cost versions")) }),
     },
@@ -149,13 +158,14 @@ export function DataTab() {
         <CardHeader
           title={<span id="your-data-title">{t("Your data")}</span>}
           description={t("What the app keeps for this business, by where it came from. Delete any kind when you want; it can't be undone. Members, settings and the audit log always stay.")}
+          help={t("Use it to clear test data or start over. Each Delete first lists what goes and what stays, and asks you to type DELETE.")}
         />
         <ul className="flex flex-col divide-y divide-border px-5 pb-3">
           {rows.map((r) => (
             <li key={r.target} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
               <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand-strong"><r.icon className="size-5" aria-hidden="true" /></span>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{r.title}</p>
+                <p className="font-semibold"><Term label={r.title} definition={r.help} /></p>
                 <p className="text-sm text-muted">{r.what}</p>
                 {r.busy ? <p className="mt-0.5 text-xs text-warning">{r.busy}</p> : r.note ? <p className="mt-0.5 text-xs text-subtle">{r.note}</p> : null}
               </div>
@@ -170,7 +180,7 @@ export function DataTab() {
       <Card className="border-negative/30">
         <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-negative">{t("Delete everything")}</p>
+            <p className="font-semibold text-negative"><Term label={t("Delete everything")} definition={t("For a full restart, for example after trying the app with test data. Exchange rates, status mappings and the audit log stay too.")} /></p>
             <p className="text-sm text-muted">{t("Start this business over: every order, parcel, ad spend, import, expense, product and creative goes. Members and settings stay.")}</p>
             {s.mdm.busy || s.meta.busy ? <p className="mt-0.5 text-xs text-warning">{t("A sync is running. You can delete once it has finished.")}</p> : null}
           </div>
@@ -225,13 +235,16 @@ function ConfirmDelete({ target, keysSaved, onClose }: { target: Target; keysSav
           {canStop && d.stopLabel ? (
             <label className="flex items-start gap-2 rounded-2xl bg-surface-2 p-3">
               <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#e1182c]" checked={stopSyncs} onChange={(e) => setStopSyncs(e.target.checked)} />
-              <span>{t(d.stopLabel)}<span className="block text-xs text-subtle">{t("You can add it again later in Settings.")}</span></span>
+              <span>{t(d.stopLabel)}{d.stopHelp ? <HelpTip label={t(d.stopLabel)} className="ms-1 align-middle">{t(d.stopHelp)}</HelpTip> : null}<span className="block text-xs text-subtle">{t("You can add it again later in Settings.")}</span></span>
             </label>
           ) : null}
-          <label className="flex flex-col gap-1.5">
-            <span className="font-semibold">{t("Type DELETE to confirm")}</span>
-            <Input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="characters" spellCheck={false} aria-label={t("Type DELETE to confirm")} className={cn(ready && "border-negative/50")} />
-          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="flex items-center gap-1">
+              <label htmlFor="delete-confirm" className="font-semibold">{t("Type DELETE to confirm")}</label>
+              <HelpTip label={t("Type DELETE to confirm")}>{t("A safety step so nothing is deleted by mistake. Type the English word DELETE, in capitals or not, then press Delete.")}</HelpTip>
+            </span>
+            <Input id="delete-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="characters" spellCheck={false} aria-label={t("Type DELETE to confirm")} className={cn(ready && "border-negative/50")} />
+          </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" disabled={del.isPending} onClick={onClose}>{t("Cancel")}</Button>
             <Button variant="danger" disabled={!ready || del.isPending} onClick={() => del.mutate({ target, stopSyncs: canStop && stopSyncs, confirm: "DELETE" })}>

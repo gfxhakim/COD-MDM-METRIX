@@ -10,6 +10,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import type { RowIssue } from "@/domain/imports/common";
 import { CsvError, MAX_IMPORT_BYTES, parseCsv, type ParsedCsv } from "@/domain/imports/csv";
 import { IMPORT_FIELDS, missingRequired, suggestMapping } from "@/domain/imports/fields";
@@ -28,6 +29,84 @@ const STEPS: [Step, string][] = [["upload", msg("Upload")], ["map", msg("Map col
 const DATES_READ: Record<string, string> = { DMY: msg("Dates read as day/month/year."), MDY: msg("Dates read as month/day/year."), ISO: msg("Dates read as year-month-day.") };
 const ORDER_STATUS: Record<string, string> = { CONFIRMED: msg("Confirmed"), PENDING: msg("Pending"), CANCELED: msg("Canceled") };
 const COST_TYPE: Record<string, string> = { FIXED: msg("Fixed"), VARIABLE: msg("Variable") };
+
+/** The ⓘ explanation of each kind of import (beside the card title). */
+const KIND_HELP: Record<Kind, string> = {
+  ORDERS: msg("Orders from a store file, on top of the orders MDM sync brings in. An order MDM already synced is not added again; the file only fills in its missing ad ID."),
+  AD_SPEND: msg("In Ads Manager, export at Ad level with the Ad ID column. Orders find their ad by that ID, and days the Meta connection already synced are not counted twice."),
+  EXPENSES: msg("Each row becomes an expense on the Expenses page and comes off the real profit of its day."),
+  BANK: msg("Use it to catch spending you never entered. Each row waits in the Bank review queue below until you make it an expense or exclude it."),
+};
+
+/** The ⓘ explanation of each column the file can be mapped to, by kind of import and field key. */
+const FIELD_HELP: Record<Kind, Record<string, string>> = {
+  ORDERS: {
+    orderNumber: msg("The order's number in your store, e.g. #1001. Rows with the same number become one order, and MDM parcels link to it by this reference."),
+    externalOrderId: msg("Used to spot orders already imported from the same source, so importing the file again skips them."),
+    placedAt: msg("When the customer placed the order. Reports count the order on this day."),
+    sku: msg("The product code on each line. It finds the product in your catalog so its costs count; when no SKU matches, the product name is tried."),
+    productName: msg("The product name on each line. Used to find the product when there is no SKU or the SKU matches nothing."),
+    quantity: msg("Pieces of the product on that line. Empty means 1."),
+    unitPrice: msg("Price of one piece on that line. Empty uses the product's sale price from your catalog."),
+    total: msg("What the customer pays the delivery person for the whole order. Example: 3900."),
+    currency: msg("Currency code of the amounts, e.g. DZD. Empty means the workspace currency; an order in another currency gets an error."),
+    status: msg("The call center's result. Confirmed orders count in the confirmation rate; a word the app does not know imports as pending."),
+    customerId: msg("Your store's ID or email for the customer. Optional: you can leave it as Not in file."),
+    phone: msg("The customer's phone number. You can then find the order by phone in the Orders search."),
+    wilaya: msg("The customer's wilaya. The dashboard uses wilayas to show where parcels come back from."),
+    city: msg("The customer's commune or city, shown on the order."),
+    utmSource: msg("Where the visit came from, e.g. facebook. Kept on the order for your records."),
+    utmMedium: msg("The kind of traffic, e.g. paid. Kept on the order for your records."),
+    utmCampaign: msg("The campaign name from the ad link. Kept on the order and in exports."),
+    utmContent: msg("The Meta ad ID from the ad link. It links each order to its ad, so the ad's spend and orders can be compared."),
+    landingUrl: msg("The page the customer ordered from, with its full link."),
+    tags: msg("The store's tags on the order, shown when you open it."),
+    notes: msg("The store's notes or extra order details, shown when you open the order."),
+    callAttempts: msg("How many times the call center called. Used for call-center cost when Settings > Economics & currencies counts it per call attempt."),
+  },
+  AD_SPEND: {
+    date: msg("The day of the spend. Export broken down by Day, so each row is one ad on one day."),
+    campaignName: msg("The Meta campaign name. New creatives take it, so the Creatives page shows each ad's campaign."),
+    campaignId: msg("The Meta campaign ID. New creatives keep it, which links their orders to the campaign."),
+    adsetName: msg("The Meta ad set name, kept with the spend."),
+    adsetId: msg("The Meta ad set ID. It tells rows apart when two ad sets have the same name."),
+    adName: msg("The Meta ad name. It becomes the name of a new creative, and stands in for the creative ID when there is no ID at all."),
+    adId: msg("The Meta ad ID. Days the Meta connection also synced are matched by this ID and not counted twice."),
+    creativeId: msg("The ID that ties spend to orders. Usually the Ad ID column, since orders carry the ad ID in utm_content."),
+    spend: msg("What the ad cost that day. When the column name shows a currency, e.g. (USD), the exchange rate below converts it."),
+    currency: msg("Currency code of the spend, e.g. USD. Empty uses the currency in the Amount spent column name, else the workspace currency."),
+    impressions: msg("Times the ad was shown. Rows with no spend and no impressions are skipped."),
+    clicks: msg("Link clicks on the ad that day, kept with the spend."),
+  },
+  EXPENSES: {
+    date: msg("The day the expense was paid. It comes off the real profit of that day."),
+    category: msg("The kind of cost, e.g. Software or Packaging. A word the app does not know imports as Other."),
+    amount: msg("What it cost, e.g. 3000. Amounts in another currency are converted with the rate in Settings > Economics & currencies."),
+    currency: msg("Currency code, e.g. EUR. Empty means the workspace currency."),
+    description: msg("What the expense was, e.g. Shopify plan. Shown on the Expenses page."),
+    productSku: msg("The SKU of the product this cost belongs to. It then counts only against that product's profit."),
+    costType: msg("Fixed: the same each month. Variable: grows with orders. Empty means fixed. It is a label for your lists; profit counts both."),
+  },
+  BANK: {
+    date: msg("The day of the bank operation."),
+    description: msg("The bank's label for the row. It is used to guess the category when you review it."),
+    amount: msg("One column where money in is positive and money out is negative."),
+    debit: msg("Money that left the account. Only money going out can become an expense."),
+    credit: msg("Money that came in, such as MDM payouts. You exclude these rows when you review them."),
+    currency: msg("Currency code. A row in another currency than the workspace's gets an error."),
+    reference: msg("The bank's ID for the operation. It tells two equal rows apart when you import again."),
+  },
+};
+
+/** The ⓘ explanation of each count in the preview. */
+const COUNT_HELP = {
+  rows: msg("Data rows read from the file, not counting the header row."),
+  ready: msg("New, valid records that will be added. An order spread over several lines counts once."),
+  update: msg("Spend rows imported before whose amount changed in this export. The new amount replaces the old one."),
+  duplicate: msg("Valid rows already here from an earlier import, so they are skipped. For orders, this includes orders MDM sync brought in."),
+  errors: msg("File lines with a problem. They are skipped; the Row errors table below says why."),
+  warnings: msg("Rows that will still import but need a look, such as an unknown product or status."),
+};
 
 /** A field's name for the person: the column key in English as before, its label in another language. */
 function fieldName(kind: Kind, key: string, t: TFunction, english: boolean) {
@@ -156,6 +235,7 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
       <CardHeader
         title={t(meta.title)}
         description={t(meta.blurb)}
+        help={t(KIND_HELP[kind])}
         actions={<Button size="sm" variant="ghost" onClick={() => downloadText(`${kind.toLowerCase()}-template.csv`, meta.template)}><Download /> {t("Template")}</Button>}
       />
       <CardBody className="flex flex-col gap-5">
@@ -187,7 +267,7 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
             </p>
             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
               {fields.map((fd) => (
-                <Field key={fd.key} label={`${t(fd.label)}${fd.required ? " *" : ""}`} htmlFor={`m-${kind}-${fd.key}`} hint={fd.hint ? t(fd.hint) : undefined}>
+                <Field key={fd.key} label={`${t(fd.label)}${fd.required ? " *" : ""}`} htmlFor={`m-${kind}-${fd.key}`} hint={fd.hint ? t(fd.hint) : undefined} help={FIELD_HELP[kind][fd.key] ? t(FIELD_HELP[kind][fd.key]) : undefined}>
                   <Select id={`m-${kind}-${fd.key}`} value={mapping[fd.key] ?? ""} onChange={(e) => setMapping({ ...mapping, [fd.key]: e.target.value || null })}>
                     <option value="">{t("— Not in file —")}</option>
                     {file.csv.headers.map((h) => <option key={h} value={h}>{h}{file.csv.rows[0]?.values[h] ? ` ${t("(e.g. {value})", { value: file.csv.rows[0].values[h].slice(0, 24) })}` : ""}</option>)}
@@ -196,13 +276,13 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
               ))}
             </div>
             <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2 xl:grid-cols-3">
-              <Field label={t("Date format")} htmlFor={`df-${kind}`} hint={t("Auto detects day-first vs month-first from the file.")}>
+              <Field label={t("Date format")} htmlFor={`df-${kind}`} hint={t("Auto detects day-first vs month-first from the file.")} help={t("How the file writes dates. 03/04/2026 is 3 April in Day/Month/Year, but 4 March in Month/Day/Year.")}>
                 <Select id={`df-${kind}`} value={dateFormat} onChange={(e) => setDateFormat(e.target.value as DateFormat)}>
                   <option value="AUTO">{t("Auto-detect")}</option><option value="DMY">{t("Day/Month/Year")}</option><option value="MDY">{t("Month/Day/Year")}</option><option value="ISO">{t("Year-Month-Day")}</option>
                 </Select>
               </Field>
               {kind === "ORDERS" ? (
-                <Field label={t("Source")} htmlFor="src" hint={t("Duplicates are detected per source and order ID.")}>
+                <Field label={t("Source")} htmlFor="src" hint={t("Duplicates are detected per source and order ID.")} help={t("Where the file comes from. The orders keep it as their source on the Orders page and in exports.")}>
                   <Select id="src" value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
                     <option value="SHOPIFY">Shopify</option><option value="EASYSELL">EasySell</option><option value="OTHER">{t("Other")}</option>
                   </Select>
@@ -213,6 +293,7 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
                   <Field
                     label={t("Exchange rate to {currency}", { currency })}
                     htmlFor="fx"
+                    help={t("Spend is saved in the workspace currency. Worked out as: amount spent × this rate, e.g. 10 USD at 250 gives 2500. The file's amount is kept too.")}
                     hint={needsFx
                       ? settingsRate
                         ? t("This export is in {from}. Enter how many {to} one {from} cost you, or leave it empty to use {rate} from Settings.", { from: headerCurrency!, to: currency, rate: settingsRate })
@@ -221,13 +302,13 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
                   >
                     <Input id="fx" inputMode="decimal" value={fxRate} onChange={(e) => setFxRate(e.target.value.replace(/[^\d.]/g, ""))} placeholder={needsFx ? (settingsRate ? String(settingsRate) : t("e.g. 250")) : t("Not needed")} required={needsFx && !settingsRate} />
                   </Field>
-                  <Field label={t("New creative IDs")} htmlFor="cc" hint={t("Off: spend for unknown IDs is kept as unmatched spend for review.")}>
+                  <Field label={t("New creative IDs")} htmlFor="cc" hint={t("Off: spend for unknown IDs is kept as unmatched spend for review.")} help={t("A creative is one Meta ad in this app. Creating them lets each new ad ID count its own spend and orders on the Creatives page.")}>
                     <Select id="cc" value={createCreatives ? "1" : "0"} onChange={(e) => setCreateCreatives(e.target.value === "1")}>
                       <option value="1">{t("Create creatives automatically")}</option><option value="0">{t("Keep as unmatched spend")}</option>
                     </Select>
                   </Field>
                   {createCreatives ? (
-                    <Field label={t("Product for new creatives")} htmlFor="cp">
+                    <Field label={t("Product for new creatives")} htmlFor="cp" help={t("The product these new ads sell, so their spend counts for it. When the file has a Campaign ID, the campaign's product on the Campaigns page is used instead.")}>
                       <Select id="cp" value={productId} onChange={(e) => setProductId(e.target.value)}>
                         <option value="">{t("Assign later")}</option>
                         {products.data?.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
@@ -251,15 +332,15 @@ export function ImportWizard({ kind, currency }: { kind: Kind; currency: string 
           <div className="flex flex-col gap-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {[
-                [t("Rows in file"), p.totalRows, ""],
-                [t("Ready to import"), p.counts.new, "text-positive"],
-                ...(kind === "AD_SPEND" ? [[t("Amounts to update"), p.counts.update, "text-info"] as const] : []),
-                [t("Already imported"), p.counts.duplicate, "text-muted"],
-                [t("Rows with errors"), p.counts.errorRows, p.counts.errorRows ? "text-negative" : "text-muted"],
-                [t("Warnings"), p.counts.warnings, p.counts.warnings ? "text-warning" : "text-muted"],
-              ].map(([label, v, tone]) => (
+                [t("Rows in file"), p.totalRows, "", COUNT_HELP.rows],
+                [t("Ready to import"), p.counts.new, "text-positive", COUNT_HELP.ready],
+                ...(kind === "AD_SPEND" ? [[t("Amounts to update"), p.counts.update, "text-info", COUNT_HELP.update] as const] : []),
+                [t("Already imported"), p.counts.duplicate, "text-muted", COUNT_HELP.duplicate],
+                [t("Rows with errors"), p.counts.errorRows, p.counts.errorRows ? "text-negative" : "text-muted", COUNT_HELP.errors],
+                [t("Warnings"), p.counts.warnings, p.counts.warnings ? "text-warning" : "text-muted", COUNT_HELP.warnings],
+              ].map(([label, v, tone, help]) => (
                 <div key={label as string} className="rounded-lg border border-border bg-surface-2 p-3">
-                  <p className="text-xs text-muted">{label}</p>
+                  <p className="text-xs text-muted"><Term label={label as string} definition={t(help as string)} /></p>
                   <p className={`num mt-1 text-xl font-semibold ${tone}`}>{(v as number).toLocaleString()}</p>
                 </div>
               ))}
@@ -344,18 +425,19 @@ function PreviewTable({ kind, rows, currency }: { kind: Kind; rows: PreviewRow[]
   const state = (s: string) => (s === "NEW" ? <Badge tone="positive">{t("New")}</Badge> : s === "UPDATE" ? <Badge tone="info">{t("Update")}</Badge> : <Badge>{t("Duplicate")}</Badge>);
   const str = (v: unknown) => (v == null || v === "" ? "—" : String(v));
   const word = (table: Record<string, string>, v: unknown) => (table[String(v)] ? t(table[String(v)]) : humanize(String(v)));
-  const cols: [string, (r: PreviewRow) => React.ReactNode, string?][] =
+  // A fourth item is the ⓘ explanation of a column that holds a worked-out amount.
+  const cols: [string, (r: PreviewRow) => React.ReactNode, string?, string?][] =
     kind === "ORDERS"
-      ? [[t("Order"), (r) => str(r.orderNumber)], [t("date::Placed"), (r) => dateTime(r.placedAt as Date)], [t("Status"), (r) => word(ORDER_STATUS, r.status)], [t("Items"), (r) => <span className={r.unknownProduct ? "text-warning" : ""}>{str(r.items)}</span>], ["COD", (r) => <Money value={r.codAmount as number} currency={currency} />, "text-end"], ["utm_content", (r) => str(r.utmContent)], [t("Wilaya"), (r) => str(r.wilaya)], [t("Phone"), (r) => str(r.phone)]]
+      ? [[t("Order"), (r) => str(r.orderNumber)], [t("date::Placed"), (r) => dateTime(r.placedAt as Date)], [t("Status"), (r) => word(ORDER_STATUS, r.status)], [t("Items"), (r) => <span className={r.unknownProduct ? "text-warning" : ""}>{str(r.items)}</span>], ["COD", (r) => <Money value={r.codAmount as number} currency={currency} />, "text-end", t("What the customer pays on delivery: the order total column, or quantity × unit price when the file has none.")], ["utm_content", (r) => str(r.utmContent)], [t("Wilaya"), (r) => str(r.wilaya)], [t("Phone"), (r) => str(r.phone)]]
       : kind === "AD_SPEND"
-        ? [[t("Date"), (r) => date(r.date as Date)], [t("Campaign"), (r) => str(r.campaignName)], [t("Ad"), (r) => str(r.adName)], [t("Creative ID"), (r) => str(r.creativeId)], [t("Spend"), (r) => <><Money value={r.spend as number} currency={currency} />{r.originalCurrency ? <span className="block text-[11px] text-muted"><Money value={r.originalSpend as number} currency={String(r.originalCurrency)} asIs /></span> : null}</>, "text-end"], [t("Impr."), (r) => str(r.impressions), "text-end"]]
+        ? [[t("Date"), (r) => date(r.date as Date)], [t("Campaign"), (r) => str(r.campaignName)], [t("Ad"), (r) => str(r.adName)], [t("Creative ID"), (r) => str(r.creativeId)], [t("Spend"), (r) => <><Money value={r.spend as number} currency={currency} />{r.originalCurrency ? <span className="block text-[11px] text-muted"><Money value={r.originalSpend as number} currency={String(r.originalCurrency)} asIs /></span> : null}</>, "text-end", t("In the workspace currency. When the export is in another currency, worked out as: amount spent × exchange rate; the file's amount shows below.")], [t("Impr."), (r) => str(r.impressions), "text-end"]]
         : kind === "EXPENSES"
-          ? [[t("Date"), (r) => date(r.date as Date)], [t("Category"), (r) => t(categoryLabel(String(r.category)))], [t("Description"), (r) => str(r.description)], [t("Scope"), (r) => (r.productId ? t("Product") : t("Global"))], [t("Type"), (r) => word(COST_TYPE, r.costType)], [t("Amount"), (r) => <><Money value={r.amount as number} currency={currency} />{r.originalCurrency ? <span className="block text-[11px] text-muted"><Money value={r.originalAmount as number} currency={String(r.originalCurrency)} asIs /></span> : null}</>, "text-end"]]
-          : [[t("Date"), (r) => date(r.date as Date)], [t("Description"), (r) => str(r.description)], [t("Reference"), (r) => str(r.reference)], [t("Amount"), (r) => <Money value={r.amount as number} currency={currency} signed />, "text-end"]];
+          ? [[t("Date"), (r) => date(r.date as Date)], [t("Category"), (r) => t(categoryLabel(String(r.category)))], [t("Description"), (r) => str(r.description)], [t("Scope"), (r) => (r.productId ? t("Product") : t("Global"))], [t("Type"), (r) => word(COST_TYPE, r.costType)], [t("Amount"), (r) => <><Money value={r.amount as number} currency={currency} />{r.originalCurrency ? <span className="block text-[11px] text-muted"><Money value={r.originalAmount as number} currency={String(r.originalCurrency)} asIs /></span> : null}</>, "text-end", t("In the workspace currency. A row in another currency is converted with the rate in Settings > Economics & currencies; the file's amount shows below.")]]
+          : [[t("Date"), (r) => date(r.date as Date)], [t("Description"), (r) => str(r.description)], [t("Reference"), (r) => str(r.reference)], [t("Amount"), (r) => <Money value={r.amount as number} currency={currency} signed />, "text-end", t("Money in is positive, money out negative. With debit and credit columns, worked out as: credit − debit.")]];
   return (
     <div className="max-h-96 overflow-auto rounded-lg border border-border">
       <Table>
-        <THead><tr><Th>{t("Line")}</Th><Th>{t("State")}</Th>{cols.map(([h, , c]) => <Th key={h} className={c}>{h}</Th>)}</tr></THead>
+        <THead><tr><Th>{t("Line")}</Th><Th>{t("State")}</Th>{cols.map(([h, , c, help]) => <Th key={h} className={c}>{help ? <Term label={h} definition={help} /> : h}</Th>)}</tr></THead>
         <tbody>
           {rows.map((r) => (
             <Tr key={r.line}>

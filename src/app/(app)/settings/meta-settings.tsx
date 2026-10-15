@@ -13,6 +13,7 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Term } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { msg } from "@/i18n/core";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
@@ -87,12 +88,12 @@ export function MetaTab() {
         </details>
       ) : null}
       {form.mode !== "replace" ? (
-        <Field label={t("Name")} htmlFor="meta-label" hint={t("Only for you, to tell your Business Managers apart.")}>
+        <Field label={t("Name")} htmlFor="meta-label" help={t("Example: Main brand. Left empty, it is called Business Manager 1, 2 and so on. It is never sent to Meta.")} hint={t("Only for you, to tell your Business Managers apart.")}>
           <Input id="meta-label" name="meta-label" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} required={form.mode === "rename"} placeholder={`Business Manager ${c.tokens.length + 1}`} />
         </Field>
       ) : null}
       {form.mode !== "rename" ? (
-        <Field label={form.mode === "replace" ? t("New access token for {name}", { name: form.label }) : t("Meta system user access token")} htmlFor="meta-token" hint={t("Sent once over HTTPS, encrypted with AES-256-GCM, and never shown again.")}>
+        <Field label={form.mode === "replace" ? t("New access token for {name}", { name: form.label }) : t("Meta system user access token")} htmlFor="meta-token" help={t("A long code made in Meta Business Settings for a system user, with ads_read. It lets this app read your ad spend, never change your ads. Paste it only here.")} hint={t("Sent once over HTTPS, encrypted with AES-256-GCM, and never shown again.")}>
           <Input id="meta-token" name="meta-token" type="password" autoComplete="new-password" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} required minLength={20} maxLength={1024} placeholder={t("Paste the token")} />
         </Field>
       ) : null}
@@ -109,12 +110,12 @@ export function MetaTab() {
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
         <Card>
-          <CardHeader title={t("Meta ads connection")} description={t("Reads what each ad spent per day, from every ad account you allow, and puts it on the creative whose content ID is the ad ID. Nothing is ever changed in your ad accounts.")} />
+          <CardHeader title={t("Meta ads connection")} description={t("Reads what each ad spent per day, from every ad account you allow, and puts it on the creative whose content ID is the ad ID. Nothing is ever changed in your ad accounts.")} help={t("Profit, POAS and cost per order all need your ad spend. Once a token passes its test, spend comes in by itself, with no files to upload.")} />
           <CardBody className="flex flex-col gap-5 text-sm">
             <div className="grid gap-3 sm:grid-cols-3">
-              <div><p className="text-xs text-muted">{t("Status")}</p><Badge tone={STATUS_TONE[c.status]} className="mt-1">{t(STATUS_LABEL[c.status])}</Badge></div>
-              <div><p className="text-xs text-muted">{t("Business Managers")}</p><p className="mt-1">{c.tokens.length ? t("{saved} saved, {working} working", { saved: c.tokens.length, working }) : t("None yet")}</p></div>
-              <div><p className="text-xs text-muted">{t("Last successful spend sync")}</p><p className="mt-1">{c.syncing ? <span className="text-info">{t("Syncing now…")}</span> : c.lastSuccessfulSyncAt ? dateTime(c.lastSuccessfulSyncAt) : t("Never")}</p></div>
+              <div><p className="text-xs text-muted"><Term label={t("Status")} definition={t("Connected: at least one token passed Test connection and spend syncs run. Needs attention: a token failed; read its message. Saved, not verified: press Test connection.")} /></p><Badge tone={STATUS_TONE[c.status]} className="mt-1">{t(STATUS_LABEL[c.status])}</Badge></div>
+              <div><p className="text-xs text-muted"><Term label={t("Business Managers")} definition={t("Saved: the tokens you added. Working: tokens that passed their test and that Meta still accepts. Only working tokens are used to read spend.")} /></p><p className="mt-1">{c.tokens.length ? t("{saved} saved, {working} working", { saved: c.tokens.length, working }) : t("None yet")}</p></div>
+              <div><p className="text-xs text-muted"><Term label={t("Last successful spend sync")} definition={t("When the last spend sync finished with no error. Spend after that is not in your numbers yet; press Sync spend now to bring it in.")} /></p><p className="mt-1">{c.syncing ? <span className="text-info">{t("Syncing now…")}</span> : c.lastSuccessfulSyncAt ? dateTime(c.lastSuccessfulSyncAt) : t("Never")}</p></div>
             </div>
 
             {c.adapter === "mock" ? (
@@ -136,7 +137,7 @@ export function MetaTab() {
         </Card>
 
         <Card>
-          <CardHeader title={t("Business Managers")} description={t("One read-only token per Business Manager. Every ad account each token can read shows up below. When two tokens can read the same account, it is read once, with the token saved first.")} />
+          <CardHeader title={t("Business Managers")} description={t("One read-only token per Business Manager. Every ad account each token can read shows up below. When two tokens can read the same account, it is read once, with the token saved first.")} help={t("A Business Manager is the Meta account that owns your ad accounts. Add one token for each of yours, then press Test connection on it.")} />
           <CardBody className="flex flex-col gap-4 text-sm">
             {c.tokens.map((tok) => {
               const line = {
@@ -178,10 +179,10 @@ export function MetaTab() {
 
         {groups.length ? (
           <Card>
-            <CardHeader title={t("Ad accounts")} description={t("Every ad account your tokens can read is synced. Switch one off to leave its spend out.")} />
+            <CardHeader title={t("Ad accounts")} description={t("Every ad account your tokens can read is synced. Switch one off to stop reading its spend; spend already read still counts.")} help={t("An ad account is where Meta bills your ads. Each one is listed under the Business Manager whose token reads it.")} />
             <div className="overflow-x-auto">
               <Table>
-                <THead><tr><Th>{t("Sync")}</Th><Th>{t("Account")}</Th><Th>{t("Currency")}</Th><Th>{t("Meta status")}</Th><Th>{t("Last synced")}</Th></tr></THead>
+                <THead><tr><Th><Term label={t("Sync")} definition={t("Ticked: this account's spend is read at every sync. Unticked: no new spend is read from it; spend already read stays in your numbers.")} /></Th><Th>{t("Account")}</Th><Th>{t("Currency")}</Th><Th>{t("Meta status")}</Th><Th>{t("Last synced")}</Th></tr></THead>
                 {groups.map((g) => (
                   <tbody key={g.key}>
                     <tr className="bg-surface-2"><td colSpan={5} className={`px-3 py-2 text-xs font-medium ${g.key === "none" ? "text-warning" : "text-muted"}`}>{g.title}</td></tr>
@@ -203,11 +204,16 @@ export function MetaTab() {
 
         {s ? (
           <Card>
-            <CardHeader title={t("Last spend sync")} description={c.lastSyncAttemptAt ? dateTime(c.lastSyncAttemptAt) : undefined} />
+            <CardHeader title={t("Last spend sync")} description={c.lastSyncAttemptAt ? dateTime(c.lastSyncAttemptAt) : undefined} help={t("What the most recent spend sync read. Check it after Sync spend now to see if new days and spend came in.")} />
             <CardBody className="flex flex-col gap-3 text-sm">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[[t("Days read"), s.from && s.until ? `${s.from} → ${s.until}` : "—"], [t("Ad accounts"), String(s.accounts ?? 0)], [t("New / updated rows"), `${s.added ?? 0} / ${s.updated ?? 0}`], [t("Spend read"), money.fmt(s.spend ?? 0, cur)]].map(([l, v]) => (
-                  <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted">{l}</p><p className="num font-semibold">{v}</p></div>
+                {[
+                  [t("Days read"), s.from && s.until ? `${s.from} → ${s.until}` : "—", t("The first and last day this sync asked Meta for, across all ad accounts.")],
+                  [t("Ad accounts"), String(s.accounts ?? 0), t("Switched-on ad accounts this sync read with a working token.")],
+                  [t("New / updated rows"), `${s.added ?? 0} / ${s.updated ?? 0}`, t("One row is one ad on one day. New: read for the first time. Updated: Meta changed its numbers since the last read.")],
+                  [t("Spend read"), money.fmt(s.spend ?? 0, cur), t("Worked out as: the spend of every ad and day this sync read, changed or not, added up. Spend billed in another currency is converted with your exchange rates.")],
+                ].map(([l, v, h]) => (
+                  <div key={l} className="rounded-lg border border-border bg-surface-2 p-2"><p className="text-[11px] text-muted"><Term label={l} definition={h} /></p><p className="num font-semibold">{v}</p></div>
                 ))}
               </div>
               {s.superseded ? <p className="text-xs text-muted">{s.superseded === 1 ? t("1 uploaded spend row for the same ads and days now count Meta's numbers instead, so nothing is counted twice.") : t("{n} uploaded spend rows for the same ads and days now count Meta's numbers instead, so nothing is counted twice.", { n: s.superseded })}</p> : null}
@@ -218,7 +224,7 @@ export function MetaTab() {
 
       <div className="flex min-w-0 flex-col gap-6">
         <Card>
-          <CardHeader title={t("How your tokens are protected")} />
+          <CardHeader title={t("How your tokens are protected")} help={t("Only owners and admins can add, test or remove tokens. To cut access at once, press Remove on the token, or delete the system user in Meta Business Settings.")} />
           <CardBody className="flex flex-col gap-2 text-xs text-muted">
             {[
               t("Each workspace uses its own tokens. There is no shared token."),
@@ -231,7 +237,7 @@ export function MetaTab() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title={t("How spend is matched")} />
+          <CardHeader title={t("How spend is matched")} help={t("Orders and spend meet on the ad ID. If an ad's link doesn't send its ID as utm_content, its orders can't be matched to its spend.")} />
           <CardBody className="flex flex-col gap-2 text-xs text-muted">
             <p>{t("Each ad's spend goes to the creative whose content ID is the ad ID, the same ID your ad links send as utm_content. Orders from MDM carry that ID, so each creative gets its own spend, orders and deliveries, whichever ad account or Business Manager the ad runs in.")}</p>
             <p>{t("The first sync reads the last 180 days. After that, each sync re-reads the days since the previous one plus the last 3 days, because Meta keeps adjusting recent numbers.")}</p>
@@ -239,7 +245,7 @@ export function MetaTab() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title={t("Sync interval")} description={t("Once a token passes its connection test, spend is synced automatically at this interval.")} />
+          <CardHeader title={t("Sync interval")} description={t("Once a token passes its connection test, spend is synced automatically at this interval.")} help={t("How often spend is read by itself. Shorter keeps today's spend fresher in your reports. Sync spend now still works at any time.")} />
           <CardBody>
             <Select aria-label={t("Meta sync interval")} disabled={!canManage || interval.isPending} value={String(c.syncIntervalMinutes)} onChange={(e) => interval.mutate({ minutes: Number(e.target.value) })}>
               {[15, 30, 45, 60, 120, 240, 720, 1440].map((m) => <option key={m} value={m}>{m < 60 ? t("Every {n} minutes", { n: m }) : m === 60 ? t("Every 1 hour") : t("Every {n} hours", { n: m / 60 })}</option>)}

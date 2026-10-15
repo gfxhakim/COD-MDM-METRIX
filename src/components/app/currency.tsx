@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { Select } from "@/components/ui/form";
+import { HelpTip } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { convertWithRates, formatMoney } from "@/lib/money";
 import { useTRPC } from "@/lib/trpc/client";
@@ -123,6 +124,7 @@ export function CurrencyPicker() {
   return (
     <label className="flex items-center gap-2 text-xs text-muted" title={title}>
       <span className="hidden whitespace-nowrap 2xl:inline">{t("Show in")}</span>
+      <HelpTip label={t("Show in")}>{t("Shows amounts in another currency, only for you in this browser, with the rates in Settings > Economics & currencies. Example: with 1 USD = 250 DZD, 5000 DZD shows as 20 USD.")}</HelpTip>
       <Select
         aria-label={t("Show amounts in")}
         value={v.view}

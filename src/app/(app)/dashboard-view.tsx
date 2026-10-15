@@ -16,7 +16,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
-import { Term } from "@/components/ui/tooltip";
+import { HelpTip, Term } from "@/components/ui/tooltip";
 import { useT } from "@/i18n/client";
 import { msg, type TFunction } from "@/i18n/core";
 import { DEF } from "@/lib/definitions";
@@ -224,14 +224,18 @@ function initials(text: string) {
   return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 3)).toUpperCase();
 }
 
-function HealthRow({ icon, label, value, href, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; href: string; tone?: "negative" | "warning" }) {
+function HealthRow({ icon, label, def, value, href, tone }: { icon: React.ReactNode; label: string; def: string; value: React.ReactNode; href: string; tone?: "negative" | "warning" }) {
   return (
-    <Link href={href} className="press group flex items-center gap-3 rounded-2xl px-2 py-2 text-sm hover:bg-surface-2">
+    // The link covers the whole row; the ⓘ sits above it so a tap on it opens the explanation, not the page.
+    <div className="press group relative flex items-center gap-3 rounded-2xl px-2 py-2 text-sm hover:bg-surface-2">
       <span className={cn("grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 text-muted [&_svg]:size-4", tone === "negative" && "bg-negative-soft text-negative", tone === "warning" && "bg-warning-soft text-warning")}>{icon}</span>
-      <span className="min-w-0 flex-1 text-muted">{label}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-1 text-muted">
+        <Link href={href} className="after:absolute after:inset-0 after:rounded-2xl">{label}</Link>
+        <HelpTip label={label} className="relative z-10">{def}</HelpTip>
+      </span>
       <span className={cn("num text-end font-semibold", tone === "negative" && "text-negative", tone === "warning" && "text-warning")}>{value}</span>
       <ArrowUpRight className="size-3.5 shrink-0 text-subtle transition-[color,translate] duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand-strong" aria-hidden="true" />
-    </Link>
+    </div>
   );
 }
 
@@ -250,7 +254,7 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
   const bestLabel = unit === "Daily" ? t("Best day") : unit === "Weekly" ? t("Best week") : t("Best month");
   return (
     <Panel className="h-full gap-3">
-      <PanelTitle action={<span className="whitespace-nowrap rounded-full bg-surface-3 px-3 py-1 text-[11px] font-medium text-muted">{capped ? t("Last 12 months") : span}</span>}>{title}</PanelTitle>
+      <PanelTitle def={t("Orders placed and parcels delivered per day, week or month, by order date. The red bar has the most deliveries. Hover or tap a bar for its numbers.")} action={<span className="whitespace-nowrap rounded-full bg-surface-3 px-3 py-1 text-[11px] font-medium text-muted">{capped ? t("Last 12 months") : span}</span>}>{title}</PanelTitle>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
         <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] border border-[#d8d2d3] bg-[#ebe8e8]" />{t("Orders placed")}</span>
         <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-[#b9b0b2]" />{t("Delivered")}</span>
@@ -350,11 +354,11 @@ function ParcelStrip({ delivered, returned, inTransit, other }: { delivered: num
   );
 }
 
-function RateCard({ title, icon, value, of, caption, rateLabel, rate, def, note }: { title: string; icon: React.ReactNode; value: number; of: number; caption: string; rateLabel: string; rate: number | null; def: string; note?: React.ReactNode }) {
+function RateCard({ title, help, icon, value, of, caption, rateLabel, rate, def, note }: { title: string; help: string; icon: React.ReactNode; value: number; of: number; caption: string; rateLabel: string; rate: number | null; def: string; note?: React.ReactNode }) {
   const { t } = useT();
   return (
     <Panel className="gap-3 p-[18px]">
-      <span className="text-sm font-semibold">{title}</span>
+      <span className="text-sm font-semibold"><Term label={title} definition={help} /></span>
       <div className="flex items-center gap-3">
         <span className="bg-brand grid size-10 shrink-0 place-items-center rounded-xl shadow-[0_6px_14px_rgb(225_24_44/0.35)] [&_svg]:size-[18px]" aria-hidden="true">{icon}</span>
         <div className="flex min-w-0 flex-col">
@@ -560,7 +564,7 @@ export function DashboardView() {
             <div className="flex min-w-0 flex-col gap-[18px] md:col-span-2 md:flex-row xl:col-span-1 xl:row-span-2 xl:flex-col">
               <Panel className="flex-1 gap-4 md:basis-0 xl:basis-auto">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[15px] font-medium text-muted">{t("Best ad right now")}</span>
+                  <span className="text-[15px] font-medium text-muted"><Term label={t("Best ad right now")} definition={t("The ad with the highest true net profit in this period, when one made a profit. An order counts for the ad whose ID is in its utm_content.")} /></span>
                   <CornerLink href="/creatives" label={t("Open all ads")} />
                 </div>
                 <div className="relative flex flex-1 flex-col pt-[22px]">
@@ -576,8 +580,8 @@ export function DashboardView() {
                         </div>
                         <span className="relative line-clamp-2 break-words text-[13px] text-[#d9d0d2]">{t("Ad {id} · {n} parcels shipped", { id: best.externalCreativeId ?? "", n: count(best.shipped) })}</span>
                         <div className="relative grid grid-cols-2 gap-2.5">
-                          <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]">{t("Profit, {currency}", { currency: shownCode })}</span><FitText max={20} min={12}>{bare(best.trueNetProfit, true)}</FitText></div>
-                          <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]">POAS</span><FitText max={20} min={12}>{best.truePoas === null ? "—" : best.truePoas.toFixed(2)}</FitText></div>
+                          <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]"><Term label={t("Profit, {currency}", { currency: shownCode })} definition={t(DEF.trueNetProfit)} iconClassName="text-white/60 hover:text-white" /></span><FitText max={20} min={12}>{bare(best.trueNetProfit, true)}</FitText></div>
+                          <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]"><Term label="POAS" definition={t(DEF.truePoas)} iconClassName="text-white/60 hover:text-white" /></span><FitText max={20} min={12}>{best.truePoas === null ? "—" : best.truePoas.toFixed(2)}</FitText></div>
                         </div>
                         <Link href="/creatives" className={cn(neonButton, "mt-auto")}>
                           <TrendingUp className="size-4" aria-hidden="true" /> {t("Compare every ad")}
@@ -596,7 +600,7 @@ export function DashboardView() {
               <Panel className="gap-3 md:flex-1 md:basis-0 xl:flex-none xl:basis-auto">
                 <div className="flex items-center gap-2.5">
                   <span className="size-[30px] shrink-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,#ff9aa3_0%,#ff2d42_45%,#9b0718_100%)] shadow-[0_0_16px_rgb(255_45_66/0.75)]" aria-hidden="true" />
-                  <h2 className="text-[15px] font-bold">{t("Smart tips")}</h2>
+                  <h2 className="text-[15px] font-bold"><Term label={t("Smart tips")} definition={t("Advice worked out from this period's numbers: your POAS against your target, wilayas with 10 or more shipped parcels where 3 in 10 come back, and cash not paid out yet.")} /></h2>
                 </div>
                 <ul className="flex flex-col gap-2.5 text-[13px] leading-relaxed text-muted">
                   {tips.length ? tips.map((tip, i) => <li key={i}>{tip}</li>) : <li>{t("Nothing needs your attention right now.")}</li>}
@@ -610,14 +614,14 @@ export function DashboardView() {
 
             <div className="flex min-w-0 flex-col gap-[18px] md:col-span-2">
               <Panel className="gap-3.5">
-                <PanelTitle action={<CornerLink href="/orders" label={t("Open orders and parcels")} />}>{t("Order statistics")}</PanelTitle>
+                <PanelTitle def={t("What happened to the parcels of the orders placed in this period. The strip splits shipped parcels into delivered, returned, still on the road, and lost or exchanged.")} action={<CornerLink href="/orders" label={t("Open orders and parcels")} />}>{t("Order statistics")}</PanelTitle>
                 {m.placed === 0 ? (
                   <EmptyState icon={<Boxes />} title={t("No orders in this period")} description={t("Change the filters, import orders, or add one manually.")} />
                 ) : (
                   <>
                     <div className="flex flex-wrap items-end justify-between gap-4">
                       <div className="flex min-w-0 flex-col gap-1">
-                        <span className="text-xs text-muted">{t("Orders placed")}</span>
+                        <span className="text-xs text-muted"><Term label={t("Orders placed")} definition={t("Every order placed in this period, confirmed or not. Shipped counts parcels handed to the carrier; one order can have several parcels.")} /></span>
                         <div className="flex items-center gap-2.5">
                           <span className="num text-[40px] font-extrabold leading-none">{count(m.placed)}</span>
                           <span className="whitespace-nowrap rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-bold text-brand-deep">{tx("{n} shipped", { n: <span className="num">{count(m.shipped)}</span> })}</span>
@@ -644,22 +648,22 @@ export function DashboardView() {
                 ) : null}
               </Panel>
               <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2">
-                <RateCard title={t("Confirmed by the call center")} icon={<PhoneCall />} value={m.confirmed} of={m.placed} caption={t("orders confirmed")} rateLabel={t("Confirmation rate")} rate={m.confirmationRate} def={t(DEF.confirmationRate)} note={tx("Shipping rate {rate}", { rate: <Rate value={m.shippingRate} className="font-semibold text-fg" /> })} />
-                <RateCard title={t("Delivered to the customer")} icon={<PackageCheck />} value={m.delivered} of={m.finished} caption={t("finished parcels delivered")} rateLabel={t("Delivery rate")} rate={m.deliveryRate} def={t(DEF.deliveryRate)} note={tx("Return rate {rate}", { rate: <Rate value={m.returnRate} className={cn("font-semibold", (m.returnRate ?? 0) > 0.3 ? "text-negative" : "text-fg")} /> })} />
+                <RateCard title={t("Confirmed by the call center")} help={t("Orders your call center confirmed by phone, out of every order placed in this period. Orders still waiting for a call count as not confirmed.")} icon={<PhoneCall />} value={m.confirmed} of={m.placed} caption={t("orders confirmed")} rateLabel={t("Confirmation rate")} rate={m.confirmationRate} def={t(DEF.confirmationRate)} note={<span className="inline-flex items-center gap-1">{tx("Shipping rate {rate}", { rate: <Rate value={m.shippingRate} className="font-semibold text-fg" /> })}<HelpTip label={t("Shipping rate")}>{t("How many confirmed orders really left with the carrier. Worked out as: shipped parcels ÷ confirmed orders.")}</HelpTip></span>} />
+                <RateCard title={t("Delivered to the customer")} help={t("Parcels the customer received and paid for, out of the shipped parcels whose delivery is finished. Parcels still on the road are not counted yet.")} icon={<PackageCheck />} value={m.delivered} of={m.finished} caption={t("finished parcels delivered")} rateLabel={t("Delivery rate")} rate={m.deliveryRate} def={t(DEF.deliveryRate)} note={<span className="inline-flex items-center gap-1">{tx("Return rate {rate}", { rate: <Rate value={m.returnRate} className={cn("font-semibold", (m.returnRate ?? 0) > 0.3 ? "text-negative" : "text-fg")} /> })}<HelpTip label={t("Return rate")}>{t(DEF.returnRate)}</HelpTip></span>} />
               </div>
             </div>
 
             <Panel className="gap-3 md:col-span-2">
-              <PanelTitle action={<CornerLink href="/creatives" label={t("Open all ads")} />}>{t("Ads list")}</PanelTitle>
+              <PanelTitle def={t("Your 5 ads with the most true net profit in this period, best first. Only ads with at least one order show.")} action={<CornerLink href="/creatives" label={t("Open all ads")} />}>{t("Ads list")}</PanelTitle>
               {r.topCreatives.length === 0 ? (
                 <EmptyState title={t("No ads with orders yet")} description={t("Orders need the ad ID (utm_content) to be linked to an ad.")} />
               ) : (
                 <div className="flex flex-col" role="table" aria-label={t("Most profitable ads")}>
                   <div role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 pb-2 text-xs text-muted sm:grid-cols-[minmax(0,1fr)_104px_56px_112px]">
                     <span role="columnheader">{t("Name")}</span>
-                    <span role="columnheader" className="hidden sm:block">{t("Verdict")}</span>
-                    <span role="columnheader" className="hidden text-end sm:block">POAS</span>
-                    <span role="columnheader" className="text-end">{t("Profit, {currency}", { currency: shownCode })}</span>
+                    <span role="columnheader" className="hidden sm:block"><Term label={t("Verdict")} definition={t(DEF.verdict)} /></span>
+                    <span role="columnheader" className="hidden text-end sm:block"><Term label="POAS" definition={t(DEF.truePoas)} /></span>
+                    <span role="columnheader" className="text-end"><Term label={t("Profit, {currency}", { currency: shownCode })} definition={t(DEF.trueNetProfit)} /></span>
                   </div>
                   {r.topCreatives.map((c, i) => {
                     const label = c.name || t("Ad {id}", { id: c.externalCreativeId ?? "" });
@@ -685,7 +689,7 @@ export function DashboardView() {
             </Panel>
 
             <Panel className="gap-2.5">
-              <PanelTitle action={<span className="text-xs font-semibold text-subtle">{shownCode}</span>}>{t("Where your cash is")}</PanelTitle>
+              <PanelTitle def={t("The cash of the orders placed in this period. Row 1 is already paid out to you, rows 2 and 3 should still reach you, and row 4 is money lost on returns.")} action={<span className="text-xs font-semibold text-subtle">{shownCode}</span>}>{t("Where your cash is")}</PanelTitle>
               {[
                 { label: t("Collected"), sub: m.deliveredRevenue > 0 ? t("{pct} of delivered", { pct: formatPercent(m.remittedCash / m.deliveredRevenue, 0) }) : t("Paid out to you"), value: m.remittedCash, def: t(DEF.netCashCollected) },
                 { label: t("On the road"), sub: t("{n} parcels", { n: count(m.inTransit) }), value: m.cashInTransit, def: t(DEF.cashInTransit) },
@@ -726,18 +730,18 @@ export function DashboardView() {
       <MoreDetails id="dashboard" hint={t("Where the profit goes, the ads with the most returns, data health and every wilaya.")} className="mt-[18px]">
         <div className={cn("stagger grid grid-cols-1 gap-[18px] transition-opacity duration-300 lg:grid-cols-2 xl:grid-cols-3", report.isPlaceholderData && "opacity-60")}>
           <Card>
-            <CardHeader title={t("Profit breakdown")} description={m ? t("Revenue basis: {basis}", { basis: basis(m.revenueView) }) : undefined} />
+            <CardHeader title={t("Profit breakdown")} help={t("The amounts that add up to true net profit in this period. Revenue counts delivered parcels, or only cash already paid out to you, as picked in More filters.")} description={m ? t("Revenue basis: {basis}", { basis: basis(m.revenueView) }) : undefined} />
             <CardBody className="p-3 pt-0">
               {!m ? <Skeleton className="h-48" /> : (
                 <dl className="flex flex-col text-sm">
                   {[
-                    [t("Revenue"), m.revenue, t(DEF.deliveredRevenue)],
+                    [t("Revenue"), m.revenue, m.revenueView === "REMITTED" ? t(DEF.netCashCollected) : t(DEF.deliveredRevenue)],
                     [t("Ad spend"), -m.adSpend, t(DEF.adSpend)],
                     [t("COGS"), -m.cogs, t(DEF.cogs)],
-                    [t("Outbound shipping"), -m.outboundShipping, t("Forward shipping on every shipped parcel (observed carrier fee when available).")],
+                    [t("Outbound shipping"), -m.outboundShipping, t("Forward shipping fee on each shipped parcel once its delivery is finished: the carrier's real fee when known, else the product's cost version.")],
                     [t("RTO fees"), -m.rtoCost, t("RTO fee on returned parcels.")],
                     [t("Call center"), -m.callCenterCost, t("Call-center fee × the configured basis (lead, confirmed order or call attempt).")],
-                    [t("Packaging"), -m.packagingCost, t("Packaging fee on every shipped parcel.")],
+                    [t("Packaging"), -m.packagingCost, t("Packaging fee on each shipped parcel once its delivery is finished (delivered, returned, lost or exchanged).")],
                     [t("Overhead"), -m.allocatedOverhead, t(DEF.overhead)],
                   ].map(([label, v, def]) => (
                     <div key={label as string} className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
@@ -746,7 +750,7 @@ export function DashboardView() {
                     </div>
                   ))}
                   <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-brand-soft px-2 py-2 font-bold">
-                    <dt>{t("True net profit")}</dt>
+                    <dt><Term label={t("True net profit")} definition={t(DEF.trueNetProfit)} /></dt>
                     <dd className={cn("num text-end", m.trueNetProfit < 0 ? "text-negative" : "text-positive")}>{fmt(m.trueNetProfit)}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3 px-2 pt-2 text-xs text-muted">
@@ -758,10 +762,10 @@ export function DashboardView() {
             </CardBody>
           </Card>
           <Card>
-            <CardHeader title={t("Worst RTO ads")} description={t("Cheap orders that come back cost twice.")} />
+            <CardHeader title={t("Worst RTO ads")} help={t("Your 5 ads with the highest return rate in this period, among ads with finished parcels. Small n means too few parcels to trust the rate yet.")} description={t("Cheap orders that come back cost twice.")} />
             {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title={t("No shipped parcels yet")} /> : (
               <Table>
-                <THead><tr><Th>{t("Ad")}</Th><Th className="text-end">{t("RTO")}</Th><Th className="text-end">{t("Returned")}</Th></tr></THead>
+                <THead><tr><Th>{t("Ad")}</Th><Th className="text-end"><Term label={t("RTO")} definition={t(DEF.returnRate)} /></Th><Th className="text-end">{t("Returned")}</Th></tr></THead>
                 <tbody>
                   {r.worstRtoCreatives.map((c) => (
                     <Tr key={c.key}>
@@ -775,16 +779,16 @@ export function DashboardView() {
             )}
           </Card>
           <Card className="lg:col-span-2 xl:col-span-1">
-            <CardHeader title={t("Data health")} description={t("What could make these numbers wrong.")} />
+            <CardHeader title={t("Data health")} help={t("These counts cover all dates, not only this period. Open a row to fix it: the fewer problems, the more you can trust the numbers.")} description={t("What could make these numbers wrong.")} />
             <CardBody className="flex flex-col gap-0.5 p-3 pt-0">
               {!h ? <Skeleton className="h-40" /> : (
                 <>
-                  <HealthRow icon={<Link2Off />} label={t("MDM connection")} value={h.connectionStatus === "CONNECTED" ? t("synced {ago}", { ago: ago(h.lastSuccessfulSyncAt) }) : CONNECTION[h.connectionStatus] ? t(CONNECTION[h.connectionStatus]) : h.connectionStatus.replace("_", " ").toLowerCase()} href="/settings?tab=mdm" tone={h.connectionStatus === "CONNECTED" ? undefined : "warning"} />
-                  <HealthRow icon={<Unlink />} label={t("Unmatched records")} value={h.unmatchedRecords} href="/syncs" tone={h.unmatchedRecords ? "negative" : undefined} />
-                  <HealthRow icon={<AlertTriangle />} label={t("Unknown parcel statuses")} value={h.unknownStatusParcels} href="/orders?parcelStatus=UNKNOWN" tone={h.unknownStatusParcels ? "negative" : undefined} />
-                  <HealthRow icon={<FileWarning />} label={t("Import / sync errors")} value={h.importRowErrors + h.failedSyncItems} href="/imports" tone={h.importRowErrors + h.failedSyncItems ? "warning" : undefined} />
-                  <HealthRow icon={<FileWarning />} label={t("Unmatched ad spend rows")} value={h.unmatchedSpendRows} href="/creatives" tone={h.unmatchedSpendRows ? "warning" : undefined} />
-                  <HealthRow icon={<FileWarning />} label={t("Bank rows awaiting review")} value={h.pendingBankRows} href="/expenses" tone={h.pendingBankRows ? "warning" : undefined} />
+                  <HealthRow icon={<Link2Off />} label={t("MDM connection")} def={t("Whether the app can read your orders from MDM, and when the last sync worked. Set it up in Settings > MDM Express.")} value={h.connectionStatus === "CONNECTED" ? t("synced {ago}", { ago: ago(h.lastSuccessfulSyncAt) }) : CONNECTION[h.connectionStatus] ? t(CONNECTION[h.connectionStatus]) : h.connectionStatus.replace("_", " ").toLowerCase()} href="/settings?tab=mdm" tone={h.connectionStatus === "CONNECTED" ? undefined : "warning"} />
+                  <HealthRow icon={<Unlink />} label={t("Unmatched records")} def={t("Parcels MDM sent that the sync could not match to one of your orders. They count in no order until you link them on the MDM sync page.")} value={h.unmatchedRecords} href="/syncs" tone={h.unmatchedRecords ? "negative" : undefined} />
+                  <HealthRow icon={<AlertTriangle />} label={t("Unknown parcel statuses")} def={t("Parcels whose MDM status the app doesn't know. They count as neither delivered nor returned until you map the status in Settings > MDM Express.")} value={h.unknownStatusParcels} href="/orders?parcelStatus=UNKNOWN" tone={h.unknownStatusParcels ? "negative" : undefined} />
+                  <HealthRow icon={<FileWarning />} label={t("Import / sync errors")} def={t("Rows an import could not read, plus items a sync could not save. Those orders or costs may be missing from the numbers.")} value={h.importRowErrors + h.failedSyncItems} href="/imports" tone={h.importRowErrors + h.failedSyncItems ? "warning" : undefined} />
+                  <HealthRow icon={<FileWarning />} label={t("Unmatched ad spend rows")} def={t("Ad spend rows whose ad ID matches no ad you know. The spend still counts in your totals, but in no ad's profit.")} value={h.unmatchedSpendRows} href="/creatives" tone={h.unmatchedSpendRows ? "warning" : undefined} />
+                  <HealthRow icon={<FileWarning />} label={t("Bank rows awaiting review")} def={t("Imported bank rows don't count in profit until you give them a category or leave them out.")} value={h.pendingBankRows} href="/expenses" tone={h.pendingBankRows ? "warning" : undefined} />
                   <p className="px-2 pt-2 text-[11px] text-subtle">{t("Last successful MDM sync: {when}", { when: dateTime(h.lastSuccessfulSyncAt) })}</p>
                 </>
               )}
@@ -793,10 +797,10 @@ export function DashboardView() {
         </div>
 
         <Card className="scroll-mt-24" id="wilayas">
-          <CardHeader title={t("By wilaya")} description={t("Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya.")} />
+          <CardHeader title={t("By wilaya")} help={t("Every wilaya of the orders placed in this period, most orders first. Look for wilayas that send many parcels back, and confirm their orders twice.")} description={t("Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya.")} />
           {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title={t("No wilaya data")} /> : (
             <Table>
-              <THead><tr><Th>{t("Wilaya")}</Th><Th className="text-end">{t("Placed")}</Th><Th className="text-end">{t("Shipped")}</Th><Th className="text-end">{t("Delivery rate")}</Th><Th className="text-end">{t("RTO rate")}</Th><Th className="text-end">{t("Delivered revenue")}</Th><Th className="text-end">{t("Contribution before ads")}</Th></tr></THead>
+              <THead><tr><Th>{t("Wilaya")}</Th><Th className="text-end">{t("Placed")}</Th><Th className="text-end">{t("Shipped")}</Th><Th className="text-end"><Term label={t("Delivery rate")} definition={t(DEF.deliveryRate)} /></Th><Th className="text-end"><Term label={t("RTO rate")} definition={t(DEF.returnRate)} /></Th><Th className="text-end"><Term label={t("Delivered revenue")} definition={t(DEF.deliveredRevenue)} /></Th><Th className="text-end"><Term label={t("Contribution before ads")} definition={t("What this wilaya's orders leave after their own costs, before ads and overhead. Revenue follows the revenue basis picked in More filters.")} /></Th></tr></THead>
               <tbody>
                 {r.wilayas.map((w) => (
                   <Tr key={w.wilaya}>
