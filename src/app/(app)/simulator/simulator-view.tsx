@@ -17,9 +17,11 @@ import { Skeleton } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { Term } from "@/components/ui/tooltip";
 import { simulate, simulatorInputSchema, type SimulatorInput } from "@/domain/simulator";
+import { useT } from "@/i18n/client";
+import { msg } from "@/i18n/core";
 import { formatMoney, parseToMinor } from "@/lib/money";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
-import { cn, formatDate, formatPercent } from "@/lib/utils";
+import { cn, formatPercent } from "@/lib/utils";
 
 type Form = {
   model: "DEFAULT" | "DETAILED";
@@ -73,6 +75,7 @@ function cellStyle(v: number, scale: number): React.CSSProperties {
 }
 
 export function SimulatorView({ initialProductId }: { initialProductId: string }) {
+  const { t, date } = useT();
   const { view } = useCurrencyView();
   const trpc = useTRPC();
   const qc = useQueryClient();
@@ -113,13 +116,13 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
     try {
       result = simulate(toInput(f, currency));
     } catch (e) {
-      error = e instanceof Error && "issues" in e ? (e as { issues: { message: string }[] }).issues[0]?.message ?? "Invalid inputs" : e instanceof Error ? e.message : "Invalid inputs";
+      error = e instanceof Error && "issues" in e ? (e as { issues: { message: string }[] }).issues[0]?.message ?? msg("Invalid inputs") : e instanceof Error ? e.message : msg("Invalid inputs");
     }
   }
 
   const save = useMutation(
     trpc.simulator.saveScenario.mutationOptions({
-      onSuccess: () => { qc.invalidateQueries({ queryKey: trpc.simulator.listScenarios.queryKey() }); setName(""); toast("success", "Scenario saved"); },
+      onSuccess: () => { qc.invalidateQueries({ queryKey: trpc.simulator.listScenarios.queryKey() }); setName(""); toast("success", t("Scenario saved")); },
       onError: (e) => toast("error", errorMessage(e)),
     }),
   );
@@ -127,96 +130,106 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
 
   const o = observed.data;
   const fmt = (v: number) => formatMoney(v, currency);
-  const unit = result?.unit === "placed lead" ? "per placed lead" : "per order";
+  const perLead = result?.unit === "placed lead";
+  const unit = perLead ? t("per placed lead") : t("per order");
 
   return (
     <>
       <PageHeader
-        title="Breakeven CPA simulator"
-        description="The most you can pay per order and still make a profit. Change any number to try it."
+        title={t("Breakeven CPA simulator")}
+        description={t("The most you can pay per order and still make a profit. Change any number to try it.")}
         actions={
           <>
-            <Select aria-label="Product" value={productId} onChange={(e) => { setProductId(e.target.value); setForm(null); }} className="w-52">
+            <Select aria-label={t("Product")} value={productId} onChange={(e) => { setProductId(e.target.value); setForm(null); }} className="w-52">
               {products.data?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
-            <Button variant="ghost" onClick={() => setForm(null)}><RotateCcw /> Reset to observed</Button>
+            <Button variant="ghost" onClick={() => setForm(null)}><RotateCcw /> {t("Reset to observed")}</Button>
           </>
         }
       />
       {!f ? <Skeleton className="h-96" /> : (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[26rem_minmax(0,1fr)]">
           <Card>
-            <CardHeader title="Formula inputs" description={view === currency ? `Currency: ${currency}` : `Currency: ${currency}. The simulator always works in ${currency}, the currency your amounts are kept in.`} actions={
-              <Select aria-label="Model" value={f.model} onChange={(e) => set("model")(e.target.value as Form["model"])} className="w-36">
-                <option value="DEFAULT">Default model</option><option value="DETAILED">Detailed model</option>
+            <CardHeader title={t("Formula inputs")} description={view === currency ? t("Currency: {currency}", { currency }) : t("Currency: {currency}. The simulator always works in {currency}, the currency your amounts are kept in.", { currency })} actions={
+              <Select aria-label={t("Model")} value={f.model} onChange={(e) => set("model")(e.target.value as Form["model"])} className="w-36">
+                <option value="DEFAULT">{t("Default model")}</option><option value="DETAILED">{t("Detailed model")}</option>
               </Select>
             } />
             <CardBody className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Sale price P" htmlFor="P"><MoneyInput id="P" currency={currency} value={f.salePrice} onChange={set("salePrice")} /></Field>
-                <Field label="Sourcing cost C" htmlFor="C" hint="For one order: every piece it sends, free ones included"><MoneyInput id="C" currency={currency} value={f.sourcingCost} onChange={set("sourcingCost")} /></Field>
-                <Field label="Outbound shipping S" htmlFor="S"><MoneyInput id="S" currency={currency} value={f.outboundShipping} onChange={set("outboundShipping")} /></Field>
-                <Field label="RTO fee R" htmlFor="R"><MoneyInput id="R" currency={currency} value={f.rtoFee} onChange={set("rtoFee")} /></Field>
-                <Field label="Call-center cost K" htmlFor="K"><MoneyInput id="K" currency={currency} value={f.callCenterCost} onChange={set("callCenterCost")} /></Field>
-                {f.model === "DETAILED" ? <Field label="Packaging G" htmlFor="G"><MoneyInput id="G" currency={currency} value={f.packagingCost} onChange={set("packagingCost")} /></Field> : null}
+                <Field label={t("Sale price P")} htmlFor="P"><MoneyInput id="P" currency={currency} value={f.salePrice} onChange={set("salePrice")} /></Field>
+                <Field label={t("Sourcing cost C")} htmlFor="C" hint={t("For one order: every piece it sends, free ones included")}><MoneyInput id="C" currency={currency} value={f.sourcingCost} onChange={set("sourcingCost")} /></Field>
+                <Field label={t("Outbound shipping S")} htmlFor="S"><MoneyInput id="S" currency={currency} value={f.outboundShipping} onChange={set("outboundShipping")} /></Field>
+                <Field label={t("RTO fee R")} htmlFor="R"><MoneyInput id="R" currency={currency} value={f.rtoFee} onChange={set("rtoFee")} /></Field>
+                <Field label={t("Call-center cost K")} htmlFor="K"><MoneyInput id="K" currency={currency} value={f.callCenterCost} onChange={set("callCenterCost")} /></Field>
+                {f.model === "DETAILED" ? <Field label={t("Packaging G")} htmlFor="G"><MoneyInput id="G" currency={currency} value={f.packagingCost} onChange={set("packagingCost")} /></Field> : null}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Delivery probability D" htmlFor="D" hint={`Observed: ${formatPercent(o?.rates.deliveryRate)}`}><PctInput id="D" value={f.deliveryProbability} onChange={set("deliveryProbability")} /></Field>
-                <Field label="Return probability Q" htmlFor="Q" hint={`Observed: ${formatPercent(o?.rates.returnRate)}`}><PctInput id="Q" value={f.returnIsComplement ? String(Math.round((result?.returnProbabilityUsed ?? 0) * 1000) / 10) : f.returnProbability} onChange={set("returnProbability")} disabled={f.returnIsComplement} /></Field>
+                <Field label={t("Delivery probability D")} htmlFor="D" hint={t("Observed: {rate}", { rate: formatPercent(o?.rates.deliveryRate) })}><PctInput id="D" value={f.deliveryProbability} onChange={set("deliveryProbability")} /></Field>
+                <Field label={t("Return probability Q")} htmlFor="Q" hint={t("Observed: {rate}", { rate: formatPercent(o?.rates.returnRate) })}><PctInput id="Q" value={f.returnIsComplement ? String(Math.round((result?.returnProbabilityUsed ?? 0) * 1000) / 10) : f.returnProbability} onChange={set("returnProbability")} disabled={f.returnIsComplement} /></Field>
               </div>
               <label className="flex items-start gap-2 text-sm text-muted">
                 <input type="checkbox" className="mt-0.5 size-4 accent-[#e1182c]" checked={f.returnIsComplement} onChange={(e) => set("returnIsComplement")(e.target.checked)} />
-                <span>Assume Q = 1 − D{f.model === "DETAILED" ? " − L" : ""} <span className="text-subtle">(every shipped parcel that is not delivered{f.model === "DETAILED" ? " or lost" : ""} comes back)</span></span>
+                {f.model === "DETAILED" ? (
+                  <span>{t("Assume Q = 1 − D − L")} <span className="text-subtle">{t("(every shipped parcel that is not delivered or lost comes back)")}</span></span>
+                ) : (
+                  <span>{t("Assume Q = 1 − D")} <span className="text-subtle">{t("(every shipped parcel that is not delivered comes back)")}</span></span>
+                )}
               </label>
               {f.model === "DETAILED" ? (
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Lost probability L" htmlFor="L" hint={`Observed: ${formatPercent(o?.rates.lostRate)}`}><PctInput id="L" value={f.lostProbability} onChange={set("lostProbability")} /></Field>
-                  <Field label="Confirmation rate" htmlFor="cr" hint={`Observed: ${formatPercent(o?.rates.confirmationRate)}`}><PctInput id="cr" value={f.confirmationRate} onChange={set("confirmationRate")} /></Field>
-                  <Field label="Shipping rate" htmlFor="sr" hint={`Observed: ${formatPercent(o?.rates.shippingRate)}`}><PctInput id="sr" value={f.shippingRate} onChange={set("shippingRate")} /></Field>
-                  <Field label="Call-center basis" htmlFor="ccb">
-                    <Select id="ccb" value={f.callCenterBasis} onChange={(e) => set("callCenterBasis")(e.target.value as Form["callCenterBasis"])}><option value="PLACED_LEAD">Per placed lead</option><option value="CONFIRMED_ORDER">Per confirmed order</option></Select>
+                  <Field label={t("Lost probability L")} htmlFor="L" hint={t("Observed: {rate}", { rate: formatPercent(o?.rates.lostRate) })}><PctInput id="L" value={f.lostProbability} onChange={set("lostProbability")} /></Field>
+                  <Field label={t("Confirmation rate")} htmlFor="cr" hint={t("Observed: {rate}", { rate: formatPercent(o?.rates.confirmationRate) })}><PctInput id="cr" value={f.confirmationRate} onChange={set("confirmationRate")} /></Field>
+                  <Field label={t("Shipping rate")} htmlFor="sr" hint={t("Observed: {rate}", { rate: formatPercent(o?.rates.shippingRate) })}><PctInput id="sr" value={f.shippingRate} onChange={set("shippingRate")} /></Field>
+                  <Field label={t("Call-center basis")} htmlFor="ccb">
+                    <Select id="ccb" value={f.callCenterBasis} onChange={(e) => set("callCenterBasis")(e.target.value as Form["callCenterBasis"])}><option value="PLACED_LEAD">{t("Per placed lead")}</option><option value="CONFIRMED_ORDER">{t("Per confirmed order")}</option></Select>
                   </Field>
                 </div>
               ) : null}
               <div className="grid grid-cols-2 gap-3">
-                <Field label={`Target profit ${unit}`} htmlFor="tp"><MoneyInput id="tp" currency={currency} value={f.targetProfitPerOrder} onChange={set("targetProfitPerOrder")} /></Field>
-                <Field label="Your current CPA" htmlFor="cc" hint={f.model === "DEFAULT" ? `Observed CPCO: ${o?.currentCpa.confirmed === null || !o ? "—" : fmt(o.currentCpa.confirmed)}` : `Observed placed CPA: ${o?.currentCpa.placed === null || !o ? "—" : fmt(o.currentCpa.placed)}`}><MoneyInput id="cc" currency={currency} value={f.currentCpa} onChange={set("currentCpa")} /></Field>
+                <Field label={perLead ? t("Target profit per placed lead") : t("Target profit per order")} htmlFor="tp"><MoneyInput id="tp" currency={currency} value={f.targetProfitPerOrder} onChange={set("targetProfitPerOrder")} /></Field>
+                <Field label={t("Your current CPA")} htmlFor="cc" hint={f.model === "DEFAULT" ? t("Observed CPCO: {cpa}", { cpa: o?.currentCpa.confirmed === null || !o ? "—" : fmt(o.currentCpa.confirmed) }) : t("Observed placed CPA: {cpa}", { cpa: o?.currentCpa.placed === null || !o ? "—" : fmt(o.currentCpa.placed) })}><MoneyInput id="cc" currency={currency} value={f.currentCpa} onChange={set("currentCpa")} /></Field>
               </div>
-              {o ? <p className="text-xs text-subtle">Observed sample: {o.sample.placed} placed · {o.sample.shipped} shipped · {o.sample.delivered} delivered · {o.sample.returned} returned.{o.sample.shipped < 10 ? " Small sample: treat observed rates with caution." : ""}</p> : null}
+              {o ? (
+                <p className="text-xs text-subtle">
+                  {t("Observed sample: {placed} placed · {shipped} shipped · {delivered} delivered · {returned} returned.", { placed: o.sample.placed, shipped: o.sample.shipped, delivered: o.sample.delivered, returned: o.sample.returned })}
+                  {o.sample.shipped < 10 ? ` ${t("Small sample: treat observed rates with caution.")}` : ""}
+                </p>
+              ) : null}
             </CardBody>
           </Card>
 
           <div className="flex flex-col gap-6">
-            {error ? <Card className="border-negative/40 p-4 text-sm text-negative" role="alert">{error}</Card> : null}
+            {error ? <Card className="border-negative/40 p-4 text-sm text-negative" role="alert">{t(error)}</Card> : null}
             {result ? (
               <>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Card className="p-4">
-                    <p className="text-xs text-muted"><Term label="Breakeven CPA" definition={f.model === "DEFAULT" ? "(P − C − S) × D − R × Q − K. The most you can pay per order before losing money." : "Expected contribution per placed lead before ad spend: the most you can pay per lead."} /></p>
+                    <p className="text-xs text-muted"><Term label={t("Breakeven CPA")} definition={f.model === "DEFAULT" ? t("(P − C − S) × D − R × Q − K. The most you can pay per order before losing money.") : t("Expected contribution per placed lead before ad spend: the most you can pay per lead.")} /></p>
                     <div className="mt-1"><FitText max={24} min={14} className={result.breakevenCpa < 0 ? "text-negative" : "text-positive"}>{fmt(result.breakevenCpa)}</FitText></div>
                     <p className="text-[11px] text-subtle">{unit}</p>
                   </Card>
                   <Card className="p-4">
-                    <p className="text-xs text-muted"><Term label="Target CPA" definition="Breakeven CPA − target profit. Pay at most this to hit your profit target." /></p>
+                    <p className="text-xs text-muted"><Term label={t("Target CPA")} definition={t("Breakeven CPA − target profit. Pay at most this to hit your profit target.")} /></p>
                     <div className="mt-1"><FitText max={24} min={14}>{fmt(result.targetCpa)}</FitText></div>
                     <p className="text-[11px] text-subtle">{unit}</p>
                   </Card>
                   <Card className="p-4">
-                    <p className="text-xs text-muted"><Term label="Expected profit" definition="Breakeven CPA − your current CPA." /></p>
+                    <p className="text-xs text-muted"><Term label={t("Expected profit")} definition={t("Breakeven CPA − your current CPA.")} /></p>
                     <div className="mt-1"><FitText max={24} min={14} className={(result.expectedProfitAtCurrentCpa ?? 0) < 0 ? "text-negative" : "text-fg"}>{result.expectedProfitAtCurrentCpa === null ? "—" : fmt(result.expectedProfitAtCurrentCpa)}</FitText></div>
-                    <p className="text-[11px] text-subtle">{unit} at current CPA</p>
+                    <p className="text-[11px] text-subtle">{perLead ? t("per placed lead at current CPA") : t("per order at current CPA")}</p>
                   </Card>
                 </div>
-                {result.breakevenCpa < 0 ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-sm text-negative">This product loses money before any ad spend at these rates. No CPA is low enough.</p> : null}
-                <MoreDetails id="simulator" hint="The assumptions behind these numbers, and the profit at other delivery rates and costs per order.">
+                {result.breakevenCpa < 0 ? <p className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-sm text-negative">{t("This product loses money before any ad spend at these rates. No CPA is low enough.")}</p> : null}
+                <MoreDetails id="simulator" hint={t("The assumptions behind these numbers, and the profit at other delivery rates and costs per order.")}>
                   <Card>
-                    <CardHeader title="Assumptions" />
+                    <CardHeader title={t("Assumptions")} />
                     <CardBody className="flex flex-col gap-1 text-sm text-muted">
-                      {result.assumptions.map((a) => <p key={a}>• {a}</p>)}
+                      {result.assumptions.map((a) => <p key={a}>• {t(a)}</p>)}
                     </CardBody>
                   </Card>
                   <Card>
-                    <CardHeader title="Delivery rate × CPA sensitivity" description={`Expected profit ${unit}. Rows: delivery probability. Columns: CPA you pay.`} />
+                    <CardHeader title={t("Delivery rate × CPA sensitivity")} description={perLead ? t("Expected profit per placed lead. Rows: delivery probability. Columns: CPA you pay.") : t("Expected profit per order. Rows: delivery probability. Columns: CPA you pay.")} />
                     <div className="overflow-x-auto p-4">
                       <table className="w-full border-separate border-spacing-0.5 text-xs">
                         <thead>
@@ -246,12 +259,12 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
               </>
             ) : null}
             <Card>
-              <CardHeader title="Saved scenarios" />
+              <CardHeader title={t("Saved scenarios")} />
               <CardBody className="flex flex-col gap-3">
                 {canSave && result ? (
                   <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); save.mutate({ name, productId: productId || null, inputs: toInput(f, currency) }); }}>
-                    <Input aria-label="Scenario name" placeholder="e.g. Winter price" value={name} onChange={(e) => setName(e.target.value)} required />
-                    <Button type="submit" disabled={save.isPending}><Save /> Save scenario</Button>
+                    <Input aria-label={t("Scenario name")} placeholder={t("e.g. Winter price")} value={name} onChange={(e) => setName(e.target.value)} required />
+                    <Button type="submit" disabled={save.isPending}><Save /> {t("Save scenario")}</Button>
                   </form>
                 ) : null}
                 {scenarios.data?.length ? (
@@ -260,12 +273,12 @@ export function SimulatorView({ initialProductId }: { initialProductId: string }
                       <li key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                         <button className="flex-1 text-start hover:text-brand-strong" onClick={() => setForm(fromInput(s.inputs as SimulatorInput, currency))}>{s.name}</button>
                         {s.product ? <Badge>{s.product.name}</Badge> : null}
-                        <span className="text-xs text-subtle">{formatDate(s.createdAt)}</span>
-                        {canSave ? <Button size="icon" variant="ghost" aria-label={`Delete ${s.name}`} onClick={() => del.mutate({ id: s.id })}><Trash2 /></Button> : null}
+                        <span className="text-xs text-subtle">{date(s.createdAt)}</span>
+                        {canSave ? <Button size="icon" variant="ghost" aria-label={t("Delete {name}", { name: s.name })} onClick={() => del.mutate({ id: s.id })}><Trash2 /></Button> : null}
                       </li>
                     ))}
                   </ul>
-                ) : <p className="text-sm text-muted">No saved scenarios yet.</p>}
+                ) : <p className="text-sm text-muted">{t("No saved scenarios yet.")}</p>}
               </CardBody>
             </Card>
           </div>

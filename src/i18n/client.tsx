@@ -37,7 +37,20 @@ export function I18nProvider({ locale, dict, children }: { locale: Locale; dict:
       ago: (d) => timeAgo(d, t),
     };
   }, [locale, dict]);
+  React.useEffect(() => {
+    activeT = value.t;
+  }, [value]);
   return <I18nCtx.Provider value={value}>{children}</I18nCtx.Provider>;
+}
+
+let activeT: TFunction = makeT(null);
+
+/**
+ * The picked language's `t` for code outside components that runs in the browser after the page
+ * is up, such as turning a server error into the toast text. English until the provider mounts.
+ */
+export function currentT(): TFunction {
+  return activeT;
 }
 
 /** The picked language and its `t`. English when no provider is around (tests, error pages). */
@@ -50,7 +63,7 @@ const FALLBACK: I18n = {
   locale: "en",
   dir: "ltr",
   t: englishT,
-  tx: (text, vars) => splitPlaceholders(text).map((p, i) => (typeof p === "string" ? p : <React.Fragment key={i}>{vars[p.name]}</React.Fragment>)),
+  tx: (text, vars) => splitPlaceholders(englishT(text)).map((p, i) => (typeof p === "string" ? p : <React.Fragment key={i}>{vars[p.name]}</React.Fragment>)),
   date: (d, opts) => formatDate(d, opts),
   dateTime: (d) => formatDate(d, { dateStyle: "medium", timeStyle: "short" }),
   ago: (d) => timeAgo(d, englishT),

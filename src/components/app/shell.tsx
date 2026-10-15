@@ -11,6 +11,7 @@ import { isActive, NAV, navItem, type NavItem } from "@/components/app/nav";
 import { CurrencyPicker, CurrencyProvider } from "@/components/app/currency";
 import { DataFreshness } from "@/components/app/data-freshness";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/i18n/client";
 import { LanguageSwitch } from "@/i18n/language-switch";
 import { Dock, DockIcon, DockItem, DockLabel } from "@/components/ui/dock";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ function NavIcon({ item, active, className }: { item: NavItem; active: boolean; 
 
 /** One page in the phone menu: its red icon, which moves while it is touched or pointed at, and its name. */
 function NavLink({ item, active, onClick }: { item: NavItem; active: boolean; onClick?: () => void }) {
+  const { t } = useT();
   return (
     <Link
       href={item.href}
@@ -70,7 +72,7 @@ function NavLink({ item, active, onClick }: { item: NavItem; active: boolean; on
       <span className={cn("grid size-9 shrink-0 place-items-center rounded-full transition-colors", active ? "bg-white/20" : "bg-brand-soft group-hover:bg-surface")}>
         <NavIcon item={item} active={active} className="size-[18px]" />
       </span>
-      <span className="min-w-0 truncate">{item.label}</span>
+      <span className="min-w-0 truncate">{t(item.label)}</span>
     </Link>
   );
 }
@@ -93,17 +95,18 @@ function useDockSize() {
 /** Computer menu: a dock down the left side. Icons grow as the pointer passes and their page's name pops out. */
 function DockNav() {
   const pathname = usePathname();
+  const { t } = useT();
   const { size, magnification, distance } = useDockSize();
   return (
     <aside className="sticky top-0 z-40 hidden h-dvh w-24 shrink-0 flex-col items-start gap-4 py-4 ps-4 lg:flex">
-      <Link href="/" aria-label="COD Flow dashboard" className="press grid h-11 shrink-0 place-items-center rounded-full" style={{ width: size + 24 }}><Logo compact /></Link>
-      <nav aria-label="Main" className="flex min-h-0 flex-1 items-center">
-        <Dock orientation="vertical" aria-label="Pages" size={size} magnification={magnification} distance={distance} panelHeight={size + 24} className="gap-2.5 rounded-[28px] bg-surface px-3 shadow-card">
+      <Link href="/" aria-label={t("COD Flow dashboard")} className="press grid h-11 shrink-0 place-items-center rounded-full" style={{ width: size + 24 }}><Logo compact /></Link>
+      <nav aria-label={t("Main")} className="flex min-h-0 flex-1 items-center">
+        <Dock orientation="vertical" aria-label={t("Pages")} size={size} magnification={magnification} distance={distance} panelHeight={size + 24} className="gap-2.5 rounded-[28px] bg-surface px-3 shadow-card">
           {NAV.map((item) => {
             const active = isActive(item.href, pathname);
             return (
-              <DockItem key={item.href} href={item.href} active={active} aria-label={item.label} className={cn("nav-link aspect-square rounded-full transition-[background-color,box-shadow] duration-300", active ? "bg-brand glow" : "bg-brand-soft hover:bg-[#ffd6da]")}>
-                <DockLabel className="rounded-full border-0 bg-ink px-3 py-1 text-xs font-semibold text-white shadow-[0_8px_20px_rgb(20_16_18/0.25)]">{item.label}</DockLabel>
+              <DockItem key={item.href} href={item.href} active={active} aria-label={t(item.label)} className={cn("nav-link aspect-square rounded-full transition-[background-color,box-shadow] duration-300", active ? "bg-brand glow" : "bg-brand-soft hover:bg-[#ffd6da]")}>
+                <DockLabel className="rounded-full border-0 bg-ink px-3 py-1 text-xs font-semibold text-white shadow-[0_8px_20px_rgb(20_16_18/0.25)]">{t(item.label)}</DockLabel>
                 <DockIcon><NavIcon item={item} active={active} className="h-full w-full" /></DockIcon>
                 {active ? <span className="bg-brand glow-soft absolute -start-2.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full" aria-hidden="true" /> : null}
               </DockItem>
@@ -117,9 +120,10 @@ function DockNav() {
 
 function WorkspaceList({ current, workspaces, onDone }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; onDone: () => void }) {
   const router = useRouter();
+  const { t } = useT();
   const [pending, start] = React.useTransition();
   return (
-    <div role="listbox" aria-label="Workspaces" className="flex flex-col gap-0.5">
+    <div role="listbox" aria-label={t("Workspaces")} className="flex flex-col gap-0.5">
       {workspaces.map((w) => (
         <button
           key={w.id}
@@ -140,7 +144,7 @@ function WorkspaceList({ current, workspaces, onDone }: { current: ShellWorkspac
         >
           <span className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-3 text-[11px] font-bold text-fg">{initials(w.name)}</span>
           <span className="min-w-0 flex-1 truncate">{w.name}</span>
-          {w.isDemo ? <Badge tone="warning">demo</Badge> : null}
+          {w.isDemo ? <Badge tone="warning">{t("demo")}</Badge> : null}
           {w.id === current.id ? <Check className="size-4" aria-hidden="true" /> : null}
         </button>
       ))}
@@ -151,13 +155,14 @@ function WorkspaceList({ current, workspaces, onDone }: { current: ShellWorkspac
 /** Avatar button: switch workspace, settings, sign out. */
 function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser }) {
   const { open, setOpen, ref } = usePopover();
+  const { t } = useT();
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Account and workspace: ${current.name}`}
+        aria-label={t("Account and workspace: {name}", { name: current.name })}
         onClick={() => setOpen((o) => !o)}
         className="press flex items-center gap-2.5 rounded-full bg-surface p-1 shadow-card hover:shadow-md min-[1400px]:pe-3"
       >
@@ -174,13 +179,13 @@ function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; w
             <p className="truncate text-sm font-bold">{user.name}</p>
             <p className="truncate text-xs text-muted">{user.email}</p>
           </div>
-          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-subtle">Workspaces</p>
+          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-subtle">{t("Workspaces")}</p>
           <WorkspaceList current={current} workspaces={workspaces} onDone={() => setOpen(false)} />
           <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1">
-            <Link role="menuitem" href="/settings?tab=new-workspace" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Plus className="size-4" /> New workspace</Link>
-            <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Settings className="size-4" /> Settings</Link>
+            <Link role="menuitem" href="/settings?tab=new-workspace" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Plus className="size-4" /> {t("New workspace")}</Link>
+            <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Settings className="size-4" /> {t("Settings")}</Link>
             <form action={logoutAction}>
-              <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-sm text-negative hover:bg-negative-soft"><LogOut className="size-4" /> Sign out</button>
+              <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-sm text-negative hover:bg-negative-soft"><LogOut className="size-4" /> {t("Sign out")}</button>
             </form>
           </div>
         </div>
@@ -192,6 +197,7 @@ function AccountMenu({ current, workspaces, user }: { current: ShellWorkspace; w
 /** Phone and tablet menu: slides in from the left with every page, the workspaces and sign out. */
 function Drawer({ current, workspaces, user, onClose: close }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; onClose: () => void }) {
   const pathname = usePathname();
+  const { t } = useT();
   // Closing slides the panel out first, then removes it.
   const [closing, setClosing] = React.useState(false);
   const onClose = React.useCallback(() => {
@@ -204,20 +210,20 @@ function Drawer({ current, workspaces, user, onClose: close }: { current: ShellW
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t("Menu")}>
       <div className={cn("absolute inset-0 bg-ink/40 backdrop-blur-[2px]", closing ? "animate-[fade-out_200ms_ease-in_both]" : "animate-fade")} onClick={onClose} />
       <aside className={cn("absolute inset-y-0 start-0 flex w-[min(20rem,88vw)] flex-col gap-4 overflow-y-auto rounded-e-[28px] bg-surface p-4 shadow-2xl", closing ? "animate-[slide-out-left_200ms_ease-in_both]" : "animate-[slide-in-left_420ms_var(--ease-out)_backwards]")}>
         <div className="flex items-center justify-between">
           <Logo />
-          <button type="button" className="press grid size-10 place-items-center rounded-full bg-surface-3 text-fg hover:rotate-90" onClick={onClose} aria-label="Close menu"><X className="size-5" /></button>
+          <button type="button" className="press grid size-10 place-items-center rounded-full bg-surface-3 text-fg hover:rotate-90" onClick={onClose} aria-label={t("Close menu")}><X className="size-5" /></button>
         </div>
-        <nav aria-label="Main" className="stagger flex flex-col gap-1">
+        <nav aria-label={t("Main")} className="stagger flex flex-col gap-1">
           {NAV.map((item) => <NavLink key={item.href} item={item} active={isActive(item.href, pathname)} onClick={onClose} />)}
         </nav>
         <div className="border-t border-border pt-3">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-subtle">Workspaces</p>
+          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-subtle">{t("Workspaces")}</p>
           <WorkspaceList current={current} workspaces={workspaces} onDone={onClose} />
-          <Link href="/settings?tab=new-workspace" onClick={onClose} className="mt-0.5 flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Plus className="size-4" /> New workspace</Link>
+          <Link href="/settings?tab=new-workspace" onClick={onClose} className="mt-0.5 flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-surface-2"><Plus className="size-4" /> {t("New workspace")}</Link>
         </div>
         <div className="mt-auto flex items-center gap-2 border-t border-border pt-3">
           <div className="min-w-0 flex-1 px-1">
@@ -225,7 +231,7 @@ function Drawer({ current, workspaces, user, onClose: close }: { current: ShellW
             <p className="truncate text-[11px] text-muted">{user.email}</p>
           </div>
           <form action={logoutAction}>
-            <button type="submit" aria-label="Sign out" className="press grid size-10 place-items-center rounded-full bg-negative-soft text-negative"><LogOut className="size-4" /></button>
+            <button type="submit" aria-label={t("Sign out")} className="press grid size-10 place-items-center rounded-full bg-negative-soft text-negative"><LogOut className="size-4" /></button>
           </form>
         </div>
       </aside>
@@ -236,11 +242,12 @@ function Drawer({ current, workspaces, user, onClose: close }: { current: ShellW
 /** Phone and tablet shortcut bar at the bottom of the screen: red icons, the open page on a red tile. */
 function BottomBar({ onMenu }: { onMenu: () => void }) {
   const pathname = usePathname();
+  const { t } = useT();
   const item = (href: NavItem["href"]) => {
     const page = navItem(href);
     const active = isActive(href, pathname);
     return (
-      <Link href={href} aria-label={page.label} aria-current={active ? "page" : undefined} className="nav-link press grid size-12 place-items-center rounded-full">
+      <Link href={href} aria-label={t(page.label)} aria-current={active ? "page" : undefined} className="nav-link press grid size-12 place-items-center rounded-full">
         <span className={cn("grid size-10 place-items-center rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[var(--ease-out)]", active ? "bg-brand glow -translate-y-1 scale-110" : "bg-brand-soft")}>
           <NavIcon item={page} active={active} className="size-5" />
         </span>
@@ -248,14 +255,14 @@ function BottomBar({ onMenu }: { onMenu: () => void }) {
     );
   };
   return (
-    <nav aria-label="Shortcuts" style={{ viewTransitionName: "bottom-bar" }} className="fixed inset-x-3 bottom-3 z-40 mx-auto flex h-16 max-w-md items-center justify-around rounded-full bg-surface/95 px-2 shadow-[0_12px_30px_rgb(20_16_18/0.16)] backdrop-blur lg:hidden">
+    <nav aria-label={t("Shortcuts")} style={{ viewTransitionName: "bottom-bar" }} className="fixed inset-x-3 bottom-3 z-40 mx-auto flex h-16 max-w-md items-center justify-around rounded-full bg-surface/95 px-2 shadow-[0_12px_30px_rgb(20_16_18/0.16)] backdrop-blur lg:hidden">
       {item("/")}
       {item("/profit")}
-      <Link href="/syncs" aria-label="MDM sync" className="bg-brand-hero neon press grid size-14 -translate-y-1 place-items-center rounded-full">
+      <Link href="/syncs" aria-label={t("MDM sync")} className="bg-brand-hero neon press grid size-14 -translate-y-1 place-items-center rounded-full">
         <RefreshCw className="size-5" aria-hidden="true" />
       </Link>
       {item("/orders")}
-      <button type="button" onClick={onMenu} aria-label="All pages" className="press grid size-12 place-items-center rounded-full">
+      <button type="button" onClick={onMenu} aria-label={t("All pages")} className="press grid size-12 place-items-center rounded-full">
         <span className="grid size-10 place-items-center rounded-full bg-brand-soft text-brand"><Menu className="size-5" strokeWidth={2.2} aria-hidden="true" /></span>
       </button>
     </nav>
@@ -263,6 +270,7 @@ function BottomBar({ onMenu }: { onMenu: () => void }) {
 }
 
 export function AppShell({ current, workspaces, user, children }: { current: ShellWorkspace; workspaces: ShellWorkspace[]; user: ShellUser; children: React.ReactNode }) {
+  const { t } = useT();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const closeMobile = React.useCallback(() => setMobileOpen(false), []);
   const shell = React.useMemo(() => ({ user, workspace: current }), [user, current]);
@@ -270,19 +278,19 @@ export function AppShell({ current, workspaces, user, children }: { current: She
     <CurrencyProvider workspaceId={current.id}>
     <ShellCtx.Provider value={shell}>
     <div className="flex min-h-screen flex-col">
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">Skip to content</a>
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-2 focus:top-2 focus:z-[70] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2">{t("Skip to content")}</a>
       <div className="flex flex-1">
         <DockNav />
         <div className="flex min-w-0 flex-1 flex-col">
           {current.isDemo ? (
             <div className="border-b border-warning/20 bg-warning-soft px-4 py-1.5 text-center text-xs font-medium text-warning" role="note">
-              DEMO DATA · Synthetic workspace. Nothing here is a real business or real MDM data.
+              {t("DEMO DATA · Synthetic workspace. Nothing here is a real business or real MDM data.")}
             </div>
           ) : null}
           <header style={{ viewTransitionName: "site-header" }} className="z-30 bg-bg/80 backdrop-blur-md md:sticky md:top-0">
             <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-              <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-surface text-brand shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu className="size-5" strokeWidth={2.2} /></button>
-              <Link href="/" aria-label="COD Flow dashboard" className="press me-1 shrink-0 rounded-full lg:hidden"><Logo /></Link>
+              <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-surface text-brand shadow-card lg:hidden" onClick={() => setMobileOpen(true)} aria-label={t("Open menu")}><Menu className="size-5" strokeWidth={2.2} /></button>
+              <Link href="/" aria-label={t("COD Flow dashboard")} className="press me-1 shrink-0 rounded-full lg:hidden"><Logo /></Link>
               {/* One copy for every screen size: its own row on phones, beside the account button from md up. */}
               <div className="no-scrollbar order-last -my-1 flex w-full items-center gap-2 overflow-x-auto py-1 md:order-none md:ms-auto md:w-auto md:overflow-visible"><LanguageSwitch /><CurrencyPicker /><DataFreshness /></div>
               <div className="ms-auto flex items-center gap-2 md:ms-0">

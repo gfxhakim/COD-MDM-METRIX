@@ -1,19 +1,21 @@
 import type { NormalizedStatus } from "@prisma/client";
+import { msg } from "@/i18n/core";
 
 /**
  * Order export: status groups, columns and presets. Shared by the export panel and the server,
- * so both always agree on what a column or a group means.
+ * so both always agree on what a column or a group means. Labels are marked with msg(): the panel
+ * shows them translated, the exported files keep the English.
  */
 
 /** The owner's own reading of MDM statuses (2026-09-28), in the order an order moves through them. */
 export const STATUS_GROUPS = [
-  { key: "not_confirmed", label: "Not confirmed yet", hint: "Pending, not answered, call later", normalized: ["PENDING"] },
-  { key: "cancelled", label: "Cancelled", hint: "Before or after confirmation", normalized: ["CANCELED"] },
-  { key: "confirmed", label: "Confirmed", hint: "Preparing, packaged", normalized: ["CONFIRMED"] },
-  { key: "carrier", label: "With the carrier", hint: "Dispatched to out for delivery, postponed", normalized: ["SHIPPED"] },
-  { key: "delivered", label: "Delivered", hint: "Delivered and paid", normalized: ["DELIVERED"] },
-  { key: "returns", label: "Returns", hint: "Delivery failed, returning, returned", normalized: ["RETURNED"] },
-  { key: "other", label: "Lost, exchanged or unknown", hint: "Statuses with no mapping yet", normalized: ["LOST", "EXCHANGED", "UNKNOWN"] },
+  { key: "not_confirmed", label: msg("Not confirmed yet"), hint: msg("Pending, not answered, call later"), normalized: ["PENDING"] },
+  { key: "cancelled", label: msg("Cancelled"), hint: msg("Before or after confirmation"), normalized: ["CANCELED"] },
+  { key: "confirmed", label: msg("Confirmed"), hint: msg("Preparing, packaged"), normalized: ["CONFIRMED"] },
+  { key: "carrier", label: msg("With the carrier"), hint: msg("Dispatched to out for delivery, postponed"), normalized: ["SHIPPED"] },
+  { key: "delivered", label: msg("Delivered"), hint: msg("Delivered and paid"), normalized: ["DELIVERED"] },
+  { key: "returns", label: msg("Returns"), hint: msg("Delivery failed, returning, returned"), normalized: ["RETURNED"] },
+  { key: "other", label: msg("Lost, exchanged or unknown"), hint: msg("Statuses with no mapping yet"), normalized: ["LOST", "EXCHANGED", "UNKNOWN"] },
 ] as const satisfies readonly { key: string; label: string; hint: string; normalized: readonly NormalizedStatus[] }[];
 
 export type StatusGroupKey = (typeof STATUS_GROUPS)[number]["key"];
@@ -27,37 +29,37 @@ export const statusGroupLabel = (key: StatusGroupKey) => STATUS_GROUPS.find((g) 
 export type ExportColumnKind = "text" | "number" | "money" | "datetime";
 
 export const EXPORT_COLUMNS = [
-  { key: "orderNumber", label: "Order number", kind: "text" },
-  { key: "mdmOrderId", label: "MDM order ID", kind: "text" },
-  { key: "customerName", label: "Customer name", kind: "text", customer: true },
-  { key: "phone", label: "Phone", kind: "text", customer: true },
-  { key: "phone2", label: "Second phone", kind: "text", customer: true },
-  { key: "address", label: "Address", kind: "text", customer: true },
-  { key: "city", label: "Commune", kind: "text" },
-  { key: "wilaya", label: "Wilaya", kind: "text" },
-  { key: "deliveryType", label: "Delivery", kind: "text" },
-  { key: "status", label: "MDM status", kind: "text" },
-  { key: "statusGroup", label: "Status group", kind: "text" },
-  { key: "statusAt", label: "Status date", kind: "datetime" },
-  { key: "placedAt", label: "Order date", kind: "datetime" },
-  { key: "products", label: "Products", kind: "text" },
-  { key: "upsell", label: "Upsell", kind: "text" },
-  { key: "sku", label: "SKU", kind: "text" },
-  { key: "quantity", label: "Quantity", kind: "number" },
-  { key: "unitPrice", label: "Unit price", kind: "money" },
-  { key: "codAmount", label: "COD amount", kind: "money" },
-  { key: "shippingFee", label: "Delivery fee", kind: "money" },
-  { key: "returnFee", label: "Return fee", kind: "money" },
-  { key: "trackingId", label: "Tracking number", kind: "text" },
-  { key: "store", label: "Store", kind: "text" },
-  { key: "source", label: "Source", kind: "text" },
-  { key: "adId", label: "Ad ID", kind: "text" },
-  { key: "adName", label: "Ad name", kind: "text" },
-  { key: "utmCampaign", label: "UTM campaign", kind: "text" },
-  { key: "utmSource", label: "UTM source", kind: "text" },
-  { key: "dispatchedAt", label: "Dispatched", kind: "datetime" },
-  { key: "deliveredAt", label: "Delivered", kind: "datetime" },
-  { key: "returnedAt", label: "Returned", kind: "datetime" },
+  { key: "orderNumber", label: msg("Order number"), kind: "text" },
+  { key: "mdmOrderId", label: msg("MDM order ID"), kind: "text" },
+  { key: "customerName", label: msg("Customer name"), kind: "text", customer: true },
+  { key: "phone", label: msg("Phone"), kind: "text", customer: true },
+  { key: "phone2", label: msg("Second phone"), kind: "text", customer: true },
+  { key: "address", label: msg("Address"), kind: "text", customer: true },
+  { key: "city", label: msg("Commune"), kind: "text" },
+  { key: "wilaya", label: msg("Wilaya"), kind: "text" },
+  { key: "deliveryType", label: msg("Delivery"), kind: "text" },
+  { key: "status", label: msg("MDM status"), kind: "text" },
+  { key: "statusGroup", label: msg("Status group"), kind: "text" },
+  { key: "statusAt", label: msg("Status date"), kind: "datetime" },
+  { key: "placedAt", label: msg("Order date"), kind: "datetime" },
+  { key: "products", label: msg("Products"), kind: "text" },
+  { key: "upsell", label: msg("Upsell"), kind: "text" },
+  { key: "sku", label: msg("SKU"), kind: "text" },
+  { key: "quantity", label: msg("Quantity"), kind: "number" },
+  { key: "unitPrice", label: msg("Unit price"), kind: "money" },
+  { key: "codAmount", label: msg("COD amount"), kind: "money" },
+  { key: "shippingFee", label: msg("Delivery fee"), kind: "money" },
+  { key: "returnFee", label: msg("Return fee"), kind: "money" },
+  { key: "trackingId", label: msg("Tracking number"), kind: "text" },
+  { key: "store", label: msg("Store"), kind: "text" },
+  { key: "source", label: msg("Source"), kind: "text" },
+  { key: "adId", label: msg("Ad ID"), kind: "text" },
+  { key: "adName", label: msg("Ad name"), kind: "text" },
+  { key: "utmCampaign", label: msg("UTM campaign"), kind: "text" },
+  { key: "utmSource", label: msg("UTM source"), kind: "text" },
+  { key: "dispatchedAt", label: msg("Dispatched"), kind: "datetime" },
+  { key: "deliveredAt", label: msg("Delivered"), kind: "datetime" },
+  { key: "returnedAt", label: msg("Returned"), kind: "datetime" },
 ] as const satisfies readonly { key: string; label: string; kind: ExportColumnKind; customer?: boolean }[];
 
 export type ExportColumnKey = (typeof EXPORT_COLUMNS)[number]["key"];
@@ -65,10 +67,10 @@ export const EXPORT_COLUMN_KEYS = EXPORT_COLUMNS.map((c) => c.key) as [ExportCol
 export const isCustomerColumn = (key: ExportColumnKey) => !!(EXPORT_COLUMNS.find((c) => c.key === key) as { customer?: boolean } | undefined)?.customer;
 
 export const COLUMN_PRESETS: { key: string; label: string; columns: ExportColumnKey[] }[] = [
-  { key: "essentials", label: "Essentials", columns: ["orderNumber", "placedAt", "customerName", "phone", "wilaya", "city", "products", "quantity", "codAmount", "status", "trackingId"] },
-  { key: "delivery", label: "Delivery follow-up", columns: ["orderNumber", "customerName", "phone", "phone2", "address", "city", "wilaya", "deliveryType", "trackingId", "status", "statusAt", "codAmount", "shippingFee", "deliveredAt", "returnedAt"] },
-  { key: "ads", label: "Ads and profit", columns: ["orderNumber", "placedAt", "status", "statusGroup", "products", "quantity", "codAmount", "adId", "adName", "utmCampaign", "utmSource"] },
-  { key: "all", label: "Everything", columns: [...EXPORT_COLUMN_KEYS] },
+  { key: "essentials", label: msg("Essentials"), columns: ["orderNumber", "placedAt", "customerName", "phone", "wilaya", "city", "products", "quantity", "codAmount", "status", "trackingId"] },
+  { key: "delivery", label: msg("Delivery follow-up"), columns: ["orderNumber", "customerName", "phone", "phone2", "address", "city", "wilaya", "deliveryType", "trackingId", "status", "statusAt", "codAmount", "shippingFee", "deliveredAt", "returnedAt"] },
+  { key: "ads", label: msg("Ads and profit"), columns: ["orderNumber", "placedAt", "status", "statusGroup", "products", "quantity", "codAmount", "adId", "adName", "utmCampaign", "utmSource"] },
+  { key: "all", label: msg("Everything"), columns: [...EXPORT_COLUMN_KEYS] },
 ];
 
 export const EXPORT_FORMATS = ["xlsx", "csv", "print"] as const;

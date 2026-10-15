@@ -24,7 +24,10 @@ import {
   type ExportFormat,
   type StatusGroupKey,
 } from "@/domain/orderExport";
-import { adFilterLabel, type AdFilter } from "@/domain/adFilter";
+import { adFilterText } from "@/components/app/ads-filter";
+import type { AdFilter } from "@/domain/adFilter";
+import { useT } from "@/i18n/client";
+import { msg } from "@/i18n/core";
 import { addDays, RANGES, rangeDays, shortDay, todayIn, type RangeKey } from "@/lib/dateRanges";
 import { download } from "@/lib/download";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
@@ -49,10 +52,13 @@ export type PageFilters = {
   ads?: AdFilter;
 };
 
+/** Order sources as the pages write them (lowercase); brand names stay as they are. */
+export const SOURCE_WORD: Record<OrderSource, string> = { SHOPIFY: "shopify", EASYSELL: "easysell", MANUAL: msg("manual"), OTHER: msg("other"), MDM_EXPRESS: "mdm_express" };
+
 const FORMATS: { key: ExportFormat; label: string; hint: string; icon: React.ReactNode }[] = [
-  { key: "xlsx", label: "Excel", hint: ".xlsx, ready to sort and filter", icon: <FileSpreadsheet /> },
-  { key: "csv", label: "CSV", hint: "For Google Sheets or other tools", icon: <FileText /> },
-  { key: "print", label: "Print or PDF", hint: "A printable page to save as PDF", icon: <Printer /> },
+  { key: "xlsx", label: "Excel", hint: msg(".xlsx, ready to sort and filter"), icon: <FileSpreadsheet /> },
+  { key: "csv", label: "CSV", hint: msg("For Google Sheets or other tools"), icon: <FileText /> },
+  { key: "print", label: msg("Print or PDF"), hint: msg("A printable page to save as PDF"), icon: <Printer /> },
 ];
 
 type Saved = {
@@ -121,6 +127,7 @@ function groupsFromPage(f: PageFilters): StatusGroupKey[] | null {
 }
 
 export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }: { workspaceId: string; timezone: string; filters: PageFilters; onClose: () => void; onPrint: (data: PrintData, title: string) => void }) {
+  const { t } = useT();
   const trpc = useTRPC();
   const toast = useToast();
   const money = useCurrencyView();
@@ -197,11 +204,11 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
       onSuccess: (r) => {
         save(workspaceId, s);
         if (r.kind === "print") {
-          onPrint(r, `Orders${days.from || days.to ? `, ${days.from ? shortDay(days.from) : "start"} to ${days.to ? shortDay(days.to) : "today"}` : ""}`);
+          onPrint(r, days.from || days.to ? t("Orders, {from} to {to}", { from: days.from ? shortDay(days.from, t) : t("start"), to: days.to ? shortDay(days.to, t) : t("today") }) : t("Orders"));
           return;
         }
         download(r.filename, r.mime, r.base64);
-        toast("success", `${r.orders.toLocaleString("en-US")} orders exported to ${r.filename}`);
+        toast("success", t("{n} orders exported to {file}", { n: r.orders.toLocaleString("en-US"), file: r.filename }));
         onClose();
       },
       onError: (e) => toast("error", errorMessage(e)),
@@ -223,55 +230,55 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
     });
 
   const carried = [
-    carry.search ? { key: "search" as const, label: `Search “${carry.search}”` } : null,
+    carry.search ? { key: "search" as const, label: t("Search “{q}”", { q: carry.search }) } : null,
     carry.wilaya ? { key: "wilaya" as const, label: carry.wilaya } : null,
-    carry.productId ? { key: "productId" as const, label: carry.productName ?? "One product" } : null,
-    carry.creativeId ? { key: "creativeId" as const, label: `Ad ${carry.creativeName ?? ""}`.trim() } : null,
-    carry.source ? { key: "source" as const, label: `Source: ${carry.source.toLowerCase()}` } : null,
-    carry.upsell !== undefined ? { key: "upsell" as const, label: carry.upsell ? "Upsold orders" : "Orders without upsell" } : null,
-    carry.ads ? { key: "ads" as const, label: `Meta ads: ${adFilterLabel(carry.ads)}` } : null,
+    carry.productId ? { key: "productId" as const, label: carry.productName ?? t("One product") } : null,
+    carry.creativeId ? { key: "creativeId" as const, label: carry.creativeName?.trim() ? t("Ad {name}", { name: carry.creativeName.trim() }) : t("Ad") } : null,
+    carry.source ? { key: "source" as const, label: t("Source: {source}", { source: t(SOURCE_WORD[carry.source]) }) } : null,
+    carry.upsell !== undefined ? { key: "upsell" as const, label: carry.upsell ? t("Upsold orders") : t("Orders without upsell") } : null,
+    carry.ads ? { key: "ads" as const, label: t("Meta ads: {ads}", { ads: adFilterText(carry.ads, t) }) } : null,
   ].filter((c) => c !== null);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Export orders" description="Pick the orders, then how you want the file. Your choices are remembered on this device." className="max-w-2xl">
+      <DialogContent title={t("Export orders")} description={t("Pick the orders, then how you want the file. Your choices are remembered on this device.")} className="max-w-2xl">
         <div className="flex flex-col gap-6">
-          <Section title="Dates">
+          <Section title={t("Dates")}>
             <div className="flex flex-wrap gap-1.5">
               {RANGES.map((r) => (
-                <Chip key={r.key} active={s.range === r.key} onClick={() => setS((p) => ({ ...p, range: r.key, from: p.from || days.from || addDays(today, -29), to: p.to || days.to || today }))}>{r.label}</Chip>
+                <Chip key={r.key} active={s.range === r.key} onClick={() => setS((p) => ({ ...p, range: r.key, from: p.from || days.from || addDays(today, -29), to: p.to || days.to || today }))}>{t(r.label)}</Chip>
               ))}
             </div>
             {s.range === "custom" ? (
               <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-                <label className="flex flex-col gap-1 text-xs text-muted">From<Input type="date" value={s.from} max={s.to || today} onChange={(e) => set("from", e.target.value)} aria-invalid={badRange} /></label>
-                <label className="flex flex-col gap-1 text-xs text-muted">To<Input type="date" value={s.to} min={s.from || undefined} onChange={(e) => set("to", e.target.value)} aria-invalid={badRange} /></label>
+                <label className="flex flex-col gap-1 text-xs text-muted">{t("From")}<Input type="date" value={s.from} max={s.to || today} onChange={(e) => set("from", e.target.value)} aria-invalid={badRange} /></label>
+                <label className="flex flex-col gap-1 text-xs text-muted">{t("To")}<Input type="date" value={s.to} min={s.from || undefined} onChange={(e) => set("to", e.target.value)} aria-invalid={badRange} /></label>
               </div>
             ) : null}
             <p className="num text-xs text-muted">
-              {badRange ? <span className="text-negative">The start date is after the end date.</span> : days.from || days.to ? `${days.from ? shortDay(days.from) : "The start"} to ${days.to ? shortDay(days.to) : "today"}` : "Every order, whatever its date"}
+              {badRange ? <span className="text-negative">{t("The start date is after the end date.")}</span> : days.from || days.to ? t("{from} to {to}", { from: days.from ? shortDay(days.from, t) : t("The start"), to: days.to ? shortDay(days.to, t) : t("today") }) : t("Every order, whatever its date")}
             </p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <span>Dates of</span>
+              <span>{t("Dates of")}</span>
               <div className="flex gap-1.5">
-                <Chip active={s.dateField === "placed"} onClick={() => set("dateField", "placed")}>Order date</Chip>
-                <Chip active={s.dateField === "status"} onClick={() => set("dateField", "status")}>Latest status change</Chip>
+                <Chip active={s.dateField === "placed"} onClick={() => set("dateField", "placed")}>{t("Order date")}</Chip>
+                <Chip active={s.dateField === "status"} onClick={() => set("dateField", "status")}>{t("Latest status change")}</Chip>
               </div>
             </div>
           </Section>
 
-          <Section title="Which orders">
+          <Section title={t("Which orders")}>
             <div className="flex flex-wrap gap-1.5">
-              <Chip active={s.scope === "mdm"} onClick={() => set("scope", "mdm")}>Synced from MDM</Chip>
-              <Chip active={s.scope === "all"} onClick={() => set("scope", "all")}>All orders</Chip>
+              <Chip active={s.scope === "mdm"} onClick={() => set("scope", "mdm")}>{t("Synced from MDM")}</Chip>
+              <Chip active={s.scope === "all"} onClick={() => set("scope", "all")}>{t("All orders")}</Chip>
             </div>
             {carried.length ? (
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                <span>From the page filters:</span>
+                <span>{t("From the page filters:")}</span>
                 {carried.map((c) => (
                   <span key={c.key} className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft py-1 ps-3 pe-1 font-medium text-brand-strong">
                     <span className="truncate">{c.label}</span>
-                    <button type="button" aria-label={`Remove ${c.label}`} className="rounded-full p-0.5 hover:bg-brand/15" onClick={() => setCarry((p) => ({ ...p, [c.key]: undefined }))}><X className="size-3.5" /></button>
+                    <button type="button" aria-label={t("Remove {name}", { name: c.label })} className="rounded-full p-0.5 hover:bg-brand/15" onClick={() => setCarry((p) => ({ ...p, [c.key]: undefined }))}><X className="size-3.5" /></button>
                   </span>
                 ))}
               </div>
@@ -279,18 +286,18 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
           </Section>
 
           <Section
-            title="Statuses"
+            title={t("Statuses")}
             aside={groups.length ? (
               <span className="flex gap-3 text-xs font-medium">
-                <button type="button" className="text-brand-strong hover:underline" onClick={() => setS((p) => ({ ...p, offGroups: [], offStatuses: [] }))}>All</button>
-                <button type="button" className="text-muted hover:text-fg hover:underline" onClick={() => setS((p) => ({ ...p, offGroups: STATUS_GROUPS.map((g) => g.key), offStatuses: [] }))}>None</button>
+                <button type="button" className="text-brand-strong hover:underline" onClick={() => setS((p) => ({ ...p, offGroups: [], offStatuses: [] }))}>{t("All")}</button>
+                <button type="button" className="text-muted hover:text-fg hover:underline" onClick={() => setS((p) => ({ ...p, offGroups: STATUS_GROUPS.map((g) => g.key), offStatuses: [] }))}>{t("None")}</button>
               </span>
             ) : null}
           >
             {preview.data?.tooMany ? (
-              <p className="rounded-xl bg-warning-soft px-3 py-2 text-xs text-warning">These dates hold more than 50,000 orders. Pick a shorter range to export.</p>
+              <p className="rounded-xl bg-warning-soft px-3 py-2 text-xs text-warning">{t("These dates hold more than 50,000 orders. Pick a shorter range to export.")}</p>
             ) : !preview.data ? (
-              <div className="h-40 animate-pulse rounded-2xl bg-surface-2" aria-label="Counting orders" />
+              <div className="h-40 animate-pulse rounded-2xl bg-surface-2" aria-label={t("Counting orders")} />
             ) : (
               <ul className={cn("divide-y divide-border overflow-hidden rounded-2xl border border-border transition-opacity", preview.isFetching && "opacity-60")}>
                 {groups.map((g) => {
@@ -299,11 +306,11 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
                   return (
                     <li key={g.key}>
                       <div className="flex items-center gap-3 px-3 py-2.5">
-                        <Check3 state={state} label={g.label} disabled={!g.count} onChange={toggleGroup.bind(null, g)} />
+                        <Check3 state={state} label={t(g.label)} disabled={!g.count} onChange={toggleGroup.bind(null, g)} />
                         <button type="button" disabled={!g.statuses.length} aria-expanded={open} onClick={() => setOpenGroups((p) => (open ? p.filter((k) => k !== g.key) : [...p, g.key]))} className="flex min-w-0 flex-1 items-center gap-2 text-start disabled:cursor-default">
                           <span className="min-w-0 flex-1">
-                            <span className={cn("block text-sm font-medium", !g.count && "text-subtle")}>{g.label}</span>
-                            <span className="block truncate text-[11px] text-subtle">{g.hint}</span>
+                            <span className={cn("block text-sm font-medium", !g.count && "text-subtle")}>{t(g.label)}</span>
+                            <span className="block truncate text-[11px] text-subtle">{t(g.hint)}</span>
                           </span>
                           <span className="num text-sm font-semibold">{g.count.toLocaleString("en-US")}</span>
                           <ChevronDown className={cn("size-4 text-subtle transition-transform", open && "rotate-180", !g.statuses.length && "invisible")} />
@@ -329,7 +336,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
             )}
           </Section>
 
-          <Section title="Format">
+          <Section title={t("Format")}>
             <div className="grid gap-2 sm:grid-cols-3">
               {FORMATS.map((f) => (
                 <button
@@ -344,52 +351,52 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
                 >
                   <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl [&_svg]:size-4", s.format === f.key ? "bg-brand glow" : "bg-surface-3 text-muted")}>{f.icon}</span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-semibold">{f.label}</span>
-                    <span className="block text-[11px] leading-snug text-muted">{f.hint}</span>
+                    <span className="block text-sm font-semibold">{t(f.label)}</span>
+                    <span className="block text-[11px] leading-snug text-muted">{t(f.hint)}</span>
                   </span>
                 </button>
               ))}
             </div>
             {s.format === "csv" ? (
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>Separator</span>
-                <Chip active={s.csvDelimiter === ","} onClick={() => set("csvDelimiter", ",")}>Comma</Chip>
-                <Chip active={s.csvDelimiter === ";"} onClick={() => set("csvDelimiter", ";")}>Semicolon (French Excel)</Chip>
+                <span>{t("Separator")}</span>
+                <Chip active={s.csvDelimiter === ","} onClick={() => set("csvDelimiter", ",")}>{t("Comma")}</Chip>
+                <Chip active={s.csvDelimiter === ";"} onClick={() => set("csvDelimiter", ";")}>{t("Semicolon (French Excel)")}</Chip>
               </div>
             ) : null}
           </Section>
 
-          <Section title="Columns" aside={<span className="num text-xs text-muted">{columns.length} of {visibleColumns.length}</span>}>
+          <Section title={t("Columns")} aside={<span className="num text-xs text-muted">{t("{n} of {total}", { n: columns.length, total: visibleColumns.length })}</span>}>
             <div className="flex flex-wrap gap-1.5">
-              {COLUMN_PRESETS.map((p) => <Chip key={p.key} active={s.preset === p.key} onClick={() => pickPreset(p.key)}>{p.label}</Chip>)}
-              {s.preset === "custom" ? <Chip active>Custom</Chip> : null}
+              {COLUMN_PRESETS.map((p) => <Chip key={p.key} active={s.preset === p.key} onClick={() => pickPreset(p.key)}>{t(p.label)}</Chip>)}
+              {s.preset === "custom" ? <Chip active>{t("Custom")}</Chip> : null}
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-2xl border border-border p-3 sm:grid-cols-3">
               {visibleColumns.map((c) => (
                 <label key={c.key} className="flex min-w-0 cursor-pointer items-center gap-2 py-1 text-[13px]">
                   <input type="checkbox" className="size-4 shrink-0 accent-[#e1182c]" checked={s.columns.includes(c.key)} onChange={() => toggleColumn(c.key)} />
-                  <span className="truncate">{c.label}</span>
+                  <span className="truncate">{t(c.label)}</span>
                 </label>
               ))}
             </div>
-            {!seeCustomers ? <p className="text-xs text-subtle">Customer names, phones and addresses are left out of exports for view-only accounts.</p> : null}
+            {!seeCustomers ? <p className="text-xs text-subtle">{t("Customer names, phones and addresses are left out of exports for view-only accounts.")}</p> : null}
           </Section>
 
-          <Section title="Rows and amounts">
+          <Section title={t("Rows and amounts")}>
             <div className="flex flex-wrap gap-1.5">
-              <Chip active={s.layout === "orders"} onClick={() => set("layout", "orders")}>One row per order</Chip>
-              <Chip active={s.layout === "lines"} onClick={() => set("layout", "lines")}>One row per product</Chip>
+              <Chip active={s.layout === "orders"} onClick={() => set("layout", "orders")}>{t("One row per order")}</Chip>
+              <Chip active={s.layout === "lines"} onClick={() => set("layout", "lines")}>{t("One row per product")}</Chip>
             </div>
             <div className="grid grid-cols-2 items-center gap-3 sm:flex">
               <label className="flex items-center gap-2 text-xs text-muted">
-                Amounts in
-                <Select aria-label="Currency" value={currency} onChange={(e) => set("currency", e.target.value)} className="h-8 w-24">
+                {t("Amounts in")}
+                <Select aria-label={t("Currency")} value={currency} onChange={(e) => set("currency", e.target.value)} className="h-8 w-24">
                   {money.available.map((c) => <option key={c} value={c}>{c}</option>)}
                 </Select>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-[13px]">
                 <input type="checkbox" className="size-4 accent-[#e1182c]" checked={s.totals} onChange={(e) => set("totals", e.target.checked)} />
-                Add totals by status
+                {t("Add totals by status")}
               </label>
             </div>
           </Section>
@@ -397,13 +404,17 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
           <div className="sticky -bottom-5 -mx-5 -mb-5 flex flex-col gap-3 border-t border-border bg-surface/95 px-5 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 text-xs text-muted">
               <p className="num font-semibold text-fg" aria-live="polite">
-                {preview.data && !preview.data.tooMany ? `${pickedOrders.toLocaleString("en-US")} orders${s.layout === "lines" ? ` · ${pickedRows.toLocaleString("en-US")} rows` : ""} · ${columns.length} columns` : " "}
+                {preview.data && !preview.data.tooMany
+                  ? s.layout === "lines"
+                    ? t("{orders} orders · {rows} rows · {columns} columns", { orders: pickedOrders.toLocaleString("en-US"), rows: pickedRows.toLocaleString("en-US"), columns: columns.length })
+                    : t("{orders} orders · {columns} columns", { orders: pickedOrders.toLocaleString("en-US"), columns: columns.length })
+                  : " "}
               </p>
-              <p className="truncate">{!columns.length ? "Pick at least one column." : noStatus ? "Pick at least one status." : filename ?? "Opens a printable page; choose Save as PDF there."}</p>
+              <p className="truncate">{!columns.length ? t("Pick at least one column.") : noStatus ? t("Pick at least one status.") : filename ?? t("Opens a printable page; choose Save as PDF there.")}</p>
             </div>
             <Button variant="primary" onClick={submit} disabled={blocked || run.isPending} className="shrink-0">
               {run.isPending ? <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : s.format === "print" ? <Printer /> : <Download />}
-              {run.isPending ? "Preparing…" : s.format === "print" ? "Open printable page" : `Download ${s.format === "xlsx" ? "Excel" : "CSV"}`}
+              {run.isPending ? t("Preparing…") : s.format === "print" ? t("Open printable page") : t("Download {format}", { format: s.format === "xlsx" ? "Excel" : "CSV" })}
             </Button>
           </div>
         </div>
@@ -414,6 +425,7 @@ export function ExportPanel({ workspaceId, timezone, filters, onClose, onPrint }
 
 /** The printable page: a full-screen sheet; the browser's print dialog saves it as PDF. */
 export function PrintSheet({ data, title, onClose }: { data: PrintData; title: string; onClose: () => void }) {
+  const { t, dateTime } = useT();
   React.useEffect(() => {
     document.documentElement.classList.add("printing");
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -424,12 +436,12 @@ export function PrintSheet({ data, title, onClose }: { data: PrintData; title: s
     };
   }, [onClose]);
   return createPortal(
-    <div className="print-sheet fixed inset-0 z-[70] overflow-auto bg-surface-2 animate-fade" role="dialog" aria-modal="true" aria-label="Printable orders">
+    <div className="print-sheet fixed inset-0 z-[70] overflow-auto bg-surface-2 animate-fade" role="dialog" aria-modal="true" aria-label={t("Printable orders")}>
       <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur">
-        <p className="text-sm font-semibold">Printable page <span className="num font-normal text-muted">· {data.orders.toLocaleString("en-US")} orders</span></p>
+        <p className="text-sm font-semibold">{t("Printable page")} <span className="num font-normal text-muted">· {t("{n} orders", { n: data.orders.toLocaleString("en-US") })}</span></p>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose}><X /> Close</Button>
-          <Button variant="primary" size="sm" onClick={() => window.print()}><Printer /> Print or save as PDF</Button>
+          <Button variant="ghost" size="sm" onClick={onClose}><X /> {t("Close")}</Button>
+          <Button variant="primary" size="sm" onClick={() => window.print()}><Printer /> {t("Print or save as PDF")}</Button>
         </div>
       </div>
       <div className="mx-auto my-4 w-fit min-w-[min(100%,56rem)] rounded-2xl bg-surface p-6 shadow-card print:m-0 print:w-auto print:rounded-none print:p-0 print:shadow-none">
@@ -438,7 +450,7 @@ export function PrintSheet({ data, title, onClose }: { data: PrintData; title: s
             <h1 className="text-xl font-black tracking-tight">{title}</h1>
             <p className="text-xs text-muted">{data.workspace}</p>
           </div>
-          <p className="num text-xs text-muted">Generated {new Date(data.generatedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p>
+          <p className="num text-xs text-muted">{t("Generated {date}", { date: dateTime(data.generatedAt) })}</p>
         </header>
         <table className="print-table w-full border-collapse text-[11px]">
           <thead>
@@ -454,7 +466,7 @@ export function PrintSheet({ data, title, onClose }: { data: PrintData; title: s
         </table>
         {data.totals ? (
           <div className="mt-6 break-inside-avoid">
-            <h2 className="mb-2 text-sm font-bold">Totals by status</h2>
+            <h2 className="mb-2 text-sm font-bold">{t("Totals by status")}</h2>
             <table className="print-table border-collapse text-[11px]">
               <thead>
                 <tr>{data.totals.headers.map((h, i) => <th key={i} className={cn("border-b border-border-strong bg-surface-2 px-2 py-1.5 font-semibold", i >= 2 ? "text-end" : "text-start")}>{h}</th>)}</tr>
@@ -470,7 +482,7 @@ export function PrintSheet({ data, title, onClose }: { data: PrintData; title: s
           </div>
         ) : null}
       </div>
-      <p className="no-print px-4 pb-6 text-center text-xs text-muted">In the print window, pick “Save as PDF” as the printer to get a PDF file.</p>
+      <p className="no-print px-4 pb-6 text-center text-xs text-muted">{t("In the print window, pick “Save as PDF” as the printer to get a PDF file.")}</p>
     </div>,
     document.body,
   );

@@ -17,17 +17,32 @@ import { Input, Select } from "@/components/ui/form";
 import { EmptyState, ErrorState, Loading } from "@/components/ui/states";
 import { Table, Td, Th, THead, Tr } from "@/components/ui/table";
 import { wilayaLabel } from "@/domain/wilayas";
+import { useT } from "@/i18n/client";
+import { msg } from "@/i18n/core";
 import { errorMessage, useTRPC } from "@/lib/trpc/client";
 import { PHONE, useMedia } from "@/lib/use-media";
-import { formatDate, timeAgo } from "@/lib/utils";
-import { ExportPanel, PrintSheet, type PrintData } from "./export-panel";
+import { ExportPanel, PrintSheet, SOURCE_WORD, type PrintData } from "./export-panel";
 import { OrderDrawer } from "./order-drawer";
 import { NewOrderDialog } from "./new-order-dialog";
 
 const PARCEL_STATUSES: NormalizedStatus[] = ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "RETURNED", "LOST", "CANCELED", "EXCHANGED", "UNKNOWN"];
 const ORDER_STATUSES: OrderStatus[] = ["PENDING", "CONFIRMED", "CANCELED"];
+/** The statuses as the filter menus write them (lowercase). */
+const ORDER_STATUS_WORD: Record<OrderStatus, string> = { PENDING: msg("pending"), CONFIRMED: msg("confirmed"), CANCELED: msg("canceled") };
+const PARCEL_STATUS_WORD: Record<NormalizedStatus, string> = {
+  PENDING: msg("pending"),
+  CONFIRMED: msg("confirmed"),
+  SHIPPED: msg("shipped"),
+  DELIVERED: msg("delivered"),
+  RETURNED: msg("returned"),
+  LOST: msg("lost"),
+  CANCELED: msg("canceled"),
+  EXCHANGED: msg("exchanged"),
+  UNKNOWN: msg("unknown"),
+};
 
 export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: NormalizedStatus }) {
+  const { t, date, ago } = useT();
   const money = useMoney();
   const trpc = useTRPC();
   const canWrite = useCan("orders.write");
@@ -50,8 +65,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
   const workspace = useQuery(trpc.workspace.getCurrent.queryOptions());
 
   React.useEffect(() => {
-    const t = setTimeout(() => setDebounced(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebounced(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
   // Changing any filter returns to page 1.
   const ads = useAdsFilter().filter;
@@ -85,12 +100,12 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
   return (
     <>
       <PageHeader
-        title="Orders & parcels"
-        description="Every order and where its parcel is. Tap an order to see everything about it."
+        title={t("Orders & parcels")}
+        description={t("Every order and where its parcel is. Tap an order to see everything about it.")}
         actions={
           <>
-            <Button onClick={() => setExporting(true)} disabled={!workspace.data}><Download /> Export</Button>
-            {canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> Manual order</Button> : null}
+            <Button onClick={() => setExporting(true)} disabled={!workspace.data}><Download /> {t("Export")}</Button>
+            {canWrite ? <Button variant="primary" onClick={() => setCreating(true)}><Plus /> {t("Manual order")}</Button> : null}
           </>
         }
       />
@@ -98,45 +113,45 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
         <div className="grid grid-cols-2 gap-2 border-b border-border p-3 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]">
           <div className="relative col-span-2">
             <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
-            <label htmlFor="order-search" className="sr-only">Search orders</label>
-            <Input id="order-search" placeholder="Order number, tracking ID or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="ps-9" />
+            <label htmlFor="order-search" className="sr-only">{t("Search orders")}</label>
+            <Input id="order-search" placeholder={t("Order number, tracking ID or phone")} value={search} onChange={(e) => setSearch(e.target.value)} className="ps-9" />
           </div>
           <AdsFilter className="col-span-2 sm:col-span-1" />
-          <Select aria-label="Order status" value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full">
-            <option value="">All orders</option>
-            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
+          <Select aria-label={t("Order status")} value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")} className="w-full">
+            <option value="">{t("All orders")}</option>
+            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{t(ORDER_STATUS_WORD[s])}</option>)}
           </Select>
-          <Select aria-label="Wilaya" value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full">
-            <option value="">All wilayas</option>
+          <Select aria-label={t("Wilaya")} value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="w-full">
+            <option value="">{t("All wilayas")}</option>
             {facets.data?.wilayas.map((w) => <option key={w} value={w}>{wilayaLabel(w)}</option>)}
           </Select>
-          <Select aria-label="Product" value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full">
-            <option value="">All products</option>
+          <Select aria-label={t("Product")} value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full">
+            <option value="">{t("All products")}</option>
             {facets.data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
           {more ? (
             <>
-              <Select aria-label="Parcel status" value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full">
-                <option value="">All parcels</option>
-                {PARCEL_STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
+              <Select aria-label={t("Parcel status")} value={parcelStatus} onChange={(e) => setParcelStatus(e.target.value as NormalizedStatus | "")} className="w-full">
+                <option value="">{t("All parcels")}</option>
+                {PARCEL_STATUSES.map((s) => <option key={s} value={s}>{t(PARCEL_STATUS_WORD[s])}</option>)}
               </Select>
-              <Select aria-label="Creative" value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full">
-                <option value="">All creatives</option>
+              <Select aria-label={t("Creative")} value={creativeId} onChange={(e) => setCreativeId(e.target.value)} className="w-full">
+                <option value="">{t("All creatives")}</option>
                 {facets.data?.creatives.map((c) => <option key={c.id} value={c.id}>{c.externalCreativeId}</option>)}
               </Select>
-              <Select aria-label="Upsell" value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full">
-                <option value="">Upsell or not</option>
-                <option value="yes">Upsold</option>
-                <option value="no">No upsell</option>
+              <Select aria-label={t("Upsell")} value={upsell} onChange={(e) => setUpsell(e.target.value as "" | "yes" | "no")} className="w-full">
+                <option value="">{t("Upsell or not")}</option>
+                <option value="yes">{t("Upsold")}</option>
+                <option value="no">{t("No upsell")}</option>
               </Select>
             </>
           ) : null}
           <MoreDetailsButton open={more} onToggle={(o) => { setMore(o); if (!o) { setParcelStatus(""); setCreativeId(""); setUpsell(""); } }} className="col-span-2 justify-self-start self-center sm:col-span-1" />
         </div>
         {orders.error ? <ErrorState message={errorMessage(orders.error)} /> : orders.isLoading ? <Loading /> : !orders.data?.items.length ? (
-          <EmptyState icon={<ClipboardList />} title="No orders match" description="Import an orders CSV from Imports, or add a manual order." />
+          <EmptyState icon={<ClipboardList />} title={t("No orders match")} description={t("Import an orders CSV from Imports, or add a manual order.")} />
         ) : phone ? (
-          <ul aria-label="Orders" className="flex flex-col divide-y divide-border">
+          <ul aria-label={t("Orders")} className="flex flex-col divide-y divide-border">
             {orders.data.items.map((o) => (
               <li key={o.id}>
                 <button type="button" onClick={() => setOpenId(o.id)} className="flex w-full flex-col gap-1.5 px-4 py-3 text-start transition-colors active:bg-surface-2">
@@ -145,8 +160,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                     <span className="num text-sm font-bold">{money.fmt(o.codAmount, o.currency)}</span>
                   </span>
                   <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-                    <span className="truncate">{o.lines.length ? o.lines.map((l) => `${l.name ?? l.product ?? "—"} ×${l.quantity}`).join(", ") : "No products"}</span>
-                    {o.upsell ? <Badge tone="brand" className="shrink-0">Upsell</Badge> : null}
+                    <span className="truncate">{o.lines.length ? o.lines.map((l) => `${l.name ?? l.product ?? "—"} ×${l.quantity}`).join(", ") : t("No products")}</span>
+                    {o.upsell ? <Badge tone="brand" className="shrink-0">{t("Upsell")}</Badge> : null}
                   </span>
                   {o.customer?.name || o.customer?.phone ? (
                     <span className="truncate text-xs text-muted">{[o.customer.name, o.customer.phone].filter(Boolean).join(" · ")}</span>
@@ -154,7 +169,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                     <OrderStatusBadge status={o.status} />
                     <ParcelStatusBadge status={o.normalizedStatus} />
-                    <span>{o.wilaya ? <bdi>{o.wilaya}</bdi> : "No wilaya"} · {formatDate(o.placedAt)}</span>
+                    <span>{o.wilaya ? <bdi>{o.wilaya}</bdi> : t("No wilaya")} · {date(o.placedAt)}</span>
                   </span>
                 </button>
               </li>
@@ -164,8 +179,8 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           <Table className="sticky-first">
             <THead>
               <tr>
-                <Th>Order</Th><Th>Customer</Th>{more ? <Th>Source</Th> : null}<Th>Product</Th>{more ? <Th>Creative</Th> : null}<Th>Placed</Th><Th>Wilaya</Th><Th>Order status</Th>
-                {more ? <><Th className="text-end">Parcels</Th><Th>Tracking</Th><Th>MDM status</Th></> : null}<Th>Parcel</Th><Th className="text-end">COD</Th>{more ? <Th>Last MDM update</Th> : null}
+                <Th>{t("Order")}</Th><Th>{t("Customer")}</Th>{more ? <Th>{t("Source")}</Th> : null}<Th>{t("Product")}</Th>{more ? <Th>{t("Creative")}</Th> : null}<Th>{t("date::Placed")}</Th><Th>{t("Wilaya")}</Th><Th>{t("Order status")}</Th>
+                {more ? <><Th className="text-end">{t("Parcels")}</Th><Th>{t("Tracking")}</Th><Th>{t("MDM status")}</Th></> : null}<Th>{t("Parcel")}</Th><Th className="text-end">COD</Th>{more ? <Th>{t("Last MDM update")}</Th> : null}
               </tr>
             </THead>
             <tbody>
@@ -182,22 +197,22 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                       </span>
                     ) : <span className="text-subtle">—</span>}
                   </Td>
-                  {more ? <Td className="text-xs text-muted">{o.source.toLowerCase()}</Td> : null}
+                  {more ? <Td className="text-xs text-muted">{t(SOURCE_WORD[o.source])}</Td> : null}
                   <Td className="max-w-56">
                     {o.lines.length ? (
                       <span className="flex min-w-0 flex-col gap-0.5 leading-tight">
                         {o.lines.slice(0, 2).map((l, i) => (
-                          <span key={i} className="truncate text-[13px]" title={l.product && l.product !== l.name ? `Counts for ${l.product}` : undefined}>
+                          <span key={i} className="truncate text-[13px]" title={l.product && l.product !== l.name ? t("Counts for {product}", { product: l.product }) : undefined}>
                             {l.name ?? l.product ?? "—"} <span className="num text-muted">×{l.quantity}</span>
                           </span>
                         ))}
-                        {o.lines.length > 2 ? <span className="text-[11px] text-subtle">+{o.lines.length - 2} more</span> : null}
+                        {o.lines.length > 2 ? <span className="text-[11px] text-subtle">{t("+{n} more", { n: o.lines.length - 2 })}</span> : null}
                       </span>
                     ) : <span className="text-subtle">—</span>}
-                    {o.upsell ? <Badge tone="brand" className="mt-1">Upsell</Badge> : null}
+                    {o.upsell ? <Badge tone="brand" className="mt-1">{t("Upsell")}</Badge> : null}
                   </Td>
-                  {more ? <Td className="font-mono text-xs text-muted">{o.creative?.externalCreativeId ?? <span className="text-subtle">unattributed</span>}</Td> : null}
-                  <Td className="text-xs text-muted">{formatDate(o.placedAt)}</Td>
+                  {more ? <Td className="font-mono text-xs text-muted">{o.creative?.externalCreativeId ?? <span className="text-subtle">{t("unattributed")}</span>}</Td> : null}
+                  <Td className="text-xs text-muted">{date(o.placedAt)}</Td>
                   <Td className="text-xs">{o.wilaya ? <bdi>{o.wilaya}</bdi> : "—"}</Td>
                   <Td><OrderStatusBadge status={o.status} /></Td>
                   {more ? (
@@ -209,18 +224,18 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   ) : null}
                   <Td><ParcelStatusBadge status={o.normalizedStatus} /></Td>
                   <Td className="num text-end">{money.fmt(o.codAmount, o.currency)}</Td>
-                  {more ? <Td className="text-xs text-muted">{o.lastProviderUpdateAt ? timeAgo(o.lastProviderUpdateAt) : "—"}</Td> : null}
+                  {more ? <Td className="text-xs text-muted">{o.lastProviderUpdateAt ? ago(o.lastProviderUpdateAt) : "—"}</Td> : null}
                 </Tr>
               ))}
             </tbody>
           </Table>
         )}
         <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted">
-          <span className="num">{orders.data ? `${orders.data.total.toLocaleString("en-US")} orders` : " "}</span>
+          <span className="num">{orders.data ? t("{n} orders", { n: orders.data.total.toLocaleString("en-US") }) : " "}</span>
           <div className="flex items-center gap-2">
-            <Button size="icon" variant="ghost" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronLeft /></Button>
-            <span className="num">Page {page} of {totalPages}</span>
-            <Button size="icon" variant="ghost" aria-label="Next page" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}><ChevronRight /></Button>
+            <Button size="icon" variant="ghost" aria-label={t("Previous page")} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronLeft /></Button>
+            <span className="num">{t("Page {page} of {pages}", { page, pages: totalPages })}</span>
+            <Button size="icon" variant="ghost" aria-label={t("Next page")} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}><ChevronRight /></Button>
           </div>
         </div>
       </Card>

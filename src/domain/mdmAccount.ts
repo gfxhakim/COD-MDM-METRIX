@@ -1,3 +1,5 @@
+import { msg } from "@/i18n/core";
+
 /**
  * The parts of the seller's MDM account each sync reads after orders and parcels. Each is
  * read on its own, so one MDM refuses (or fails to answer) never stops the others.
@@ -6,13 +8,13 @@ export const ACCOUNT_PARTS = ["wallet", "fees", "payouts", "prices", "stock", "c
 export type AccountPart = (typeof ACCOUNT_PARTS)[number];
 
 export const ACCOUNT_PART_LABEL: Record<AccountPart, string> = {
-  wallet: "wallet",
-  fees: "money and fees per order",
-  payouts: "payouts",
-  prices: "price list",
-  stock: "stock",
-  capital: "stock value",
-  arrivals: "stock arrivals",
+  wallet: msg("wallet"),
+  fees: msg("money and fees per order"),
+  payouts: msg("payouts"),
+  prices: msg("price list"),
+  stock: msg("stock"),
+  capital: msg("stock value"),
+  arrivals: msg("stock arrivals"),
 };
 
 /**

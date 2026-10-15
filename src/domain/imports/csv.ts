@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { msg } from "@/i18n/core";
 
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 50_000;
@@ -11,12 +12,13 @@ export type ParsedCsv = {
   truncated: boolean;
 };
 
+/** Its message is English marked with `msg`, shown through `t()`. */
 export class CsvError extends Error {}
 
 /** Parse CSV text (comma, semicolon or tab separated) into header-keyed rows. */
 export function parseCsv(text: string): ParsedCsv {
-  if (text.length > MAX_IMPORT_BYTES * 1.1) throw new CsvError("File is larger than 5 MB");
-  if (text.includes("\u0000")) throw new CsvError("This does not look like a text CSV file");
+  if (text.length > MAX_IMPORT_BYTES * 1.1) throw new CsvError(msg("File is larger than 5 MB"));
+  if (text.includes("\u0000")) throw new CsvError(msg("This does not look like a text CSV file"));
   const clean = text.replace(/^﻿/, "");
   // Track the physical line each record starts on so errors point at the right spreadsheet row.
   const data: string[][] = [];
@@ -39,7 +41,7 @@ export function parseCsv(text: string): ParsedCsv {
       for (; pos < end; pos++) if (clean[pos] === "\n") line++;
     },
   });
-  if (data.length === 0) throw new CsvError("The file is empty");
+  if (data.length === 0) throw new CsvError(msg("The file is empty"));
   const seen = new Map<string, number>();
   const headers = data[0].map((h, i) => {
     const base = (h ?? "").trim() || `Column ${i + 1}`;
@@ -47,7 +49,7 @@ export function parseCsv(text: string): ParsedCsv {
     seen.set(base, n);
     return n === 1 ? base : `${base} (${n})`;
   });
-  if (headers.length < 2) throw new CsvError("Could not detect columns. Use a comma, semicolon or tab separated file with a header row.");
+  if (headers.length < 2) throw new CsvError(msg("Could not detect columns. Use a comma, semicolon or tab separated file with a header row."));
   const body = data.slice(1);
   const truncated = body.length > MAX_IMPORT_ROWS;
   const rows = body.slice(0, MAX_IMPORT_ROWS).map((cells, i) => {

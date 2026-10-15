@@ -3,6 +3,7 @@
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Info } from "lucide-react";
 import * as React from "react";
+import { useT } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
@@ -23,11 +24,12 @@ export function Tooltip({ content, children, side }: { content: React.ReactNode;
 
 /** Metric label with a keyboard-focusable definition tooltip. */
 export function Term({ label, definition, hideLabel, iconClassName }: { label: string; definition: React.ReactNode; hideLabel?: boolean; iconClassName?: string }) {
+  const { t } = useT();
   return (
     <span className="inline-flex items-center gap-1">
       {hideLabel ? null : label}
       <Tooltip content={definition}>
-        <button type="button" className={cn("text-subtle hover:text-muted", iconClassName)} aria-label={`What is ${label}?`}>
+        <button type="button" className={cn("text-subtle hover:text-muted", iconClassName)} aria-label={t("What is {label}?", { label })}>
           <Info className="size-3" />
         </button>
       </Tooltip>

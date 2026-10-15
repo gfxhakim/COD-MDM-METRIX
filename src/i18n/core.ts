@@ -35,8 +35,33 @@ export function interpolate(text: string, vars?: Vars): string {
   return text.replace(PLACEHOLDER, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
+/**
+ * A word with two meanings gets a context in front of its key: `t("date::Placed")` shows "Placed"
+ * in English and the Arabic of "date::Placed", apart from the count "Placed".
+ */
+const CONTEXT = /^[a-z][a-z-]*::/;
+
 export function makeT(dict: Dict | null): TFunction {
-  return (text, vars) => interpolate((dict && dict[text]) || text, vars);
+  if (!dict) return (text, vars) => interpolate(text.replace(CONTEXT, ""), vars);
+  return (text, vars) => interpolate(dict[text] || text.replace(CONTEXT, ""), keepNumbersLtr(vars));
+}
+
+const LRM = "\u200E";
+const ARABIC_LETTER = /[\u0600-\u06FF]/;
+
+/**
+ * In Arabic text a filled-in number keeps its minus and % where they belong ("ربح -DZD 826", not
+ * "ربح DZD 826-"): an invisible left-to-right mark goes in front of any value with digits and no
+ * Arabic letters.
+ */
+function keepNumbersLtr(vars?: Vars): Vars | undefined {
+  if (!vars) return vars;
+  const out: Vars = {};
+  for (const [k, v] of Object.entries(vars)) {
+    const s = String(v);
+    out[k] = /\d/.test(s) && !ARABIC_LETTER.test(s) ? LRM + s : v;
+  }
+  return out;
 }
 
 /** The text split around its `{name}` parts, for filling them with elements (see `tx`). */
@@ -53,7 +78,7 @@ export function splitPlaceholders(text: string): (string | { name: string })[] {
 }
 
 /** English is the identity: for code outside React that is handed no `t`. */
-export const englishT: TFunction = (text, vars) => interpolate(text, vars);
+export const englishT: TFunction = (text, vars) => interpolate(text.replace(CONTEXT, ""), vars);
 
 /**
  * Marks an English text kept outside a component (a constant, a label table) that is shown later

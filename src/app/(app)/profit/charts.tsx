@@ -6,11 +6,15 @@
  * text next to the chart, so color is never the only clue.
  */
 import * as React from "react";
+import { useT } from "@/i18n/client";
+import type { TFunction } from "@/i18n/core";
 import { cn, formatPercent } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
 const utc = (date: string) => Date.parse(`${date}T00:00:00Z`);
-const dayLabel = (t: number, withYear = false) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC" });
+/** A day (in UTC milliseconds) written out with these Intl options, in the picked language. */
+type DayFormat = (ms: number, opts: Intl.DateTimeFormatOptions) => string;
+const dayLabel = (day: DayFormat, ms: number, withYear = false) => day(ms, { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}) });
 
 /** A round step for an axis: the top of the scale for `max`, in three steps. */
 function niceStep(max: number) {
@@ -37,9 +41,10 @@ export type SplitPart = { key: string; label: string; amount: number; color: str
  * When the costs are more than the price, the bar is the costs and a line marks the price.
  */
 export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitPart[]; price: number; profit: number; fmt: (v: number) => string; label: string }) {
+  const { t, tx } = useT();
   const [active, setActive] = React.useState<string | null>(null);
   const costs = parts.filter((p) => p.amount > 0);
-  const shown = profit > 0 ? [...costs, { key: "profit", label: "Profit", amount: profit, color: "#0d7a3e" }] : costs;
+  const shown = profit > 0 ? [...costs, { key: "profit", label: t("Profit"), amount: profit, color: "#0d7a3e" }] : costs;
   const total = Math.max(price, costs.reduce((a, p) => a + p.amount, 0), 1);
   const pct = (v: number) => (v / total) * 100;
   return (
@@ -50,7 +55,7 @@ export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitP
             <span
               key={p.key}
               tabIndex={0}
-              aria-label={`${p.label}: ${fmt(p.amount)}, ${formatPercent(price > 0 ? p.amount / price : null, 0)} of the price`}
+              aria-label={t("{label}: {amount}, {pct} of the price", { label: p.label, amount: fmt(p.amount), pct: formatPercent(price > 0 ? p.amount / price : null, 0) })}
               onMouseEnter={() => setActive(p.key)}
               onFocus={() => setActive(p.key)}
               onBlur={() => setActive(null)}
@@ -61,7 +66,7 @@ export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitP
         </div>
         {total > price && price > 0 ? (
           <span className="absolute inset-y-[-6px] w-0.5 rounded-full bg-ink" style={{ insetInlineStart: `${pct(price)}%` }} aria-hidden="true">
-            <span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-fg">Price</span>
+            <span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-fg rtl:translate-x-1/2">{t("Price")}</span>
           </span>
         ) : null}
         {active ? (() => {
@@ -72,8 +77,8 @@ export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitP
           }
           const p = shown.find((x) => x.key === active)!;
           return (
-            <Tip className="bottom-[calc(100%+8px)] -translate-x-1/2" style={{ insetInlineStart: `${Math.min(85, Math.max(15, pct(start + p.amount / 2)))}%` }}>
-              <b>{p.label}</b>: {fmt(p.amount)} · {formatPercent(price > 0 ? p.amount / price : null, 0)} of the price
+            <Tip className="bottom-[calc(100%+8px)] -translate-x-1/2 rtl:translate-x-1/2" style={{ insetInlineStart: `${Math.min(85, Math.max(15, pct(start + p.amount / 2)))}%` }}>
+              {tx("{label}: {amount} · {pct} of the price", { label: <b>{p.label}</b>, amount: fmt(p.amount), pct: formatPercent(price > 0 ? p.amount / price : null, 0) })}
             </Tip>
           );
         })() : null}
@@ -88,7 +93,7 @@ export function PriceSplit({ parts, price, profit, fmt, label }: { parts: SplitP
             </li>
           ))}
         </ul>
-        {profit <= 0 ? <p className="mt-2 text-[12px] font-semibold text-negative">The costs are more than the price: each delivered order loses {fmt(-profit)}.</p> : null}
+        {profit <= 0 ? <p className="mt-2 text-[12px] font-semibold text-negative">{t("The costs are more than the price: each delivered order loses {amount}.", { amount: fmt(-profit) })}</p> : null}
       </figcaption>
     </figure>
   );
@@ -104,33 +109,33 @@ type Bucket = ProfitDay & { label: string; long: string };
 const gap = (n: number) => `${Math.min(3, 33 / Math.max(1, n))}%`;
 
 /** Days, or weeks past a month, or months past half a year; zeros where nothing happened. */
-function bucketize(days: ProfitDay[], from?: string, to?: string): { unit: "day" | "week" | "month"; buckets: Bucket[] } {
+function bucketize(days: ProfitDay[], day: DayFormat, t: TFunction, from?: string, to?: string): { unit: "day" | "week" | "month"; buckets: Bucket[] } {
   if (days.length === 0) return { unit: "day", buckets: [] };
   const start = utc(from || days[0].date);
   const end = utc(to || days[days.length - 1].date);
   const byDate = new Map(days.map((d) => [d.date, d]));
   const all: ProfitDay[] = [];
-  for (let t = start; t <= end && all.length < 3700; t += DAY_MS) {
-    const date = new Date(t).toISOString().slice(0, 10);
+  for (let ms = start; ms <= end && all.length < 3700; ms += DAY_MS) {
+    const date = new Date(ms).toISOString().slice(0, 10);
     all.push(byDate.get(date) ?? { date, placed: 0, delivered: 0, returned: 0, inTransit: 0, revenue: 0, costs: 0, adSpend: 0, profit: 0 });
   }
   const unit = all.length <= 31 ? "day" : all.length <= 26 * 7 ? "week" : "month";
   const years = new Set(all.map((d) => d.date.slice(0, 4))).size;
   const groups = new Map<string, Bucket>();
   for (const d of all) {
-    const t = utc(d.date);
+    const ms = utc(d.date);
     let key = d.date;
-    let label = dayLabel(t);
-    let long = dayLabel(t, true);
+    let label = dayLabel(day, ms);
+    let long = dayLabel(day, ms, true);
     if (unit === "week") {
-      const first = start + Math.floor((t - start) / (7 * DAY_MS)) * 7 * DAY_MS;
+      const first = start + Math.floor((ms - start) / (7 * DAY_MS)) * 7 * DAY_MS;
       key = String(first);
-      label = dayLabel(first);
-      long = `Week of ${dayLabel(first, true)}`;
+      label = dayLabel(day, first);
+      long = t("Week of {date}", { date: dayLabel(day, first, true) });
     } else if (unit === "month") {
       key = d.date.slice(0, 7);
-      label = new Date(t).toLocaleDateString("en-US", { month: "short", ...(years > 1 ? { year: "2-digit" } : {}), timeZone: "UTC" });
-      long = new Date(t).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+      label = day(ms, { month: "short", ...(years > 1 ? { year: "2-digit" } : {}) });
+      long = day(ms, { month: "long", year: "numeric" });
     }
     const b = groups.get(key) ?? groups.set(key, { ...d, placed: 0, delivered: 0, returned: 0, inTransit: 0, revenue: 0, costs: 0, adSpend: 0, profit: 0, label, long }).get(key)!;
     b.placed += d.placed;
@@ -151,9 +156,12 @@ function bucketize(days: ProfitDay[], from?: string, to?: string): { unit: "day"
  * parcels on the road, so its profit can still change.
  */
 export function ProfitByDay({ days, from, to, fmt, tick }: { days: ProfitDay[]; from?: string; to?: string; fmt: (v: number) => string; tick: (v: number) => string }) {
-  const { unit, buckets } = bucketize(days, from, to);
+  const { t, date, locale } = useT();
+  // English keeps its "Sep 1"; Arabic gets Algeria's month names.
+  const day: DayFormat = (ms, opts) => (locale === "en" ? new Date(ms).toLocaleDateString("en-US", { ...opts, timeZone: "UTC" }) : date(new Date(ms), { ...opts, timeZone: "UTC" }));
+  const { unit, buckets } = bucketize(days, day, t, from, to);
   const [active, setActive] = React.useState<number | null>(null);
-  if (buckets.length === 0) return <p className="py-10 text-center text-sm text-muted">No orders or ad spend in these days.</p>;
+  if (buckets.length === 0) return <p className="py-10 text-center text-sm text-muted">{t("No orders or ad spend in these days.")}</p>;
   const hi = Math.max(0, ...buckets.map((b) => b.profit));
   const lo = Math.min(0, ...buckets.map((b) => b.profit));
   const step = niceStep(Math.max(hi, -lo));
@@ -164,12 +172,13 @@ export function ProfitByDay({ days, from, to, fmt, tick }: { days: ProfitDay[]; 
   const ticks: number[] = [];
   for (let v = top; v >= bottom - 1e-9; v -= step) ticks.push(v);
   const total = buckets.reduce((a, b) => a + b.profit, 0);
-  const label = `Profit by ${unit}: ${fmt(total)} in total over ${buckets.length} ${unit}s`;
+  const vars = { total: fmt(total), n: buckets.length };
+  const label = unit === "day" ? t("Profit by day: {total} in total over {n} days", vars) : unit === "week" ? t("Profit by week: {total} in total over {n} weeks", vars) : t("Profit by month: {total} in total over {n} months", vars);
   return (
     <figure className="flex flex-col gap-2" aria-label={label}>
       <div className="flex h-56 gap-2">
         <div className="relative w-12 shrink-0 text-end text-[10px] text-subtle" aria-hidden="true">
-          {ticks.map((v) => <span key={v} className="absolute end-0 -translate-y-1/2" style={{ top: `${y(v)}%` }}>{tick(v)}</span>)}
+          {ticks.map((v) => <span key={v} className="num absolute end-0 -translate-y-1/2" style={{ top: `${y(v)}%` }}>{tick(v)}</span>)}
         </div>
         <div className="relative min-w-0 flex-1" onMouseLeave={() => setActive(null)} role="img" aria-label={label}>
           {ticks.map((v) => <div key={v} className={cn("absolute inset-x-0 border-t", v === 0 ? "border-border-strong" : "border-dashed border-[#f1eeee]")} style={{ top: `${y(v)}%` }} aria-hidden="true" />)}
@@ -183,7 +192,11 @@ export function ProfitByDay({ days, from, to, fmt, tick }: { days: ProfitDay[]; 
                   key={b.label + i}
                   type="button"
                   className="relative h-full min-w-0 flex-1 cursor-default rounded-md outline-none"
-                  aria-label={`${b.long}: profit ${fmt(b.profit)}, ${b.placed} orders placed, ${b.delivered} delivered${pending ? `, ${b.inTransit} still on the road` : ""}, ${fmt(b.adSpend)} on ads`}
+                  aria-label={
+                    pending
+                      ? t("{date}: profit {profit}, {placed} orders placed, {delivered} delivered, {road} still on the road, {ads} on ads", { date: b.long, profit: fmt(b.profit), placed: b.placed, delivered: b.delivered, road: b.inTransit, ads: fmt(b.adSpend) })
+                      : t("{date}: profit {profit}, {placed} orders placed, {delivered} delivered, {ads} on ads", { date: b.long, profit: fmt(b.profit), placed: b.placed, delivered: b.delivered, ads: fmt(b.adSpend) })
+                  }
                   onMouseEnter={() => setActive(i)}
                   onFocus={() => setActive(i)}
                   onBlur={() => setActive(null)}
@@ -204,11 +217,15 @@ export function ProfitByDay({ days, from, to, fmt, tick }: { days: ProfitDay[]; 
             })}
           </div>
           {active !== null && buckets[active] ? (
-            <Tip className="top-1 -translate-x-1/2" style={{ insetInlineStart: `${Math.min(80, Math.max(20, ((active + 0.5) / buckets.length) * 100))}%` }}>
+            <Tip className="top-1 -translate-x-1/2 rtl:translate-x-1/2" style={{ insetInlineStart: `${Math.min(80, Math.max(20, ((active + 0.5) / buckets.length) * 100))}%` }}>
               <b className="block text-[12px]">{buckets[active].long}</b>
-              <span className={cn("num block font-bold", buckets[active].profit < 0 ? "text-[#ff9aa3]" : "text-[#7be3a6]")}>Profit {fmt(buckets[active].profit)}</span>
-              <span className="block text-white/80">{buckets[active].placed} placed · {buckets[active].delivered} delivered{buckets[active].inTransit ? ` · ${buckets[active].inTransit} on the road` : ""}</span>
-              <span className="block text-white/80">Collected {fmt(buckets[active].revenue)} · costs {fmt(buckets[active].costs)} · ads {fmt(buckets[active].adSpend)}</span>
+              <span className={cn("num block font-bold", buckets[active].profit < 0 ? "text-[#ff9aa3]" : "text-[#7be3a6]")}>{t("Profit {amount}", { amount: fmt(buckets[active].profit) })}</span>
+              <span className="block text-white/80">
+                {buckets[active].inTransit
+                  ? t("{placed} placed · {delivered} delivered · {road} on the road", { placed: buckets[active].placed, delivered: buckets[active].delivered, road: buckets[active].inTransit })
+                  : t("{placed} placed · {delivered} delivered", { placed: buckets[active].placed, delivered: buckets[active].delivered })}
+              </span>
+              <span className="block text-white/80">{t("Collected {revenue} · costs {costs} · ads {ads}", { revenue: fmt(buckets[active].revenue), costs: fmt(buckets[active].costs), ads: fmt(buckets[active].adSpend) })}</span>
             </Tip>
           ) : null}
         </div>
@@ -219,9 +236,9 @@ export function ProfitByDay({ days, from, to, fmt, tick }: { days: ProfitDay[]; 
         ))}
       </div>
       <figcaption className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-positive" aria-hidden="true" />Profit</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-negative" aria-hidden="true" />Loss</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] [background-image:repeating-linear-gradient(45deg,#0d7a3e_0_2px,#5fcf8f_2px_4px)]" aria-hidden="true" />Parcels still on the road: can still change</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-positive" aria-hidden="true" />{t("Profit")}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-negative" aria-hidden="true" />{t("Loss")}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] [background-image:repeating-linear-gradient(45deg,#0d7a3e_0_2px,#5fcf8f_2px_4px)]" aria-hidden="true" />{t("Parcels still on the road: can still change")}</span>
       </figcaption>
     </figure>
   );
@@ -236,14 +253,15 @@ export type CampaignBar = { id: string; name: string; value: number | null; note
  * delivered order can pay for ads. Bars past the line lose money on each delivered order.
  */
 export function CampaignBars({ rows, limit, fmt }: { rows: CampaignBar[]; limit: number | null; fmt: (v: number) => string }) {
+  const { t, tx } = useT();
   const [active, setActive] = React.useState<string | null>(null);
   const known = rows.filter((r): r is CampaignBar & { value: number } => r.value !== null).sort((a, b) => b.value - a.value);
   const unknown = rows.filter((r) => r.value === null);
-  if (known.length === 0) return <p className="py-6 text-center text-sm text-muted">Not enough confirmed and delivered orders yet to compare campaigns.</p>;
+  if (known.length === 0) return <p className="py-6 text-center text-sm text-muted">{t("Not enough confirmed and delivered orders yet to compare campaigns.")}</p>;
   const max = Math.max(...known.map((r) => r.value), limit !== null && limit > 0 ? limit : 0) * 1.04 || 1;
   const x = (v: number) => (Math.max(0, v) / max) * 100;
   return (
-    <figure className="flex flex-col gap-3" aria-label="Ad cost per delivered order, by campaign">
+    <figure className="flex flex-col gap-3" aria-label={t("Ad cost per delivered order, by campaign")}>
       <ul className="relative flex flex-col gap-3" onMouseLeave={() => setActive(null)}>
         {limit !== null && limit > 0 ? (
           <li aria-hidden="true" className="pointer-events-none absolute inset-y-[-4px] end-[6rem] start-0 sm:start-[12.75rem]">
@@ -258,7 +276,11 @@ export function CampaignBars({ rows, limit, fmt }: { rows: CampaignBar[]; limit:
               <span
                 className="relative grid h-7 grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-2 outline-none"
                 tabIndex={0}
-                aria-label={`${r.name}: ${fmt(r.value)} of ads per delivered order. ${r.note}${over ? ". More than a delivered order can pay." : ""}`}
+                aria-label={
+                  over
+                    ? t("{name}: {amount} of ads per delivered order. {note}. More than a delivered order can pay.", { name: r.name, amount: fmt(r.value), note: r.note })
+                    : t("{name}: {amount} of ads per delivered order. {note}", { name: r.name, amount: fmt(r.value), note: r.note })
+                }
                 onMouseEnter={() => setActive(r.id)}
                 onFocus={() => setActive(r.id)}
                 onBlur={() => setActive(null)}
@@ -277,10 +299,10 @@ export function CampaignBars({ rows, limit, fmt }: { rows: CampaignBar[]; limit:
         })}
       </ul>
       <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-full bg-brand-bar" aria-hidden="true" />Earns money</span>
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-full bg-ink" aria-hidden="true" />Loses money on each delivered order</span>
-        {limit !== null && limit > 0 ? <span className="flex items-center gap-1.5"><span className="h-3 border-s-2 border-dashed border-ink/60" aria-hidden="true" />Most a delivered order can pay: <b className="num text-fg">{fmt(limit)}</b></span> : null}
-        {unknown.length ? <span>{unknown.length} campaign{unknown.length === 1 ? " has" : "s have"} no confirmed or delivered orders yet.</span> : null}
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-full bg-brand-bar" aria-hidden="true" />{t("Earns money")}</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-full bg-ink" aria-hidden="true" />{t("Loses money on each delivered order")}</span>
+        {limit !== null && limit > 0 ? <span className="flex items-center gap-1.5"><span className="h-3 border-s-2 border-dashed border-ink/60" aria-hidden="true" />{tx("Most a delivered order can pay: {amount}", { amount: <b className="num text-fg">{fmt(limit)}</b> })}</span> : null}
+        {unknown.length ? <span>{unknown.length === 1 ? t("1 campaign has no confirmed or delivered orders yet.") : t("{n} campaigns have no confirmed or delivered orders yet.", { n: unknown.length })}</span> : null}
       </figcaption>
     </figure>
   );
@@ -292,16 +314,17 @@ export type FunnelStep = { label: string; value: number; rate: number | null; ra
 
 /** Orders placed, confirmed, shipped and delivered as shrinking bars, each with the share it keeps. */
 export function OrderFunnel({ steps }: { steps: FunnelStep[] }) {
+  const { t } = useT();
   const max = Math.max(1, ...steps.map((s) => s.value));
   return (
-    <ol className="flex flex-col gap-2.5" aria-label="Orders from placed to delivered">
+    <ol className="flex flex-col gap-2.5" aria-label={t("Orders from placed to delivered")}>
       {steps.map((s, i) => (
         <li key={s.label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3">
           <span className="text-[12px] text-muted">{s.label}</span>
           <span className="flex min-w-0 items-center gap-2">
             <span className="animate-grow-x h-6 rounded-e-[8px] rounded-s-[4px] bg-brand-bar" style={{ width: `${Math.max(1.5, (s.value / max) * 100)}%`, opacity: 1 - i * 0.14, animationDelay: `${120 + i * 80}ms` }} aria-hidden="true" />
             <span className="num shrink-0 whitespace-nowrap text-[13px] font-bold">{s.value.toLocaleString("en-US")}</span>
-            {s.rate !== null && i > 0 ? <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand-strong">{formatPercent(s.rate, 0)}{s.rateLabel ? ` ${s.rateLabel}` : ""}</span> : null}
+            {s.rate !== null && i > 0 ? <span className="num shrink-0 whitespace-nowrap rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand-strong">{formatPercent(s.rate, 0)}{s.rateLabel ? ` ${s.rateLabel}` : ""}</span> : null}
           </span>
         </li>
       ))}

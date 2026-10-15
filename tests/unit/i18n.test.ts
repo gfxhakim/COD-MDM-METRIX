@@ -57,8 +57,14 @@ describe("Arabic texts", () => {
 
   it("fills placeholders and falls back to English", () => {
     const t = makeT({ "{n} orders": "{n} طلبيات" });
-    expect(t("{n} orders", { n: 3 })).toBe("3 طلبيات");
-    expect(t("Not translated {x}", { x: 1 })).toBe("Not translated 1");
+    // In Arabic a filled-in number starts with an invisible left-to-right mark so "-826" keeps its minus in front.
+    expect(t("{n} orders", { n: 3 })).toBe("\u200E3 طلبيات");
+    expect(t("{n} orders", { n: "-DZD 826" })).toBe("\u200E-DZD 826 طلبيات");
+    expect(t("{n} orders", { n: "وهران 31" })).toBe("وهران 31 طلبيات");
+    expect(t("Not translated {x}", { x: "x" })).toBe("Not translated x");
+    expect(makeT(null)("{n} orders", { n: -3 })).toBe("-3 orders");
     expect(interpolate("{a} and {b}", { a: "x" })).toBe("x and {b}");
+    expect(makeT(null)("date::Placed")).toBe("Placed");
+    expect(makeT({ "date::Placed": "تاريخ الطلبية" })("date::Placed")).toBe("تاريخ الطلبية");
   });
 });

@@ -1,7 +1,8 @@
 import type { OrderStatus } from "@prisma/client";
+import { msg } from "@/i18n/core";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import type { ParsedCsv } from "./csv";
-import { cell, currencyOf, int, money, RowError, type Mapping, type RowIssue } from "./common";
+import { cell, currencyOf, int, issueOf, money, RowError, rowIssue, type Mapping, type RowIssue } from "./common";
 import { parseDate, type DateFormat } from "./dates";
 import { wilayaName } from "../wilayas";
 
@@ -78,7 +79,7 @@ export function validateOrders(
     // Group by order number: Shopify repeats it on every line item but fills the ID on the first row only.
     const key = cell(row, mapping, "orderNumber") || cell(row, mapping, "externalOrderId");
     if (!key) {
-      issues.push({ line: row.line, field: "orderNumber", message: "Missing order number" });
+      issues.push(rowIssue(row.line, "orderNumber", msg("Missing order number")));
       continue;
     }
     const g = groups.get(key);
@@ -94,7 +95,7 @@ export function validateOrders(
       try {
         return fn();
       } catch (e) {
-        if (e instanceof RowError) rowIssues.push({ line, field: e.field, message: e.message });
+        if (e instanceof RowError) rowIssues.push(issueOf(line, e));
         else throw e;
         return undefined;
       }
@@ -103,21 +104,21 @@ export function validateOrders(
     const orderNumber = first("orderNumber") || key;
     const dateRaw = first("placedAt");
     const placedAt = dateRaw ? parseDate(dateRaw, opts.dateFormat) : null;
-    if (!dateRaw) rowIssues.push({ line: line0, field: "placedAt", message: "Missing created date" });
-    else if (!placedAt) rowIssues.push({ line: line0, field: "placedAt", message: `Invalid date "${dateRaw}"` });
+    if (!dateRaw) rowIssues.push(rowIssue(line0, "placedAt", msg("Missing created date")));
+    else if (!placedAt) rowIssues.push(rowIssue(line0, "placedAt", msg('Invalid date "{raw}"'), { raw: dateRaw }));
     const currency = guard(line0, () => currencyOf(first("currency"), opts.currency)) ?? opts.currency;
-    if (currency !== opts.currency) rowIssues.push({ line: line0, field: "currency", message: `Order is in ${currency}; this workspace uses ${opts.currency}` });
+    if (currency !== opts.currency) rowIssues.push(rowIssue(line0, "currency", msg("Order is in {currency}; this workspace uses {workspaceCurrency}"), { currency, workspaceCurrency: opts.currency }));
 
     const items: ImportedOrderLine[] = [];
     for (const r of rows) {
       const sku = cell(r, mapping, "sku") || null;
       const name = cell(r, mapping, "productName") || null;
       if (!sku && !name) {
-        if (rows.length === 1) rowIssues.push({ line: r.line, field: "sku", message: "No SKU or product name" });
+        if (rows.length === 1) rowIssues.push(rowIssue(r.line, "sku", msg("No SKU or product name")));
         continue;
       }
       const product = (sku && bySku.get(sku.toLowerCase())) || (name && byName.get(name.toLowerCase())) || null;
-      if (!product) warnings.push({ line: r.line, field: "sku", message: `Unknown product "${sku ?? name}": imported without costs (COGS counted as 0)` });
+      if (!product) warnings.push(rowIssue(r.line, "sku", msg('Unknown product "{product}": imported without costs (COGS counted as 0)'), { product: sku ?? name ?? "" }));
       const qRaw = cell(r, mapping, "quantity");
       const quantity = qRaw ? guard(r.line, () => int(qRaw, "quantity", { min: 1, max: 1000 })) : 1;
       const pRaw = cell(r, mapping, "unitPrice");
@@ -130,7 +131,7 @@ export function validateOrders(
     const total = totalRaw ? guard(line0, () => money(totalRaw, currency, "total")) : items.reduce((a, l) => a + l.quantity * l.unitPrice, 0);
     const statusRaw = first("status");
     const { status, recognized } = parseOrderStatus(statusRaw);
-    if (!recognized) warnings.push({ line: line0, field: "status", message: `Unrecognized status "${statusRaw}" imported as pending` });
+    if (!recognized) warnings.push(rowIssue(line0, "status", msg('Unrecognized status "{status}" imported as pending'), { status: statusRaw }));
     const callRaw = first("callAttempts");
     const callAttempts = callRaw ? guard(line0, () => int(callRaw, "callAttempts", { max: 100 })) ?? null : null;
 

@@ -22,6 +22,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useT } from '@/i18n/client';
 import { cn } from '@/lib/utils';
 
 /**
@@ -106,8 +107,9 @@ function Dock({
   size = DEFAULT_SIZE,
   panelHeight = DEFAULT_PANEL_HEIGHT,
   orientation = 'horizontal',
-  'aria-label': ariaLabel = 'Application dock',
+  'aria-label': ariaLabel,
 }: DockProps) {
+  const { t } = useT();
   const mouse = useMotionValue(Infinity);
   const isHovered = useMotionValue(0);
   // People who ask for less motion get the dock without the growing icons.
@@ -146,7 +148,7 @@ function Dock({
       style={vertical ? { width: panelHeight } : { height: panelHeight }}
       role='toolbar'
       aria-orientation={orientation}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t('Application dock')}
     >
       <DockProvider value={context}>{children}</DockProvider>
     </motion.div>
@@ -241,6 +243,9 @@ function DockLabel({ children, className, ...rest }: DockLabelProps) {
   const [isVisible, setIsVisible] = useState(false);
   const { orientation } = useDock();
   const vertical = orientation === 'vertical';
+  // A vertical dock's name pops out toward the page: rightward, or leftward when the page reads right to left.
+  const { dir } = useT();
+  const shift = dir === 'rtl' ? -10 : 10;
 
   useEffect(() => {
     const unsubscribe = isHovered.on('change', (latest) => {
@@ -255,7 +260,7 @@ function DockLabel({ children, className, ...rest }: DockLabelProps) {
       {isVisible && (
         <motion.div
           initial={vertical ? { opacity: 0, x: 0 } : { opacity: 0, y: 0 }}
-          animate={vertical ? { opacity: 1, x: 10 } : { opacity: 1, y: -10 }}
+          animate={vertical ? { opacity: 1, x: shift } : { opacity: 1, y: -10 }}
           exit={vertical ? { opacity: 0, x: 0 } : { opacity: 0, y: 0 }}
           transition={{ duration: 0.2 }}
           className={cn(

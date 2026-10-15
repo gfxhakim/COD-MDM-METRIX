@@ -69,6 +69,12 @@ p {
   letter-spacing: -0.02em;
 }
 
+/* In Arabic a number keeps its minus, plus and % where they belong ("-826", "21.6%", not "826-"):
+   the invisible left-to-right mark in front makes the number one left-to-right piece. */
+[dir="rtl"] .num:not(.flex, .grid, .inline-flex)::before {
+  content: "\200E";
+}
+
 /* Brand surfaces: red gradients, glow and shine. */
 @utility bg-brand {
   background-image: linear-gradient(135deg, #f23446 0%, #c9111f 100%);

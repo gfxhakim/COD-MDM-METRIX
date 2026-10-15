@@ -1,7 +1,8 @@
+import { msg } from "@/i18n/core";
 import { normalizeCreativeKey } from "@/lib/normalize";
 import { convertMinor } from "@/lib/money";
 import type { ParsedCsv } from "./csv";
-import { cell, currencyOf, int, money, occurrenceKeys, RowError, type Mapping, type RowIssue } from "./common";
+import { cell, currencyOf, int, issueOf, money, occurrenceKeys, RowError, rowIssue, type Mapping, type RowIssue } from "./common";
 import { parseDate, type DateFormat } from "./dates";
 
 export type ImportedSpend = {
@@ -49,11 +50,11 @@ export function validateSpend(
     try {
       const dateRaw = cell(row, mapping, "date");
       const date = parseDate(dateRaw, opts.dateFormat);
-      if (!date) throw new RowError("date", dateRaw ? `Invalid date "${dateRaw}"` : "Missing date");
+      if (!date) throw new RowError("date", dateRaw ? msg('Invalid date "{raw}"') : msg("Missing date"), { raw: dateRaw });
       const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
       const currency = currencyOf(cell(row, mapping, "currency"), headerCurrency ?? opts.workspaceCurrency);
       const spendRaw = cell(row, mapping, "spend");
-      if (!spendRaw) throw new RowError("spend", "Missing amount spent");
+      if (!spendRaw) throw new RowError("spend", msg("Missing amount spent"));
       const original = money(spendRaw, currency, "spend");
       const impressionsRaw = cell(row, mapping, "impressions");
       const clicksRaw = cell(row, mapping, "clicks");
@@ -66,13 +67,13 @@ export function validateSpend(
       let spend = original;
       let fx: number | null = null;
       if (currency !== opts.workspaceCurrency) {
-        if (!opts.fxRate || opts.fxRate <= 0) throw new RowError("currency", `Spend is in ${currency}; enter an exchange rate to ${opts.workspaceCurrency}`);
+        if (!opts.fxRate || opts.fxRate <= 0) throw new RowError("currency", msg("Spend is in {currency}; enter an exchange rate to {workspaceCurrency}"), { currency, workspaceCurrency: opts.workspaceCurrency });
         fx = opts.fxRate;
         spend = convert(original, currency, opts.workspaceCurrency, fx);
       }
       const externalCreativeId = cell(row, mapping, "creativeId") || cell(row, mapping, "adId") || cell(row, mapping, "adName") || null;
       const creativeKey = normalizeCreativeKey(externalCreativeId) || null;
-      if (!creativeKey) warnings.push({ line: row.line, field: "creativeId", message: "No creative, ad ID or ad name: kept as unmatched spend" });
+      if (!creativeKey) warnings.push(rowIssue(row.line, "creativeId", msg("No creative, ad ID or ad name: kept as unmatched spend")));
       const item = {
         line: row.line,
         date: day,
@@ -95,7 +96,7 @@ export function validateSpend(
       pending.push(item);
       ids.push([day.toISOString().slice(0, 10), item.campaignId ?? item.campaignName, item.adsetId ?? item.adsetName, item.adId ?? item.adName, creativeKey].map((x) => x ?? "").join("|"));
     } catch (e) {
-      if (e instanceof RowError) issues.push({ line: row.line, field: e.field, message: e.message });
+      if (e instanceof RowError) issues.push(issueOf(row.line, e));
       else throw e;
     }
   }
