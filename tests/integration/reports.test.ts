@@ -152,3 +152,30 @@ describe("economics reports", () => {
     await expect(spoofed.creatives.exportCsv({ columns: ["creative"] })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
+
+describe("orders MDM made more parcels for", () => {
+  it("counts each order once and leaves out what MDM archived", async () => {
+    const t = await makeTenant("Follow-ups");
+    const w = t.ws.id;
+    const product = await t.caller.products.create({ name: "Lamp", sku: "LMP", cost });
+    const placedAt = new Date(Date.now() - 2 * DAY);
+    const mk = (n: string) => t.caller.orders.create({ orderNumber: n, placedAt, status: "CONFIRMED", codAmount: 390000, lines: [{ productId: product.id, quantity: 2, unitPrice: 195000 }] });
+    const parcel = (orderId: string, trk: string, status: "DELIVERED" | "RETURNED", extra: { mdmParentParcelId?: string; archived?: boolean; codAmount?: number } = {}) =>
+      db.parcel.create({ data: { workspaceId: w, orderId, provider: "MDM_EXPRESS", trackingId: trk, normalizedStatus: status, codAmount: 390000, dispatchedAt: placedAt, ...extra } });
+    // Delivered, then exchanged: MDM adds a parcel collecting the piece back and one delivering the new piece.
+    const exchanged = await mk("EX-1");
+    await parcel(exchanged.id, "F1", "DELIVERED");
+    await parcel(exchanged.id, "F1-BACK", "RETURNED", { mdmParentParcelId: "F1", codAmount: 0 });
+    await parcel(exchanged.id, "F1-NEW", "DELIVERED", { mdmParentParcelId: "F1", codAmount: 0 });
+    // A parcel MDM archived counts for nothing, nor does an order MDM archived.
+    const plain = await mk("PL-1");
+    await parcel(plain.id, "F2", "RETURNED");
+    await parcel(plain.id, "F2-OLD", "DELIVERED", { archived: true });
+    const archived = await mk("AR-1");
+    await db.order.update({ where: { id: archived.id }, data: { mdmArchived: true } });
+    await parcel(archived.id, "F3", "DELIVERED");
+
+    const m = (await t.caller.reports.dashboard({ revenueView: "DELIVERED" })).metrics;
+    expect(m).toMatchObject({ placed: 2, shipped: 2, finished: 2, delivered: 1, returned: 1, deliveredOrders: 1, deliveredUnits: 2, deliveredRevenue: 390000, deliveryRate: 0.5 });
+  });
+});

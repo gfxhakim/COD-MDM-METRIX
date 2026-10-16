@@ -7,6 +7,7 @@ import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone, maskPhone } from "@/lib/pii";
 import { assertCan, NotFoundError, type WorkspaceContext } from "@/server/tenancy";
 import { customerFor } from "@/server/customers";
+import { asReceivedFor } from "@/server/mdm/as-received";
 import { resolveAdScope, scopeCampaignIds } from "@/server/reports/adScope";
 
 export type OrderListInput = {
@@ -50,7 +51,7 @@ export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "p
     });
   }
   if (input.status) and.push({ status: input.status });
-  if (input.parcelStatus) and.push({ parcels: { some: { normalizedStatus: input.parcelStatus } } });
+  if (input.parcelStatus) and.push(...parcelStatusWhere(input.parcelStatus));
   if (input.wilaya) and.push({ wilaya: input.wilaya });
   if (input.productId) and.push({ lines: { some: { productId: input.productId } } });
   if (input.creativeId) and.push({ attribution: { creativeId: input.creativeId } });
@@ -60,6 +61,27 @@ export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "p
   if (input.from) and.push({ placedAt: { gte: input.from } });
   if (input.to) and.push({ placedAt: { lte: input.to } });
   return { AND: and };
+}
+
+/**
+ * Where an order stands, from its parcels MDM didn't archive: the first status in this list that one
+ * of them has. An order delivered and then exchanged is delivered; one sent again after a return is
+ * on the road. Reports count orders the same way (src/domain/economics.ts).
+ */
+const LEAD_STATUSES: NormalizedStatus[] = ["DELIVERED", "SHIPPED", "UNKNOWN", "RETURNED", "LOST", "EXCHANGED", "CONFIRMED", "PENDING", "CANCELED"];
+
+export function leadParcel<P extends { normalizedStatus: NormalizedStatus; archived: boolean }>(parcels: P[]): P | null {
+  const live = parcels.filter((p) => !p.archived);
+  let lead: P | null = null;
+  for (const p of live.length ? live : parcels) if (!lead || LEAD_STATUSES.indexOf(p.normalizedStatus) < LEAD_STATUSES.indexOf(lead.normalizedStatus)) lead = p;
+  return lead;
+}
+
+/** Orders whose lead parcel (see `leadParcel`) has this status. */
+function parcelStatusWhere(status: NormalizedStatus): Prisma.OrderWhereInput[] {
+  const has = (s: NormalizedStatus): Prisma.OrderWhereInput => ({ parcels: { some: { normalizedStatus: s, archived: false } } });
+  const before = LEAD_STATUSES.slice(0, LEAD_STATUSES.indexOf(status));
+  return [has(status), ...before.map((s) => ({ NOT: has(s) }))];
 }
 
 export async function listOrders(ctx: WorkspaceContext, input: OrderListInput) {
@@ -81,7 +103,7 @@ export async function listOrders(ctx: WorkspaceContext, input: OrderListInput) {
   return {
     total,
     items: rows.map((o) => {
-      const primary = o.parcels[0];
+      const primary = leadParcel(o.parcels);
       return {
         id: o.id,
         orderNumber: o.orderNumber,
@@ -97,7 +119,8 @@ export async function listOrders(ctx: WorkspaceContext, input: OrderListInput) {
         placedAt: o.placedAt,
         wilaya: o.wilaya,
         status: o.status,
-        parcelCount: o.parcels.length,
+        parcelCount: o.parcels.filter((p) => !p.archived).length,
+        archived: o.mdmArchived,
         trackingId: primary?.trackingId ?? null,
         providerStatus: primary?.providerStatus ?? null,
         normalizedStatus: primary?.normalizedStatus ?? null,
@@ -138,7 +161,8 @@ export async function getOrderDetails(ctx: WorkspaceContext, id: string) {
   const { phoneHash: _hash, customerEncrypted, customerKeyVersion: _version, ...safe } = order;
   void _hash;
   void _version;
-  return { ...safe, customer: customerFor(ctx.role, customerEncrypted, ctx.workspaceId) };
+  const asReceived = await asReceivedFor(ctx.workspaceId, order.mdmOrderId, order.parcels.filter((p) => p.provider === "MDM_EXPRESS").map((p) => p.trackingId));
+  return { ...safe, customer: customerFor(ctx.role, customerEncrypted, ctx.workspaceId), asReceived };
 }
 
 async function resolveCreative(ctx: WorkspaceContext, utmContent: string | null | undefined, tx: Prisma.TransactionClient) {

@@ -49,6 +49,7 @@ const between = (r: DateRange) => (r.from || r.to ? { gte: r.from, lte: r.to } :
 /**
  * Loads every stored fact needed for economics in one workspace for a date range.
  * Orders are a cohort by placed date; spend and expenses are filtered by their own dates.
+ * Orders and parcels MDM archived are left out.
  * Repeating expenses add their share of the range, one fact per month.
  *
  * With an ad filter, only the orders whose ad is in the picked campaigns or ad accounts count
@@ -66,12 +67,13 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
     resolveAdScope(w, ads),
     db.workspace.findUniqueOrThrow({ where: { id: w }, select: { currency: true, economicsDefaults: true, verdictThresholds: true } }),
     db.order.findMany({
-      where: { workspaceId: w, placedAt: between(range) },
+      // Orders MDM archived count in no report, nor do archived parcels.
+      where: { workspaceId: w, placedAt: between(range), mdmArchived: false },
       select: {
         id: true, orderNumber: true, placedAt: true, confirmedAt: true, callAttempts: true, wilaya: true,
         lines: { select: { productId: true, quantity: true } },
         attribution: { select: { creativeId: true } },
-        parcels: { select: { normalizedStatus: true, codAmount: true, shippingFee: true, returnFee: true, dispatchedAt: true } },
+        parcels: { where: { archived: false }, select: { normalizedStatus: true, codAmount: true, shippingFee: true, returnFee: true, dispatchedAt: true, mdmParentParcelId: true, paidToClient: true } },
         cashEvents: { select: { type: true, amount: true } },
       },
     }),
@@ -123,7 +125,7 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
       creativeId: o.attribution?.creativeId ?? null,
       wilaya: o.wilaya,
       lines: linesWithOffers(o.lines, (id) => pieces.get(id) ?? 1),
-      parcels: o.parcels.map((p) => ({ status: p.normalizedStatus, codAmount: p.codAmount, shippingFee: p.shippingFee, returnFee: p.returnFee, dispatched: p.dispatchedAt !== null })),
+      parcels: o.parcels.map((p) => ({ status: p.normalizedStatus, codAmount: p.codAmount, shippingFee: p.shippingFee, returnFee: p.returnFee, dispatched: p.dispatchedAt !== null, followUp: p.mdmParentParcelId !== null, paidToClient: p.paidToClient })),
       // REMITTED events carry the gross COD settled for a parcel. Carrier fees are already charged
       // through outbound shipping / RTO costs, so CARRIER_FEE events are not subtracted again here.
       remittedCash: o.cashEvents.reduce((a, e) => a + (e.type === "REMITTED" || e.type === "ADJUSTMENT" ? e.amount : 0), 0),

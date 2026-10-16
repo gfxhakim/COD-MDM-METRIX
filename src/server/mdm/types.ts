@@ -22,6 +22,18 @@ export type MdmParcel = {
   deliveredAt: Date | null;
   returnedAt: Date | null;
   events: MdmEvent[];
+  /** MDM's parcel type and sub-type, as sent (e.g. an exchange or a refund). */
+  type?: string | null;
+  subType?: string | null;
+  /** The parcel MDM made this one from (exchange, refund, copy). */
+  parentParcelId?: string | null;
+  /** MDM archived the parcel: it counts in no report. */
+  archived?: boolean;
+  /** Integer minor units MDM hands back to the customer with this parcel. */
+  paidToClient?: number | null;
+  /** Pieces sent, and pieces the customer kept (MDM's completed quantity). */
+  piecesSent?: number | null;
+  piecesDelivered?: number | null;
   /** Original provider payload. PII keys are redacted before storage. */
   raw: unknown;
 };
@@ -61,6 +73,10 @@ export type MdmOrder = {
   products: MdmOrderProduct[];
   /** MDM's upsell flag, when the order itself carries one (the documented order shape does not). */
   upsell?: boolean | null;
+  /** MDM archived the order: it stays in the app but counts in no report. */
+  archived?: boolean;
+  /** What MDM sent for this order, without the customer's details (shown on the order as received). */
+  raw?: unknown;
 };
 
 /** `unreadable`: tracking IDs (or "?") of orders on the page that could not be read; the rest still sync. */

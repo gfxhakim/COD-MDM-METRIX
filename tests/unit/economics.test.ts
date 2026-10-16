@@ -70,10 +70,29 @@ describe("per-order economics", () => {
     expect(t.rtoCost).toBe(20000);
   });
 
-  it("multi-parcel partial delivery: counts parcels separately and prorates delivered units", () => {
+  it("multi-parcel partial delivery: counts the order once, adds up each parcel's money and prorates delivered units", () => {
     const o = order([parcel("DELIVERED", { codAmount: 195000 }), parcel("RETURNED", { codAmount: 195000 })], { lines: [{ productId: "p", quantity: 2 }] });
     const t = orderEconomics(o, resolve, defaults);
-    expect(t).toMatchObject({ placed: 1, shipped: 2, delivered: 1, returned: 1, deliveredUnits: 1, cogs: 90000, deliveredRevenue: 195000, outboundShipping: 120000, packagingCost: 10000, deliveredOrders: 1 });
+    expect(t).toMatchObject({ placed: 1, shipped: 1, delivered: 1, returned: 0, deliveredUnits: 1, cogs: 90000, deliveredRevenue: 195000, outboundShipping: 120000, packagingCost: 10000, rtoCost: 25000, deliveredOrders: 1 });
+  });
+
+  it("an exchange or a refund MDM makes from a delivered parcel is more money for the same order, not one more delivery", () => {
+    const exchange = order([parcel("DELIVERED"), parcel("RETURNED", { codAmount: 0, followUp: true }), parcel("DELIVERED", { codAmount: 50000, followUp: true })], { lines: [{ productId: "p", quantity: 2 }] });
+    const t = orderEconomics(exchange, resolve, defaults);
+    expect(t).toMatchObject({ placed: 1, shipped: 1, delivered: 1, returned: 0, deliveredOrders: 1, deliveredUnits: 2, deliveredRevenue: 440000, outboundShipping: 180000, rtoCost: 25000 });
+    const refund = orderEconomics(order([parcel("DELIVERED"), parcel("DELIVERED", { codAmount: 0, paidToClient: 390000, followUp: true })]), resolve, defaults);
+    expect(refund).toMatchObject({ delivered: 1, deliveredRevenue: 0, outboundShipping: 120000 });
+    // What MDM puts in "to pay to the client" on a first parcel is not taken off.
+    expect(orderEconomics(order([parcel("DELIVERED", { paidToClient: 340000 })]), resolve, defaults).deliveredRevenue).toBe(390000);
+    const metrics = computeMetrics(sumTotals([t, refund]), 0, 0, "DELIVERED");
+    expect(metrics).toMatchObject({ shipped: 2, delivered: 2, finished: 2, deliveryRate: 1, shippingRate: 1 });
+  });
+
+  it("a copy sent after a return makes the order delivered, with every piece", () => {
+    const o = order([parcel("RETURNED"), parcel("DELIVERED", { followUp: true })], { lines: [{ productId: "p", quantity: 2 }] });
+    expect(orderEconomics(o, resolve, defaults)).toMatchObject({ shipped: 1, delivered: 1, returned: 0, deliveredUnits: 2, deliveredRevenue: 390000, rtoCost: 25000 });
+    const onTheRoad = order([parcel("RETURNED"), parcel("SHIPPED", { followUp: true })]);
+    expect(orderEconomics(onTheRoad, resolve, defaults)).toMatchObject({ shipped: 1, inTransit: 1, returned: 0, delivered: 0, cashInTransit: 390000 });
   });
 
   it("ignores canceled parcels when prorating", () => {

@@ -2,7 +2,7 @@
 
 import type { AttributionMethod, MatchMethod, OrderSource, OrderStatus } from "@prisma/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link2, Trash2, Unlink } from "lucide-react";
+import { FileJson, Link2, Trash2, Unlink } from "lucide-react";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
 import { OrderStatusBadge, ParcelStatusBadge } from "@/components/app/status";
@@ -63,6 +63,30 @@ function KV({ items }: { items: [string, React.ReactNode, string?][] }) {
   );
 }
 
+/** What MDM sent, exactly as it came: MDM's field names and values (amounts in dinars, dates as sent). */
+function AsReceived({ data, title }: { data: { observedAt: Date | string; rows: [string, string][] } | null | undefined; title: string }) {
+  const { t, dateTime } = useT();
+  if (!data?.rows.length) return null;
+  return (
+    <details className="group mt-3 rounded-lg border border-dashed border-border-strong bg-surface text-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 font-medium text-brand-strong [&::-webkit-details-marker]:hidden">
+        <FileJson className="size-4 shrink-0" />
+        <span>{title}</span>
+        <span className="ms-auto text-[11px] font-normal text-subtle">{t("read {date}", { date: dateTime(data.observedAt) })}</span>
+      </summary>
+      <p className="px-3 text-[11px] text-subtle">{t("MDM's own field names and values, as the last sync read them. Amounts are in dinars, as MDM sends them. The customer's details are never kept here.")}</p>
+      <dl dir="ltr" className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-x-3 px-3 py-2 font-mono text-[11px]">
+        {data.rows.map(([k, v], i) => (
+          <React.Fragment key={`${k}-${i}`}>
+            <dt className="break-all border-t border-border py-1 text-subtle">{k}</dt>
+            <dd className="break-all border-t border-border py-1 text-fg">{v}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 /** A phone number that calls when tapped; masked numbers stay plain text. */
 function PhoneLink({ value }: { value: string | null | undefined }) {
   if (!value) return <>—</>;
@@ -105,7 +129,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
               />
             </Section>
 
-            <Section title={t("Order")}>
+            <Section title={o.mdmArchived ? <span className="flex items-center gap-2">{t("Order")} <Badge tone="warning">{t("Archived in MDM")}</Badge></span> : t("Order")} help={o.mdmArchived ? t("MDM archived this order, so it counts in no report. It stays here so you can still find it.") : undefined}>
               <KV
                 items={[
                   [t("Status"), <OrderStatusBadge key="s" status={o.status} />, t("The call center's result: pending, confirmed or canceled. It follows the parcels: a parcel being prepared or shipped confirms it, and all parcels canceled cancels it.")],
@@ -130,6 +154,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                   <Button variant="danger" size="sm" className="ms-auto" onClick={() => confirm(t("Delete this order? Linked parcels are kept and become unmatched.")) && del.mutate({ id: o.id })}><Trash2 /> {t("Delete order")}</Button>
                 </div>
               ) : null}
+              <AsReceived data={o.asReceived.order} title={t("What MDM sent for this order")} />
             </Section>
 
             <Section
@@ -159,7 +184,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
               />
             </Section>
 
-            <Section title={t("Parcels ({n})", { n: o.parcels.length })} help={t("The parcels MDM made for this order, with every status they went through. Delivery and return rates count parcels, not orders.")}>
+            <Section title={t("Parcels ({n})", { n: o.parcels.length })} help={t("The parcels MDM made for this order, with every status they went through. The order counts once in every number, however many parcels it has: an exchange, a refund or a copy adds its money, not one more delivery. Parcels MDM archived count for nothing.")}>
               {o.parcels.length === 0 ? <p className="text-sm text-muted">{t("No parcel linked yet.")}</p> : (
                 <div className="flex flex-col gap-3">
                   {o.parcels.map((p) => (
@@ -169,6 +194,9 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                         <ParcelStatusBadge status={p.normalizedStatus} />
                         <Badge>{t("provider: {status}", { status: p.providerStatus ?? "—" })}</Badge>
                         {p.isDemoFixture ? <Badge tone="warning">{t("demo fixture")}</Badge> : null}
+                        {p.archived ? <Badge tone="warning">{t("Archived in MDM")}</Badge> : null}
+                        {p.mdmParentParcelId ? <Badge tone="info">{tx("Made from {id}", { id: <bdi className="font-mono">{p.mdmParentParcelId}</bdi> })}</Badge> : null}
+                        {p.mdmType || p.mdmSubType ? <Badge>{t("MDM type: {type}", { type: [p.mdmType, p.mdmSubType].filter(Boolean).join(" / ") })}</Badge> : null}
                         {canMatch ? (
                           <Button size="sm" variant="ghost" className="ms-auto" onClick={() => confirm(t("Unlink this parcel? It will move to the unmatched review queue.")) && unlink.mutate({ parcelId: p.id })}><Unlink /> {t("Unlink")}</Button>
                         ) : null}
@@ -184,6 +212,13 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                           {t("Match: how the parcel was tied to this order. Confidence: 100% by MDM order, order reference or by hand; 95% by an earlier tracking-ID link; 90% by the store order ID.")}
                         </HelpTip>
                       </p>
+                      {p.piecesSent !== null ? (
+                        <p className="mt-1 text-xs text-muted">
+                          {p.piecesDelivered !== null
+                            ? tx("Pieces: {sent} sent · {kept} kept by the customer", { sent: <span className="num">{p.piecesSent}</span>, kept: <span className="num">{p.piecesDelivered}</span> })
+                            : tx("Pieces: {sent} sent", { sent: <span className="num">{p.piecesSent}</span> })}
+                        </p>
+                      ) : null}
                       {p.providerReference ? <p className="mt-1 text-xs text-muted">{tx("Provider reference: {ref}", { ref: <code className="rounded bg-surface-3 px-1 font-mono">{p.providerReference}</code> })}</p> : null}
                       <ol className="mt-3 border-s border-border-strong ps-4">
                         {p.events.map((e) => (
@@ -194,6 +229,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                         ))}
                         {p.events.length === 0 ? <li className="text-xs text-subtle">{t("No status events yet.")}</li> : null}
                       </ol>
+                      <AsReceived data={o.asReceived.parcels[p.trackingId]} title={t("What MDM sent for this parcel")} />
                     </div>
                   ))}
                 </div>

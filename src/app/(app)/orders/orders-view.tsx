@@ -188,6 +188,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                     <OrderStatusBadge status={o.status} />
                     <ParcelStatusBadge status={o.normalizedStatus} />
+                    {o.archived ? <Badge tone="warning">{t("Archived in MDM")}</Badge> : null}
                     <span>{o.wilaya ? <bdi>{o.wilaya}</bdi> : t("No wilaya")} · {date(o.placedAt)}</span>
                   </span>
                 </button>
@@ -233,7 +234,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
                   {more ? <Td className="font-mono text-xs text-muted">{o.creative?.externalCreativeId ?? <span className="text-subtle">{t("unattributed")}</span>}</Td> : null}
                   <Td className="text-xs text-muted">{date(o.placedAt)}</Td>
                   <Td className="text-xs">{o.wilaya ? <bdi>{o.wilaya}</bdi> : "—"}</Td>
-                  <Td><OrderStatusBadge status={o.status} /></Td>
+                  <Td><OrderStatusBadge status={o.status} />{o.archived ? <Badge tone="warning" className="ms-1">{t("Archived in MDM")}</Badge> : null}</Td>
                   {more ? (
                     <>
                       <Td className="num text-end">{o.parcelCount}</Td>

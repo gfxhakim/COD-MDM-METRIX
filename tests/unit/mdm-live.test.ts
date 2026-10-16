@@ -176,6 +176,21 @@ describe("MDM parcel mapping", () => {
     });
     // History is sorted oldest first.
     expect(p.events.map((e) => e.status)).toEqual(["outForDelivery", "delivered"]);
+    expect(p).toMatchObject({ type: "delivery", parentParcelId: null, archived: false, paidToClient: 340_000 });
+  });
+
+  it("reads what makes a parcel an exchange, a refund or a copy, and whether MDM archived it", () => {
+    const p = mapMdmParcel({
+      ...parcel(8),
+      type: "exchange",
+      subType: "delivery",
+      parentParcelId: "MDM-P-1",
+      archived: true,
+      pricing: { totalToPayFromClient: 500, totalToPayToClient: 300 },
+      products: [{ name: "Lamp", quantity: 2, completedQuantity: 1 }],
+    });
+    expect(p).toMatchObject({ type: "exchange", subType: "delivery", parentParcelId: "MDM-P-1", archived: true, codAmount: 50_000, paidToClient: 30_000, piecesSent: 2, piecesDelivered: 1 });
+    expect(mapMdmParcel({ ...parcel(9), products: [{ quantity: 2 }] })).toMatchObject({ piecesSent: 2, piecesDelivered: null });
   });
 
   it("tolerates nullable and missing fields", () => {
@@ -252,9 +267,30 @@ describe("MDM orders", () => {
       customer: { name: "Amina Placeholder", phone2: "0662222222", address: "12 rue X" },
       deliveryType: null,
       storeName: "My store",
+      archived: false,
+      raw: {
+        trackingId: "ORD-TEST1",
+        externalId: "#101",
+        status: "packaged",
+        statusDate: "2026-09-02T09:00:00.000Z",
+        createdAt: "2026-09-01T08:00:00.000Z",
+        updatedAt: "2026-09-02T09:00:05.000Z",
+        confirmed: true,
+        totalPrice: 4000,
+        currency: "DZD",
+        source: "shopify",
+        isDropShipping: false,
+        store: { name: "My store" },
+        destination: { stateName: "Alger", stateCode: "16", cityName: "Bab Ezzouar" },
+        utm: { source: "facebook", medium: "paid", campaign: "Spring", content: "120000000000009" },
+        products: [{ name: "Lamp", quantity: 2, price: 2000, variantOf: "" }],
+      },
     });
     // The sync encrypts the customer before storing it; the IP, GPS and seller are never read.
     expect(JSON.stringify(o)).not.toMatch(/203\.0\.113\.7|36\.7|Seller/);
+    // What is kept "as MDM sent it" leaves the customer out.
+    expect(JSON.stringify(o.raw)).not.toMatch(/Amina|0551111111|0662222222|12 rue X/);
+    expect(mapMdmOrder(order(5, { archived: true }))).toMatchObject({ archived: true, raw: { archived: true } });
     expect(mapMdmOrder(order(3, { isStopDesk: true }))).toMatchObject({ deliveryType: "STOP_DESK" });
     expect(mapMdmOrder(order(4, { isStopDesk: false, client: { firstName: "Amina", lastName: null, phone: "0551111111" } }))).toMatchObject({ deliveryType: "HOME", customer: { name: "Amina", phone2: null } });
   });
