@@ -4,7 +4,8 @@ import type { AdFilter } from "@/domain/adFilter";
 import { selectCostVersion } from "@/domain/costVersions";
 import { linesWithOffers } from "@/domain/offers";
 import { recurringByMonth } from "@/domain/recurring";
-import { allocateOverhead, orderEconomics, type AllocationGroup, type CostResolver, type CostTerms, type ExpenseFact, type OrderFact } from "@/domain/economics";
+import { allocateOverhead, orderEconomics, type AllocationGroup, type CostResolver, type CostTerms, type ExpenseFact } from "@/domain/economics";
+import type { OpenOrderFact } from "@/domain/openOrders";
 import { parseEconomicsDefaults, parseVerdictThresholds } from "@/domain/settings";
 import type { WorkspaceContext } from "@/server/tenancy";
 import { resolveAdScope, scopeMatcher } from "./adScope";
@@ -29,7 +30,8 @@ export type CampaignInfo = {
 };
 
 export type WorkspaceFacts = {
-  orders: (OrderFact & { orderNumber: string })[];
+  /** `canceled` and `codAmount` tell orders not sent yet apart (src/domain/openOrders.ts). */
+  orders: (OpenOrderFact & { orderNumber: string; canceled: boolean; codAmount: number })[];
   spend: SpendFact[];
   expenses: (ExpenseFact & { date: Date })[];
   creatives: CreativeInfo[];
@@ -70,7 +72,7 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
       // Orders MDM archived count in no report, nor do archived parcels.
       where: { workspaceId: w, placedAt: between(range), mdmArchived: false },
       select: {
-        id: true, orderNumber: true, placedAt: true, confirmedAt: true, callAttempts: true, wilaya: true,
+        id: true, orderNumber: true, placedAt: true, confirmedAt: true, status: true, codAmount: true, callAttempts: true, wilaya: true,
         lines: { select: { productId: true, quantity: true } },
         attribution: { select: { creativeId: true } },
         parcels: { where: { archived: false }, select: { normalizedStatus: true, codAmount: true, shippingFee: true, returnFee: true, dispatchedAt: true, mdmParentParcelId: true, paidToClient: true } },
@@ -120,6 +122,8 @@ export async function loadFacts(ctx: WorkspaceContext, range: DateRange, ads?: A
       orderNumber: o.orderNumber,
       placedAt: o.placedAt,
       confirmed: o.confirmedAt !== null,
+      canceled: o.status === "CANCELED",
+      codAmount: o.codAmount,
       callAttempts: o.callAttempts,
       productId: o.lines[0]?.productId ?? null,
       creativeId: o.attribution?.creativeId ?? null,

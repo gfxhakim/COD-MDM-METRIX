@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { adCostPerDelivered, AFTER_KEYS, BEFORE_KEYS, orderProfit, type OrderProfitInput } from "@/domain/orderProfit";
-import { stockProjection } from "@/domain/profitTracker";
 
 /** Buy 1, get 1 free at 2900 DZD; a piece costs 500. 80% confirmed, all shipped, 60% delivered. */
 const base: OrderProfitInput = {
@@ -37,32 +36,6 @@ describe("one delivered order, step by step", () => {
     expect(r.margin).toBeCloseTo(r.profit / 290000);
     // The parts add up exactly.
     expect(base.price - BEFORE_KEYS.reduce((a, k) => a + r.before[k], 0) - AFTER_KEYS.reduce((a, k) => a + r.after[k], 0)).toBe(r.profit);
-  });
-
-  it("gives the same profit as the stock calculation, per delivered order", () => {
-    const r = orderProfit(base);
-    if (!r.ok) throw new Error(r.reason);
-    const stock = stockProjection({
-      units: 2000,
-      salePrice: base.price / 2,
-      unitCost: base.costPerPiece,
-      unitsPerOrder: 2,
-      confirmationRate: base.confirmationRate,
-      shippingRate: base.shippingRate,
-      deliveryRate: base.deliveryRate,
-      returnRate: null,
-      lostRate: 0,
-      cpa: 30000,
-      forwardShippingFee: base.deliveryFee,
-      rtoFee: base.returnFee,
-      callCenterFee: base.callCenterFee,
-      callCenterBasis: "PLACED_LEAD",
-      packagingFee: base.packagingFee,
-      extraFeePerDelivered: 0,
-      otherCosts: 0,
-    });
-    if (!stock.ok) throw new Error(stock.reason);
-    expect(stock.benefit / 1000).toBeCloseTo(r.profit, -1);
   });
 
   it("charges calls per confirmed order, and lost parcels their goods and delivery", () => {

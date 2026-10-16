@@ -1,5 +1,4 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { seedFor } from "@/domain/profitTracker";
 import { db } from "@/server/db";
 import { addMember, cost, makeTenant } from "../helpers";
 
@@ -45,85 +44,90 @@ describe("profit tracker", () => {
     ids = await build(t);
   });
 
-  it("gives each product its MDM stock, real rates, costs and ad spend", async () => {
+  it("gives each product its real profit, what its open orders should still bring, and where each number comes from", async () => {
     const r = await t.caller.profit.tracker({});
     expect(r.currency).toBe("DZD");
     expect(r.products).toHaveLength(1);
     const p = r.products[0];
-    expect(p).toMatchObject({ id: ids.product.id, name: "Lamp", plan: null });
+    expect(p).toMatchObject({ id: ids.product.id, name: "Lamp", adsLinked: true });
     expect(p.cost).toMatchObject({ salePrice: 390000, sourcingCost: 90000 });
-    expect(p.stock).toEqual({ read: true, available: 45, incoming: 10, received: 150, sellingPrice: 400000, purchasePrice: 95000 });
-    expect(p.stockDetail).toMatchObject({ inDelivery: 6 });
-    expect(p.sample).toMatchObject({ placed: 5, confirmed: 4, shipped: 4, finished: 3, delivered: 2, returned: 1, lost: 0, inTransit: 1 });
+    expect(p.stock).toMatchObject({ read: true, available: 45, incoming: 10 });
+    // The pending order was placed 5 days ago: still waiting for the call, so not counted as not confirmed.
+    expect(p.sample).toEqual({ placed: 5, confirmed: 4, shipped: 4, finished: 3, delivered: 2, returned: 1, lost: 0, inTransit: 1, notConfirmed: 0 });
+    expect(p.open).toEqual({ road: 1, preparing: 0, waiting: 1 });
     // Spend nobody linked counts for no product, even the only one, and is listed to link it.
     expect(r.unlinked).toEqual({ total: 70000, campaigns: [{ id: ids.campaign.id, name: "Spring", spend: 50000 }], other: 20000 });
-    expect(p.observed).toMatchObject({ enough: false, confirmationRate: 0.8, shippingRate: 1, lostRate: 0, unitsPerOrder: 1, cpa: 70000, avgShippingFee: 60000, avgReturnFee: 25000 });
-    expect(p.observed.deliveryRate).toBeCloseTo(2 / 3);
-    expect(p.actual).toMatchObject({ deliveredUnits: 2, deliveredRevenue: 780000, cogs: 180000, adSpend: 350000, outboundShipping: 180000, rtoCost: 25000, callCenterCost: 48000, packagingCost: 15000, overhead: 100000, cashInTransit: 390000 });
+    expect(p.actual).toMatchObject({ deliveredUnits: 2, deliveredRevenue: 780000, cogs: 180000, adSpend: 350000, outboundShipping: 180000, rtoCost: 25000, callCenterCost: 48000, packagingCost: 15000, overhead: 100000 });
     expect(p.actual.trueNetProfit).toBe(780000 - 350000 - 180000 - 180000 - 25000 - 48000 - 15000 - 100000);
+
+    // Too few finished parcels for the default threshold (10): example rates, said to be one.
+    expect(p.rates).toEqual({ source: "example", finished: 0, confirmation: 0.75, shipping: 0.95, delivery: 0.6, lost: 0 });
+    // On the road: 60% × (3900 − 900) − 600 − 50 − 40% × 250. Waiting: 75% confirmed × (95% shipped × that − its call).
+    expect(p.expected.road).toBe(105000);
+    // Its call is paid only once confirmed (per confirmed order here), so it comes off what it should bring.
+    expect(p.expected.waiting).toBeCloseTo(0.75 * (0.95 * 105000 - 12000), -1);
+    expect(p.expected.total).toBe(p.expected.road + p.expected.preparing + p.expected.waiting);
+
+    // Price, delivery and return fees from what MDM really collected and charged; the rest from the product.
+    expect(p.inputs).toMatchObject({
+      price: { value: 390000, source: "orders" },
+      costPerPiece: { value: 90000, source: "product" },
+      deliveryFee: { value: 60000, source: "orders" },
+      returnFee: { value: 25000, source: "orders" },
+      callCenterFee: { value: 12000, source: "product" },
+      packagingFee: { value: 5000, source: "product" },
+      adCostPerOrder: { value: 70000, source: "campaigns" },
+      delivered: 2,
+      finished: 3,
+    });
+    // 5 orders over the 6 days from the first order to today; the expense over 30 days.
+    expect(p.pace).toMatchObject({ days: 6, expensesPerMonth: 500000 });
+    expect(p.pace.ordersPerDay).toBeCloseTo(5 / 6);
+    const day = p.days.find((d) => d.placed > 0)!;
+    expect(day).toMatchObject({ placed: 5, delivered: 2, returned: 1, open: 2, revenue: 780000, costs: 448000 });
+    expect(day.expected).toBe(p.expected.total);
 
     // Linking the campaign from here moves its spend into the product.
     await t.caller.campaigns.setProduct({ id: ids.campaign.id, productId: ids.product.id });
     const linked = await t.caller.profit.tracker({});
     expect(linked.unlinked).toEqual({ total: 20000, campaigns: [], other: 20000 });
     expect(linked.products[0].actual.adSpend).toBe(400000);
+    expect(linked.products[0].inputs.adCostPerOrder.value).toBe(80000);
     await t.caller.campaigns.setProduct({ id: ids.campaign.id, productId: null });
-
-    // Too few finished parcels for the default threshold (10): rates fall back, fees come from product details.
-    const seed = seedFor(p, r.defaults);
-    expect(seed).toMatchObject({ stockSource: "MDM_AVAILABLE", units: 45 });
-    expect(seed.inputs).toMatchObject({ deliveryRate: 0.6, forwardShippingFee: 60000, rtoFee: 25000, cpa: 70000 });
   });
 
-  it("reads rates from the orders once there are enough finished parcels", async () => {
+  it("reads rates from the orders once there are enough finished parcels, leaving out orders still waiting", async () => {
     await db.workspace.update({ where: { id: t.ws.id }, data: { verdictThresholds: { minShippedForRates: 3 } } });
     const r = await t.caller.profit.tracker({});
-    const seed = seedFor(r.products[0], r.defaults);
-    expect(seed.inputs.deliveryRate).toBeCloseTo(2 / 3);
-    expect(seed.sources.deliveryRate).toBe("orders");
+    const rates = r.products[0].rates;
+    // 4 confirmed of the 4 whose call is answered; 2 delivered of 3 finished.
+    expect(rates).toMatchObject({ source: "days", finished: 3, confirmation: 1, shipping: 1, lost: 0 });
+    expect(rates.delivery).toBeCloseTo(2 / 3);
     await db.workspace.update({ where: { id: t.ws.id }, data: { verdictThresholds: {} } });
   });
 
-  it("only counts orders placed in the days picked", async () => {
+  it("only counts orders placed in the days picked, and takes the rates from every order then", async () => {
+    await db.workspace.update({ where: { id: t.ws.id }, data: { verdictThresholds: { minShippedForRates: 3 } } });
     const today = new Date().toISOString().slice(0, 10);
     const r = await t.caller.profit.tracker({ from: today, to: today });
-    expect(r.products[0].sample.placed).toBe(0);
-    expect(r.products[0].actual.adSpend).toBe(0);
-    expect(r.products[0].stock.available).toBe(45);
+    const p = r.products[0];
+    expect(p.sample.placed).toBe(0);
+    expect(p.actual.adSpend).toBe(0);
+    expect(p.stock?.available).toBe(45);
+    expect(p.rates.source).toBe("all");
+    expect(p.inputs.price).toEqual({ value: 390000, source: "orders" });
+    await db.workspace.update({ where: { id: t.ws.id }, data: { verdictThresholds: {} } });
   });
 
-  it("saves an owner's numbers for a product, and goes back to the data", async () => {
-    await t.caller.profit.savePlan({ productId: ids.product.id, plan: { stockSource: "TYPED", stockUnits: 300, overrides: { deliveryRate: 0.7, cpa: 60000 } } });
-    let r = await t.caller.profit.tracker({});
-    expect(r.products[0].plan).toEqual({ stockSource: "TYPED", stockUnits: 300, overrides: { deliveryRate: 0.7, cpa: 60000 } });
-    const seed = seedFor(r.products[0], r.defaults);
-    expect(seed).toMatchObject({ stockSource: "TYPED", units: 300 });
-    expect(seed.inputs).toMatchObject({ deliveryRate: 0.7, cpa: 60000 });
-    const log = await db.auditLog.findFirst({ where: { workspaceId: t.ws.id, action: "profitPlan.saved" } });
-    expect(log).not.toBeNull();
-
-    await t.caller.profit.savePlan({ productId: ids.product.id, plan: null });
-    r = await t.caller.profit.tracker({});
-    expect(r.products[0].plan).toBeNull();
-  });
-
-  it("refuses values a plan can't hold", async () => {
-    await expect(t.caller.profit.savePlan({ productId: ids.product.id, plan: { stockSource: "TYPED", stockUnits: 1, overrides: { deliveryRate: 2 } } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    // @ts-expect-error unknown field
-    await expect(t.caller.profit.savePlan({ productId: ids.product.id, plan: { stockSource: "TYPED", stockUnits: 1, overrides: { secret: "x" } } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("lets analysts look but not save, and keeps operators out", async () => {
+  it("lets analysts look, and keeps operators out", async () => {
     const analyst = await addMember(t.ws.id, "ANALYST");
     const operator = await addMember(t.ws.id, "OPERATOR");
     await expect(analyst.caller.profit.tracker({})).resolves.toMatchObject({ currency: "DZD" });
-    await expect(analyst.caller.profit.savePlan({ productId: ids.product.id, plan: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(operator.caller.profit.tracker({})).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("never reaches another business's products", async () => {
     const other = await makeTenant("Profit other");
-    await expect(other.caller.profit.savePlan({ productId: ids.product.id, plan: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
     const r = await other.caller.profit.tracker({});
     expect(r.products).toHaveLength(0);
   });

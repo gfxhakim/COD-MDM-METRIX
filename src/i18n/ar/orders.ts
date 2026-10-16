@@ -316,6 +316,13 @@ const ar: Dict = {
   "Pieces: {sent} sent · {kept} kept by the customer": "القطع: {sent} مُرسَلة · {kept} احتفظ بها الزبون",
   "Pieces: {sent} sent": "القطع: {sent} مُرسَلة",
   "What MDM sent for this parcel": "ما أرسلته MDM لهذا الطرد",
+  // Orders opened from a Profit tracker number
+  "Orders placed {from} to {to}": "الطلبيات الواردة من {from} إلى {to}",
+  "Orders placed since {from}": "الطلبيات الواردة منذ {from}",
+  "Orders placed up to {to}": "الطلبيات الواردة حتى {to}",
+  "Orders the reports count": "الطلبيات التي تحسبها التقارير",
+  "Show orders of every day": "اعرض طلبيات كل الأيام",
+  "The same orders the Profit tracker counted: placed in these days, without the ones MDM archived.": "نفس الطلبيات التي حسبها متتبّع الربح: الواردة في هذه الأيام، بدون التي أرشفها MDM.",
 };
 
 export default ar;

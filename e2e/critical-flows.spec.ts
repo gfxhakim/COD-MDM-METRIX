@@ -185,13 +185,21 @@ test.describe("new workspace", () => {
     await expect(page.getByText("Workspace saved")).toBeVisible();
   });
 
-  test("7. run the breakeven simulator", async ({ page }) => {
+  test("7. try other numbers in What if, starting from the product's own", async ({ page }) => {
     await page.goto("/products");
-    await page.getByRole("link", { name: "Breakeven simulator for E2E Lamp" }).click();
-    await expect(page.getByRole("heading", { name: "Breakeven CPA simulator" })).toBeVisible();
-    await page.fill("#D", "70");
-    // (3 900 − 1 000 − 600) × 0.70 − 250 × 0.30 − 120 = 1 415 DZD
-    await expect(page.getByText(/1[\s,.  ]?415/).first()).toBeVisible();
+    await page.getByRole("link", { name: "What if for E2E Lamp" }).click();
+    await expect(page).toHaveURL(/\/profit\?productId=.+#what-if$/);
+    const whatIf = page.locator("#what-if");
+    await expect(whatIf.getByRole("heading", { name: "What if" })).toBeVisible();
+    await expect(whatIf.getByText("At your numbers now.")).toBeVisible();
+    await whatIf.locator("#wi-del").fill("90");
+    await expect(whatIf.getByText("compared with your numbers now")).toBeVisible();
+    await whatIf.getByRole("button", { name: "Back to my numbers" }).click();
+    await expect(whatIf.getByText("At your numbers now.")).toBeVisible();
+    await expect(whatIf.getByRole("button", { name: "Back to my numbers" })).toHaveCount(0);
+    // The old simulator address opens What if.
+    await page.goto("/simulator");
+    await expect(page).toHaveURL(/\/profit#what-if$/);
   });
 
   test("18. add a repeating expense in a category of your own, filter by days and export", async ({ page }) => {
@@ -342,7 +350,7 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(card.getByText(/^From \d+ \w+/)).toHaveCount(0);
   });
 
-  test("17. see what a delivered order really earns with its offer and linked campaigns, and what the stock earns", async ({ page }) => {
+  test("17. see the profit of these days, what a delivered order really earns with its offer and linked campaigns, and open the orders behind a number", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link").nth(1)).toHaveAccessibleName(/Profit tracker/);
     await page.goto("/profit");
@@ -357,58 +365,33 @@ test.describe("demo workspace MDM (mock adapter)", () => {
     await expect(page.getByText("comes from ads with no known campaign")).toBeVisible();
     await expect(page.locator("tr", { hasText: "LED Night Lamp" })).not.toContainText("No ads linked");
     await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
-    // One delivered order, step by step, with the product's offer counted.
-    const order = page.getByRole("region", { name: "Posture Corrector Pro", exact: true });
-    await expect(order.getByText("Profit per delivered order").first()).toBeVisible();
-    await expect(order.getByText("Product: 1 ×")).toBeVisible();
-    await order.getByLabel("Offer", { exact: true }).selectOption("2");
+    const product = page.getByRole("region", { name: "Posture Corrector Pro", exact: true });
+    await expect(product).toBeVisible();
+    // The result of these days: real so far, plus what the orders not finished yet should bring.
+    await expect(page.getByText("Profit of these days").first()).toBeVisible();
+    await expect(page.getByText("Real so far").first()).toBeVisible();
+    await expect(page.getByText("Meta per order").first()).toBeVisible();
+    // One delivered order, from its price to its profit, with the product's offer counted.
+    await expect(page.getByRole("heading", { name: "One delivered order" })).toBeVisible();
+    await expect(page.getByText(/Product: 1 ×/).first()).toBeAttached();
+    await product.getByLabel("Offer", { exact: true }).selectOption("2");
     await expect(page.getByText("Posture Corrector Pro: Buy 1, get 1 free")).toBeVisible();
-    await expect(order.getByText("Product: 2 ×")).toBeVisible();
-    await order.getByLabel("Offer", { exact: true }).selectOption("1");
+    await expect(page.getByText(/Product: 2 ×/).first()).toBeAttached();
+    await product.getByLabel("Offer", { exact: true }).selectOption("1");
     await expect(page.getByText("Posture Corrector Pro: No offer")).toBeVisible();
-    await expect(order.getByText("Product: 1 ×")).toBeVisible();
+    await expect(page.getByText(/Product: 1 ×/).first()).toBeAttached();
     // Every campaign linked to the product, added together.
     await expect(page.getByText("All linked campaigns").first()).toBeVisible();
-    // Other numbers can be tried without saving them.
-    await order.getByRole("button", { name: "Try other numbers" }).click();
-    await order.getByLabel("Delivery rate", { exact: true }).fill("0");
-    await expect(order.getByRole("alert")).toContainText("no order is ever delivered");
-    await order.getByRole("button", { name: "Back to my data" }).click();
-    await expect(order.getByRole("alert")).toHaveCount(0);
-
-    // The stock calculation is folded under More details.
+    // Where every number comes from, folded under More details.
     await page.getByRole("button", { name: "More details" }).click();
-    const card = page.getByRole("region", { name: "Stock of Posture Corrector Pro" });
-    // The MDM stock read by the sync counts for the product with the same name: 142 + 71 units,
-    // at 3900 − 1050 DZD each.
-    await expect(card.getByLabel("Units", { exact: true })).toHaveValue("213");
-    await expect(card.getByText("213 units ×")).toBeVisible();
-    await expect(card.getByText("607,050").first()).toBeVisible();
-
-    await card.getByRole("tab", { name: /With ads, rates and fees/ }).click();
-    await expect(card.getByText("Real benefit").first()).toBeVisible();
-    await expect(card.getByRole("list", { name: "From the benefit before ads to the real benefit" })).toContainText("Ad spend");
-    // Rates and fees come from the data, folded until someone wants to change them.
-    await expect(card.getByLabel("Delivered (of shipped)", { exact: true })).toHaveCount(0);
-    await card.getByRole("button", { name: "Change rates and fees" }).click();
-    await card.getByLabel("Delivered (of shipped)", { exact: true }).fill("0");
-    await expect(card.getByRole("alert")).toContainText("never sells");
-    await card.getByLabel("Delivered (of shipped)", { exact: true }).fill("70");
-
-    await card.getByLabel("Stock to count", { exact: true }).selectOption("TYPED");
-    await card.getByLabel("Units", { exact: true }).fill("500");
-    await card.getByRole("button", { name: "Save for this product" }).click();
-    await expect(page.getByText("Saved for Posture Corrector Pro")).toBeVisible();
-    await page.reload();
-    await page.getByRole("button", { name: "Posture Corrector Pro" }).click();
-    await expect(card.getByText("Your numbers saved")).toBeVisible();
-    await expect(card.getByLabel("Units", { exact: true })).toHaveValue("500");
-    await card.getByRole("button", { name: "Back to my data" }).click();
-    await expect(card.getByText("Your numbers saved")).toHaveCount(0);
-    await expect(card.getByLabel("Units", { exact: true })).toHaveValue("213");
-
-    await card.getByRole("tab", { name: /Real orders/ }).click();
-    await expect(card.getByText("Real profit").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Where every number comes from" })).toBeVisible();
+    await expect(page.getByText("From your product details").first()).toBeVisible();
+    // A number opens the orders behind it: this product's orders of these days.
+    await page.getByRole("link", { name: "See these orders" }).click();
+    await expect(page).toHaveURL(/\/orders\?productId=.+&counted=1/);
+    await expect(page.getByText(/^Orders placed /)).toBeVisible();
+    await page.getByRole("button", { name: "Show orders of every day" }).click();
+    await expect(page.getByText(/^Orders placed /)).toHaveCount(0);
   });
 
   test("12. connect Meta ads without the token reaching the browser, and sync spend", async ({ page }) => {
@@ -607,7 +590,7 @@ test("20. open pages from the red dock, and every page fits a phone screen", asy
   await page.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: "Expenses" }).click();
   await expect(page.getByRole("heading", { name: "Expenses", level: 1 })).toBeVisible();
   const tabs = ["workspace", "members", "economics", "mdm", "meta", "mappings", "audit", "data"].map((t) => `/settings?tab=${t}`);
-  const pages = ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports"];
+  const pages = ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/imports"];
   const fits = async (path: string, how: string) => {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
@@ -617,7 +600,7 @@ test("20. open pages from the red dock, and every page fits a phone screen", asy
   for (const path of [...pages, ...tabs]) await fits(path, "folded");
   // Again with every "More details" open, as this browser remembers it.
   await page.evaluate(() => {
-    for (const id of ["dashboard", "expenses", "expenses-filters", "money", "simulator", "orders", "creatives-filters", "products", "profit-stock", "profit-try", "profit-rates", "syncs"]) localStorage.setItem(`more-details:${id}`, "1");
+    for (const id of ["dashboard", "expenses", "expenses-filters", "money", "orders", "creatives-filters", "products", "profit-how", "syncs"]) localStorage.setItem(`more-details:${id}`, "1");
   });
   for (const path of pages) await fits(path, "with More details open");
 });
@@ -680,7 +663,7 @@ test("22. switch to Arabic: pages turn right to left, fit a phone, and the accou
 
   // Every page still fits a phone, right to left.
   await page.setViewportSize({ width: 360, height: 780 });
-  for (const path of ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/simulator", "/imports", "/settings"]) {
+  for (const path of ["/", "/profit", "/expenses", "/products", "/orders", "/creatives", "/campaigns", "/money", "/syncs", "/imports", "/settings"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     const wider = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
