@@ -9,7 +9,14 @@
  * the orders that are delivered. Every amount below is per delivered order, and they add up.
  */
 import { msg } from "@/i18n/core";
-import type { CallCenterBasis } from "./profitTracker";
+
+export type CallCenterBasis = "PLACED_LEAD" | "CONFIRMED_ORDER";
+
+/** A rate to the nearest 0.1%. */
+export const roundRate = (v: number) => Math.round(v * 1000) / 1000;
+
+/** Rates counted until a product has enough finished parcels of its own: an example, and shown as one. */
+export const FALLBACK_RATES = { confirmation: 0.75, shipping: 0.95, delivery: 0.6, lost: 0 } as const;
 
 export type OrderProfitInput = {
   /** What the customer pays for one order: the offer's price, without delivery. */

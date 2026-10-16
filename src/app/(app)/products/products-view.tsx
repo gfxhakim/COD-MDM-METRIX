@@ -355,7 +355,7 @@ export function ProductsView() {
     ) : <span className="text-subtle">{t("Not linked")}</span>;
   const actions = (p: ProductRow) => (
     <div className="flex justify-end gap-1">
-      <Button size="icon" variant="ghost" asChild><Link href={`/simulator?productId=${p.id}`} aria-label={t("Breakeven simulator for {name}", { name: p.name })}><Calculator /></Link></Button>
+      <Button size="icon" variant="ghost" asChild><Link href={`/profit?productId=${p.id}#what-if`} aria-label={t("What if for {name}", { name: p.name })}><Calculator /></Link></Button>
       <Button size="icon" variant="ghost" aria-label={t("Cost versions for {name}", { name: p.name })} onClick={() => setVersioning(p)}><History /></Button>
       {canWrite ? (
         <>

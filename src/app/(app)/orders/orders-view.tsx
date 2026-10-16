@@ -2,7 +2,7 @@
 
 import type { NormalizedStatus, OrderStatus } from "@prisma/client";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ClipboardList, Download, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, Download, Plus, Search, X } from "lucide-react";
 import * as React from "react";
 import { useMoney } from "@/components/app/currency";
 import { AdsFilter, useAdsFilter } from "@/components/app/ads-filter";
@@ -42,17 +42,22 @@ const PARCEL_STATUS_WORD: Record<NormalizedStatus, string> = {
   UNKNOWN: msg("unknown"),
 };
 
-export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: NormalizedStatus }) {
+/** Filters a link opened the page with, such as the orders behind a Profit tracker number. */
+export type OrdersInitial = { parcelStatus?: NormalizedStatus; status?: OrderStatus; productId?: string; from?: string; to?: string; counted?: boolean };
+
+export function OrdersView({ initial = {} }: { initial?: OrdersInitial }) {
   const { t, date, ago } = useT();
   const money = useMoney();
   const trpc = useTRPC();
   const canWrite = useCan("orders.write");
   const [search, setSearch] = React.useState("");
   const [debounced, setDebounced] = React.useState("");
-  const [status, setStatus] = React.useState<OrderStatus | "">("");
-  const [parcelStatus, setParcelStatus] = React.useState<NormalizedStatus | "">(initialParcelStatus ?? "");
+  const [status, setStatus] = React.useState<OrderStatus | "">(initial.status ?? "");
+  const [parcelStatus, setParcelStatus] = React.useState<NormalizedStatus | "">(initial.parcelStatus ?? "");
   const [wilaya, setWilaya] = React.useState("");
-  const [productId, setProductId] = React.useState("");
+  const [productId, setProductId] = React.useState(initial.productId ?? "");
+  // The days the orders were placed, when a link set them; only the orders reports count, then.
+  const [placed, setPlaced] = React.useState(initial.from || initial.to || initial.counted ? { from: initial.from, to: initial.to, counted: !!initial.counted } : null);
   const [creativeId, setCreativeId] = React.useState("");
   const [upsell, setUpsell] = React.useState<"" | "yes" | "no">("");
   // Beginners see the main filters and columns; the rest are one tap away. A filter in use stays shown.
@@ -64,6 +69,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
   const [printing, setPrinting] = React.useState<{ data: PrintData; title: string } | null>(null);
   const closePrint = React.useCallback(() => setPrinting(null), []);
   const workspace = useQuery(trpc.workspace.getCurrent.queryOptions());
+  const day = (d: string) => date(new Date(`${d}T12:00:00Z`));
 
   React.useEffect(() => {
     const timer = setTimeout(() => setDebounced(search), 300);
@@ -71,7 +77,7 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
   }, [search]);
   // Changing any filter returns to page 1.
   const ads = useAdsFilter().filter;
-  const filterKey = JSON.stringify([debounced, status, parcelStatus, wilaya, productId, creativeId, upsell, ads]);
+  const filterKey = JSON.stringify([debounced, status, parcelStatus, wilaya, productId, creativeId, upsell, ads, placed]);
   const upsellFilter = upsell === "" ? undefined : upsell === "yes";
   const [pageState, setPageState] = React.useState({ key: filterKey, page: 1 });
   const page = pageState.key === filterKey ? pageState.page : 1;
@@ -88,6 +94,9 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
       productId: productId || undefined,
       creativeId: creativeId || undefined,
       upsell: upsellFilter,
+      fromDay: placed?.from,
+      toDay: placed?.to,
+      counted: placed?.counted || undefined,
       ads,
       page,
       pageSize,
@@ -167,6 +176,21 @@ export function OrdersView({ initialParcelStatus }: { initialParcelStatus?: Norm
           ) : null}
           <MoreDetailsButton open={more} onToggle={(o) => { setMore(o); if (!o) { setParcelStatus(""); setCreativeId(""); setUpsell(""); } }} className="col-span-2 justify-self-start self-center sm:col-span-1" />
         </div>
+        {placed ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft py-1 ps-3 pe-1 text-xs font-semibold text-brand-strong">
+              {placed.from && placed.to
+                ? t("Orders placed {from} to {to}", { from: day(placed.from), to: day(placed.to) })
+                : placed.from
+                  ? t("Orders placed since {from}", { from: day(placed.from) })
+                  : placed.to
+                    ? t("Orders placed up to {to}", { to: day(placed.to) })
+                    : t("Orders the reports count")}
+              <button type="button" onClick={() => setPlaced(null)} aria-label={t("Show orders of every day")} className="press grid size-5 place-items-center rounded-full hover:bg-brand/15"><X className="size-3.5" aria-hidden="true" /></button>
+            </span>
+            {placed.counted ? <HelpTip label={t("Orders the reports count")}>{t("The same orders the Profit tracker counted: placed in these days, without the ones MDM archived.")}</HelpTip> : null}
+          </div>
+        ) : null}
         {orders.error ? <ErrorState message={errorMessage(orders.error)} /> : orders.isLoading ? <Loading /> : !orders.data?.items.length ? (
           <EmptyState icon={<ClipboardList />} title={t("No orders match")} description={t("Import an orders CSV from Imports, or add a manual order.")} />
         ) : phone ? (

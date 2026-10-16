@@ -1,4 +1,4 @@
-import { Calculator, Clapperboard, HandCoins, Import, LayoutDashboard, Package, Receipt, RefreshCw, Settings, ShoppingCart, Target, Wallet } from "lucide-react";
+import { Clapperboard, HandCoins, Import, LayoutDashboard, Package, Receipt, RefreshCw, Settings, ShoppingCart, Target, Wallet } from "lucide-react";
 import { msg } from "@/i18n/core";
 
 /**
@@ -15,7 +15,6 @@ export const NAV = [
   { href: "/campaigns", label: msg("Campaigns"), icon: Target, motion: "pulse" },
   { href: "/money", label: msg("Money & stock"), icon: Wallet, motion: "fly" },
   { href: "/syncs", label: msg("MDM sync"), icon: RefreshCw, motion: "spin" },
-  { href: "/simulator", label: msg("Breakeven CPA"), icon: Calculator, motion: "tilt" },
   { href: "/imports", label: msg("Imports"), icon: Import, motion: "drop" },
   { href: "/settings", label: msg("Settings"), icon: Settings, motion: "spin" },
 ] as const;

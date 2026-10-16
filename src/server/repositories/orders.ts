@@ -20,6 +20,8 @@ export type OrderListInput = {
   source?: OrderSource;
   /** Only orders MDM's call center upsold (true), or only the others (false). */
   upsell?: boolean;
+  /** Only the orders reports count: not archived by MDM. */
+  counted?: boolean;
   from?: Date;
   to?: Date;
   /** Only orders whose ad is in these Meta Business Managers, ad accounts or campaigns. */
@@ -57,6 +59,7 @@ export function orderWhere(ctx: WorkspaceContext, input: Omit<OrderListInput, "p
   if (input.creativeId) and.push({ attribution: { creativeId: input.creativeId } });
   if (input.source) and.push({ source: input.source });
   if (input.upsell !== undefined) and.push({ mdmUpsell: input.upsell });
+  if (input.counted) and.push({ mdmArchived: false });
   if (input.adCampaignIds) and.push({ attribution: { creative: { campaignId: { in: input.adCampaignIds } } } });
   if (input.from) and.push({ placedAt: { gte: input.from } });
   if (input.to) and.push({ placedAt: { lte: input.to } });

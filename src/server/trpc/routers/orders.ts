@@ -2,6 +2,8 @@ import { z } from "zod";
 import { adFilterSchema } from "@/domain/adFilter";
 import { EXPORT_COLUMN_KEYS, EXPORT_FORMATS } from "@/domain/orderExport";
 import { exportOrders, orderExportPreview } from "@/server/exports/orders";
+import { dayRange } from "@/lib/zonedDays";
+import { db } from "@/server/db";
 import * as repo from "@/server/repositories/orders";
 import { permitted, router, workspaceProcedure } from "@/server/trpc/init";
 import { id, minor, normalizedStatusEnum, optionalText, orderSourceEnum, orderStatusEnum } from "@/server/trpc/schemas";
@@ -36,12 +38,23 @@ export const ordersRouter = router({
         upsell: z.boolean().optional(),
         from: z.coerce.date().optional(),
         to: z.coerce.date().optional(),
+        /** Days the orders were placed, in the workspace's time zone, as the Profit tracker counts them. */
+        fromDay: day.optional(),
+        toDay: day.optional(),
+        /** Only the orders reports count: not archived by MDM. */
+        counted: z.boolean().optional(),
         ads: adFilterSchema.optional(),
         page: z.number().int().min(1).default(1),
         pageSize: z.number().int().min(10).max(100).default(25),
       }),
     )
-    .query(({ ctx, input }) => repo.listOrders(ctx.ws, input)),
+    .query(async ({ ctx, input }) => {
+      const { fromDay, toDay, ...rest } = input;
+      if (!fromDay && !toDay) return repo.listOrders(ctx.ws, rest);
+      const ws = await db.workspace.findUniqueOrThrow({ where: { id: ctx.ws.workspaceId }, select: { timezone: true } });
+      const days = dayRange({ from: fromDay, to: toDay }, ws.timezone);
+      return repo.listOrders(ctx.ws, { ...rest, from: days.from ?? rest.from, to: days.to ?? rest.to });
+    }),
   facets: workspaceProcedure.query(({ ctx }) => repo.listOrderFacets(ctx.ws)),
   exportPreview: workspaceProcedure.input(exportFilters).query(({ ctx, input }) => orderExportPreview(ctx.ws, input)),
   export: workspaceProcedure

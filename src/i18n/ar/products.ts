@@ -369,6 +369,8 @@ const ar: Dict = {
   stock: "المخزون",
   "stock value": "قيمة المخزون",
   "stock arrivals": "المخزون الوارد",
+  // Link to the Profit tracker's What if
+  "What if for {name}": "ماذا لو، لـ {name}",
 };
 
 export default ar;
