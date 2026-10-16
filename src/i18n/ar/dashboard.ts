@@ -217,6 +217,32 @@ const ar: Dict = {
   "by delivered orders": "حسب الطلبيات المسلَّمة",
   "by revenue": "حسب المداخيل",
 
+  // Creatives page: each product apart
+  "The product the ad sells: the one its campaign or ad account is linked to, else the product most of its orders are for.":
+    "المنتج الذي يبيعه الإعلان: المنتج المربوط بحملته أو بحسابه الإعلاني، وإلا فالمنتج الذي تخصّه أغلب طلبياته.",
+  "Matched by its orders": "حُدِّد من طلبياته",
+  "No product": "بدون منتج",
+  "Ads not linked to a product that brought no order of a product in these days, so nothing says what they sell. Link their campaign to a product on the Campaigns page.":
+    "إعلانات غير مربوطة بمنتج ولم تجلب طلبية لأي منتج في هذه الأيام، فلا شيء يدل على ما تبيعه. اربط حملتها بمنتج في صفحة الحملات.",
+  "This product's ads and their totals together. An ad sits here when its campaign or ad account is linked to this product, or, when it isn't linked, when most of its orders are for this product.":
+    "إعلانات هذا المنتج ومجموعها معًا. يظهر الإعلان هنا عندما تكون حملته أو حسابه الإعلاني مربوطًا بهذا المنتج، أو، إن لم يكن مربوطًا، عندما تكون أغلب طلبياته لهذا المنتج.",
+  "What Meta spent on these ads in these days.": "ما صرفته Meta على هذه الإعلانات في هذه الأيام.",
+  "Orders these ads brought in these days, and how many of them were delivered.": "الطلبيات التي جلبتها هذه الإعلانات في هذه الأيام، وكم منها تم تسليمه.",
+  "{n} delivered": "{n} مُسلَّمة",
+  "1 ad is here because of its orders: its campaign isn't linked to {product}, so its spend doesn't count in that product's Profit tracker yet.":
+    "إعلان واحد هنا بسبب طلبياته: حملته غير مربوطة بـ{product}، لذلك لا تُحسب مصاريفه بعد في متتبّع ربح هذا المنتج.",
+  "{n} ads are here because of their orders: their campaigns aren't linked to {product}, so their spend doesn't count in that product's Profit tracker yet.":
+    "{n} إعلان هنا بسبب طلبياتها: حملاتها غير مربوطة بـ{product}، لذلك لا تُحسب مصاريفها بعد في متتبّع ربح هذا المنتج.",
+  "Each product apart": "كل منتج على حدة",
+  "Show the ads of": "عرض إعلانات",
+  "Pick a product to see only its ads with their totals, or Each product apart to see one part per product. An ad goes with the product its campaign or ad account is linked to, else with the product most of its orders are for.":
+    "اختر منتجًا لترى إعلاناته فقط مع مجموعها، أو «كل منتج على حدة» لترى قسمًا لكل منتج. يُنسب الإعلان إلى المنتج المربوط بحملته أو بحسابه الإعلاني، وإلا فإلى المنتج الذي تخصّه أغلب طلبياته.",
+  "No ads for {product} yet": "لا توجد إعلانات لـ{product} بعد",
+  "Link the campaigns that sell a product to it on the Campaigns page, and its ads show here.": "اربط الحملات التي تبيع منتجًا به في صفحة الحملات، وستظهر إعلاناته هنا.",
+  "Orders and spend with no ad": "طلبيات ومصاريف بدون إعلان",
+  "Orders that no ad can claim, and spend whose ad is unknown. They count in your totals, but in none of the products' ads above.":
+    "طلبيات لا يمكن نسبتها لأي إعلان، ومصاريف إعلانها غير معروف. تُحسب في مجموعك، لكن ليس ضمن إعلانات أي منتج أعلاه.",
+
   // Campaigns page
   "Ad accounts & campaigns": "الحسابات الإعلانية والحملات",
   "Each campaign's spend, orders and profit. Link a campaign to the product it sells so its spend counts in that product's profit.":

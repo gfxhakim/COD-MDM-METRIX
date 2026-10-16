@@ -566,6 +566,35 @@ test("11. another business cannot reach either workspace's data", async ({ page 
   await expect(page.getByText("#E2E-1")).toHaveCount(0);
 });
 
+test("25. see the ads of each product apart, or of one product", async ({ page }) => {
+  // The demo owner signs in for each test above; the sign-in limit allows 10 in 15 minutes, so the analyst looks here.
+  await signIn(page, "analyst@codflow.local", "demo-password-123");
+  await page.goto("/creatives");
+  const picker = page.getByRole("group", { name: "Show the ads of" });
+  await picker.getByRole("button", { name: "Each product apart" }).click();
+  await expect(picker.getByRole("button", { name: "Each product apart" })).toHaveAttribute("aria-pressed", "true");
+  for (const name of ["Posture Corrector Pro", "Mini Blender Go", "LED Night Lamp"]) await expect(page.getByRole("region", { name, exact: true })).toBeVisible();
+  // The lamp's campaign isn't linked: its ads sit with the lamp because of their orders, and say so.
+  const lamp = page.getByRole("region", { name: "LED Night Lamp", exact: true });
+  await expect(lamp.getByText("2 ads are here because of their orders")).toBeVisible();
+  await expect(lamp.locator("tr", { hasText: "cr_ln_story_02" })).toContainText("Matched by its orders");
+  await expect(lamp.locator("tr", { hasText: "cr_pc_ugc_01" })).toHaveCount(0);
+
+  // One product: only its ads, and the pick stays in the address.
+  await picker.getByRole("button", { name: "Mini Blender Go" }).click();
+  await expect(page).toHaveURL(/[?&]product=/);
+  await expect(page.locator("tr", { hasText: "cr_mb_ugc_01" })).toBeVisible();
+  await expect(page.locator("tr", { hasText: "cr_pc_ugc_01" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Show the ads of" }).getByRole("button", { name: "Mini Blender Go" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("tr", { hasText: "cr_ln_story_02" })).toHaveCount(0);
+
+  // Every product together again: the product column says what each ad sells.
+  await page.getByRole("group", { name: "Show the ads of" }).getByRole("button", { name: "All products" }).click();
+  await expect(page).not.toHaveURL(/product=/);
+  await expect(page.locator("tr", { hasText: "cr_pc_ugc_01" })).toContainText("Posture Corrector Pro");
+});
+
 test("20. open pages from the red dock, and every page fits a phone screen", async ({ page }) => {
   // The demo business's view-only member: the same full pages, without an 11th owner sign-in
   // inside the 15-minute login limit.

@@ -45,9 +45,25 @@ export type CreativeRow = {
   name: string | null;
   campaignName: string | null;
   productId: string | null;
+  /**
+   * The product the Creatives page shows the ad under: the one it is linked to (its campaign's, its
+   * ad account's, or its own when it has no campaign), else the product most of its orders are for.
+   */
+  product: { id: string; source: "LINK" | "ORDERS" } | null;
   metrics: Metrics;
   verdict: Verdict | null;
 };
+
+/** The product most of each ad's orders are for; on a tie, the first by ID, so it never flips. */
+function mainOrderProduct(evaluated: Evaluated[]): Map<string, string> {
+  const counts = new Map<string, Map<string, number>>();
+  for (const o of evaluated) {
+    if (!o.creativeId || !o.productId) continue;
+    const byProduct = counts.get(o.creativeId) ?? counts.set(o.creativeId, new Map()).get(o.creativeId)!;
+    byProduct.set(o.productId, (byProduct.get(o.productId) ?? 0) + 1);
+  }
+  return new Map([...counts].map(([k, byProduct]) => [k, [...byProduct].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]]));
+}
 
 /**
  * Order totals, ad spend and allocated overhead per creative, keyed by creative ID, plus the
@@ -73,8 +89,10 @@ export function creativeBreakdown(facts: WorkspaceFacts, evaluated: Evaluated[])
 /** Creative-level economics including the unattributed-orders and unmatched-spend buckets. */
 function creativeRows(facts: WorkspaceFacts, evaluated: Evaluated[], view: RevenueView): { rows: CreativeRow[]; unallocatedOverhead: number } {
   const { keys, totalsByCreative, spendByCreative, allocated, unallocated, creativeIndex } = creativeBreakdown(facts, evaluated);
+  const byOrders = mainOrderProduct(evaluated);
   const rows: CreativeRow[] = [...keys].map((k) => {
     const c = creativeIndex.get(k);
+    const fromOrders = c ? byOrders.get(c.id) : undefined;
     const metrics = computeMetrics(totalsByCreative.get(k) ?? sumTotals([]), spendByCreative.get(k) ?? 0, allocated.get(k) ?? 0, view);
     const kind = k === UNATTRIBUTED ? "UNATTRIBUTED" : k === UNMATCHED_SPEND ? "UNMATCHED_SPEND" : "CREATIVE";
     return {
@@ -85,6 +103,7 @@ function creativeRows(facts: WorkspaceFacts, evaluated: Evaluated[], view: Reven
       name: kind === "UNATTRIBUTED" ? "Unattributed orders" : kind === "UNMATCHED_SPEND" ? "Unmatched spend" : c?.name ?? null,
       campaignName: c?.campaignName ?? null,
       productId: c?.productId ?? null,
+      product: c?.productId ? { id: c.productId, source: "LINK" } : fromOrders ? { id: fromOrders, source: "ORDERS" } : null,
       metrics,
       verdict: kind === "CREATIVE" ? creativeVerdict(metrics, facts.thresholds) : null,
     };
@@ -97,7 +116,8 @@ export async function creativeMatrix(ctx: WorkspaceContext, input: DateRange & {
   const view = input.revenueView ?? facts.defaults.revenueView;
   const { rows, unallocatedOverhead } = creativeRows(facts, evaluate(facts), view);
   rows.sort((a, b) => (a.kind === "CREATIVE" ? 0 : 1) - (b.kind === "CREATIVE" ? 0 : 1) || b.metrics.trueNetProfit - a.metrics.trueNetProfit);
-  return { currency: facts.currency, revenueView: view, thresholds: facts.thresholds, overheadPolicy: facts.defaults.overheadPolicy, unallocatedOverhead, rows };
+  const products = facts.products.map((p) => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name));
+  return { currency: facts.currency, revenueView: view, thresholds: facts.thresholds, overheadPolicy: facts.defaults.overheadPolicy, unallocatedOverhead, products, rows };
 }
 
 export type DashboardInput = DateRange & { productId?: string; creativeId?: string; revenueView?: RevenueView; ads?: AdFilter };
