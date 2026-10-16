@@ -26,7 +26,7 @@
   --color-negative-soft: rgb(185 28 28 / 0.08);
   --color-info: #1d5fc2;
   --color-info-soft: rgb(29 95 194 / 0.1);
-  --font-sans: var(--font-alexandria), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-cairo), var(--font-alexandria), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --shadow-card: 0 1px 2px rgb(20 16 18 / 0.04), 0 10px 30px -18px rgb(20 16 18 / 0.18);
 }
@@ -41,7 +41,7 @@ body {
   background-repeat: no-repeat;
   color: var(--color-fg);
   font-family: var(--font-sans);
-  /* Alexandria runs wide: a touch of negative tracking and a calm line height read cleaner. */
+  /* Alexandria (Latin) runs wide: a touch of negative tracking and a calm line height read cleaner. */
   letter-spacing: -0.006em;
   line-height: 1.55;
   text-rendering: optimizeLegibility;
@@ -73,6 +73,27 @@ p {
    the invisible left-to-right mark in front makes the number one left-to-right piece. */
 [dir="rtl"] .num:not(.flex, .grid, .inline-flex)::before {
   content: "\200E";
+}
+
+/* Arabic letters join up, so any letter spacing pulls the words apart: Arabic pages use none. */
+[lang="ar"] :not(.num) {
+  letter-spacing: 0;
+}
+
+/* Cairo draws lighter than Alexandria: Arabic text is one step bolder so it reads easily on a phone.
+   Numbers keep their weight. */
+[lang="ar"] body,
+[lang="ar"] .font-normal:not(.num) {
+  font-weight: 500;
+}
+[lang="ar"] .font-medium:not(.num) {
+  font-weight: 600;
+}
+[lang="ar"] .font-semibold:not(.num) {
+  font-weight: 700;
+}
+[lang="ar"] .font-bold:not(.num) {
+  font-weight: 800;
 }
 
 /* Brand surfaces: red gradients, glow and shine. */
