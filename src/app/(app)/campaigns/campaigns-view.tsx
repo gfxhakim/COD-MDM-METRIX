@@ -165,7 +165,7 @@ export function CampaignsView() {
           <div className="grid grid-cols-2 border-b border-border sm:grid-cols-3 lg:grid-cols-5">
             <Stat label={t("Ad spend")} def={t(DEF.adSpend)}>{money.fmt(m.adSpend, cur)}</Stat>
             <Stat label={t("Orders placed")} def={t("Orders placed in this period from the ads of these campaigns, running or not. With all ad accounts, orders not linked to a campaign count too.")}>{m.placed.toLocaleString("en-US")}</Stat>
-            <Stat label={t("Delivered")} def={t(DEF.deliveryRate)} sub={m.deliveryRate === null ? t("No finished parcels yet") : t("{pct}% delivery rate", { pct: Math.round(m.deliveryRate * 100) })}>{m.delivered.toLocaleString("en-US")}</Stat>
+            <Stat label={t("Delivered")} def={t(DEF.deliveryRate)} sub={m.deliveryRate === null ? t("No finished orders yet") : t("{pct}% delivery rate", { pct: Math.round(m.deliveryRate * 100) })}>{m.delivered.toLocaleString("en-US")}</Stat>
             <Stat label={t("True net profit")} def={t(DEF.trueNetProfit)} tone={m.trueNetProfit < 0 ? "text-negative" : "text-positive"}>{money.fmt(m.trueNetProfit, cur)}</Stat>
             <Stat label="POAS" def={t(DEF.truePoas)} tone={m.truePoas !== null && m.truePoas < 0 ? "text-negative" : undefined} sub={account ? t("Whole account, this period") : t("All campaigns, this period")}>{m.truePoas === null ? "—" : m.truePoas.toFixed(2)}</Stat>
           </div>

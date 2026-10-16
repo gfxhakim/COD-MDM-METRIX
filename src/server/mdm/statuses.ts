@@ -36,12 +36,13 @@ export async function setParcelStatus(tx: Prisma.TransactionClient, workspaceId:
  * - a parcel being prepared or with the carrier confirms a pending order;
  * - an order whose parcels are all canceled is canceled and no longer counts as
  *   confirmed, even if it was confirmed before (the client canceled after confirming).
+ * Parcels MDM archived are left out.
  * Without `orderIds`, checks every order in the workspace that has a parcel.
  */
 export async function reconcileOrderStatuses(tx: Prisma.TransactionClient, workspaceId: string, orderIds?: string[]) {
   const orders = await tx.order.findMany({
     where: { workspaceId, status: { not: "CANCELED" }, ...(orderIds ? { id: { in: orderIds } } : { parcels: { some: {} } }) },
-    select: { id: true, status: true, parcels: { select: { normalizedStatus: true, dispatchedAt: true, lastProviderUpdateAt: true } } },
+    select: { id: true, status: true, parcels: { where: { archived: false }, select: { normalizedStatus: true, dispatchedAt: true, lastProviderUpdateAt: true } } },
   });
   let confirmed = 0;
   let canceled = 0;

@@ -91,6 +91,12 @@ export function mapMdmParcel(raw: unknown): LiveParcel {
     .filter((e): e is { status: string; at: Date } => !!e.status && !!e.at)
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const status = str(p.status);
+  const products = (Array.isArray(p.products) ? p.products : []).filter(isObj);
+  // Pieces in the parcel, and the pieces the customer kept; null when MDM doesn't say for every product.
+  const pieces = (key: "quantity" | "completedQuantity") =>
+    products.length && products.every((x) => typeof x[key] === "number" && Number.isFinite(x[key]))
+      ? products.reduce((a, x) => a + Math.max(0, Math.round(x[key] as number)), 0)
+      : null;
   return {
     trackingId,
     mdmOrderId: str(p.orderId),
@@ -107,6 +113,13 @@ export function mapMdmParcel(raw: unknown): LiveParcel {
     deliveredAt: firstAt(events, "DELIVERED"),
     returnedAt: firstAt(events, "RETURNED"),
     events,
+    type: str(p.type),
+    subType: str(p.subType),
+    parentParcelId: str(p.parentParcelId),
+    archived: p.archived === true,
+    paidToClient: money(pricing.totalToPayToClient, currency),
+    piecesSent: pieces("quantity"),
+    piecesDelivered: pieces("completedQuantity"),
     raw: p,
   };
 }
@@ -155,7 +168,24 @@ export function mapMdmOrder(raw: unknown): MdmOrder {
     utm: { source: utmValue(utm.source), medium: utmValue(utm.medium), campaign: utmValue(utm.campaign), content: utmValue(utm.content) },
     products,
     upsell: typeof o.upsell === "boolean" ? o.upsell : null,
+    archived: o.archived === true,
+    raw: orderAsReceived(o),
   };
+}
+
+/** The order fields shown "as MDM sent it": everything about the order and its money, nothing about the customer. */
+const ORDER_FIELDS = ["trackingId", "externalId", "status", "statusDate", "createdAt", "updatedAt", "confirmed", "confirmedByUs", "totalPrice", "currency", "declaredValue", "freeShipping", "isStopDesk", "paymentMethod", "source", "archived", "upsell", "isDropShipping", "isFulfilledByUs"] as const;
+
+export function orderAsReceived(o: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of ORDER_FIELDS) if (o[k] !== undefined) out[k] = o[k];
+  const store = isObj(o.store) ? o.store : null;
+  if (store) out.store = { name: store.name ?? null };
+  const dest = isObj(o.destination) ? o.destination : null;
+  if (dest) out.destination = { stateName: dest.stateName ?? null, stateCode: dest.stateCode ?? null, cityName: dest.cityName ?? null };
+  if (isObj(o.utm)) out.utm = { source: o.utm.source ?? null, medium: o.utm.medium ?? null, campaign: o.utm.campaign ?? null, content: o.utm.content ?? null };
+  if (Array.isArray(o.products)) out.products = o.products.filter(isObj).map((x) => ({ name: x.name ?? null, quantity: x.quantity ?? null, price: x.price ?? null, variantOf: x.variantOf ?? null }));
+  return out;
 }
 
 /**

@@ -662,6 +662,8 @@ model Order {
   mdmHistoryCheckedAt   DateTime?
   /// MDM marks the order as upsold by its call center (read with MDM's upsell filter).
   mdmUpsell             Boolean     @default(false)
+  /// MDM archived this order (taken off its lists). Archived orders stay visible but count in no report.
+  mdmArchived           Boolean     @default(false)
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
@@ -748,6 +750,19 @@ model Parcel {
   deliveredAt          DateTime?
   returnedAt           DateTime?
   lastProviderUpdateAt DateTime?
+  /// MDM's own parcel type and sub-type, as sent (e.g. an exchange or a refund).
+  mdmType              String?
+  mdmSubType           String?
+  /// Set when MDM made this parcel from another one (exchange, refund, copy). It counts as more
+  /// money for the same order, never as one more order delivered or returned.
+  mdmParentParcelId    String?
+  /// MDM archived this parcel (taken off its lists). Archived parcels count in no report.
+  archived             Boolean             @default(false)
+  /// Money MDM hands back to the customer with this parcel (a refund or an exchange difference).
+  paidToClient         Int?
+  /// Pieces MDM sent in this parcel, and the pieces the customer kept (MDM's completed quantity).
+  piecesSent           Int?
+  piecesDelivered      Int?
   matchMethod          MatchMethod         @default(NONE)
   matchConfidence      Float               @default(0)
   isDemoFixture        Boolean             @default(false)

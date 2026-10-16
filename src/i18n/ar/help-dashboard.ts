@@ -5,20 +5,8 @@ const ar: Dict = {
   // Dashboard: cards and number tiles
   "The ad with the highest true net profit in this period, when one made a profit. An order counts for the ad whose ID is in its utm_content.":
     "الإعلان صاحب أعلى صافي ربح حقيقي في هذه الفترة، إن وُجد إعلان رابح. تُحتسب الطلبية للإعلان الذي يوجد معرّفه في utm_content الخاص بها.",
-  "Advice worked out from this period's numbers: your POAS against your target, wilayas with 10 or more shipped parcels where 3 in 10 come back, and cash not paid out yet.":
-    "نصائح مبنية على أرقام هذه الفترة: POAS عندك مقارنةً بهدفك، والولايات التي فيها 10 طرود مُرسَلة أو أكثر ويعود منها 3 من كل 10، والمال الذي لم يُحوَّل إليك بعد.",
-  "Orders placed and parcels delivered per day, week or month, by order date. The red bar has the most deliveries. Hover or tap a bar for its numbers.":
-    "الطلبيات الواردة والطرود المسلَّمة في كل يوم أو أسبوع أو شهر، حسب تاريخ الطلبية. العمود الأحمر هو الذي فيه أكثر طرود مسلَّمة. مرِّر المؤشر على عمود أو المسه لترى أرقامه.",
-  "What happened to the parcels of the orders placed in this period. The strip splits shipped parcels into delivered, returned, still on the road, and lost or exchanged.":
-    "ما حدث لطرود الطلبيات الواردة في هذه الفترة. يقسم الشريط الطرود المُرسَلة إلى مُسلَّمة، ومرتجَعة، وما زالت في الطريق، وضائعة أو مستبدَلة.",
-  "Every order placed in this period, confirmed or not. Shipped counts parcels handed to the carrier; one order can have several parcels.":
-    "كل طلبية واردة في هذه الفترة، مؤكَّدة أو لا. «مُرسَلة» تعدّ الطرود التي سُلِّمت لشركة التوصيل؛ وقد تكون للطلبية الواحدة عدة طرود.",
   "Orders your call center confirmed by phone, out of every order placed in this period. Orders still waiting for a call count as not confirmed.":
     "الطلبيات التي أكَّدها مركز الاتصال بالهاتف، من بين كل الطلبيات الواردة في هذه الفترة. الطلبيات التي ما زالت تنتظر الاتصال تُحتسب غير مؤكَّدة.",
-  "How many confirmed orders really left with the carrier. Worked out as: shipped parcels ÷ confirmed orders.":
-    "كم من الطلبيات المؤكَّدة خرجت فعلًا مع شركة التوصيل. طريقة الحساب: الطرود المُرسَلة ÷ الطلبيات المؤكَّدة.",
-  "Parcels the customer received and paid for, out of the shipped parcels whose delivery is finished. Parcels still on the road are not counted yet.":
-    "الطرود التي استلمها الزبون ودفع ثمنها، من بين الطرود المُرسَلة التي انتهى توصيلها. الطرود التي ما زالت في الطريق لا تُحتسب بعد.",
   "Return rate": "نسبة الإرجاع",
   "Your 5 ads with the most true net profit in this period, best first. Only ads with at least one order show.":
     "أفضل 5 إعلانات لديك من حيث صافي الربح الحقيقي في هذه الفترة، الأفضل أولًا. تظهر فقط الإعلانات التي لها طلبية واحدة على الأقل.",
@@ -32,8 +20,6 @@ const ar: Dict = {
     "رسوم التوصيل على كل طرد مُرسَل بعد انتهاء توصيله: رسوم شركة التوصيل الفعلية إن كانت معروفة، وإلا فرسوم إصدار تكلفة المنتج.",
   "Packaging fee on each shipped parcel once its delivery is finished (delivered, returned, lost or exchanged).":
     "رسوم التغليف على كل طرد مُرسَل بعد انتهاء توصيله (مُسلَّم، أو مرتجَع، أو ضائع، أو مستبدَل).",
-  "Your 5 ads with the highest return rate in this period, among ads with finished parcels. Small n means too few parcels to trust the rate yet.":
-    "الإعلانات الـ5 ذات أعلى نسبة إرجاع في هذه الفترة، من بين الإعلانات التي لها طرود انتهى توصيلها. «عيّنة صغيرة» تعني أن الطرود قليلة جدًا للوثوق بالنسبة بعد.",
   "These counts cover all dates, not only this period. Open a row to fix it: the fewer problems, the more you can trust the numbers.":
     "هذه الأعداد تشمل كل التواريخ، لا هذه الفترة فقط. افتح السطر لإصلاحه: كلما قلّت المشاكل، زادت ثقتك في الأرقام.",
   "Whether the app can read your orders from MDM, and when the last sync worked. Set it up in Settings > MDM Express.":
@@ -46,8 +32,6 @@ const ar: Dict = {
     "أسطر لم يستطع الاستيراد قراءتها، وعناصر لم تستطع المزامنة حفظها. قد تكون تلك الطلبيات أو التكاليف ناقصة من الأرقام.",
   "Ad spend rows whose ad ID matches no ad you know. The spend still counts in your totals, but in no ad's profit.":
     "أسطر مصاريف إعلانات لا يطابق معرّف إعلانها أي إعلان معروف. تُحتسب المصاريف في مجاميعك، لكنها لا تدخل في ربح أي إعلان.",
-  "Every wilaya of the orders placed in this period, most orders first. Look for wilayas that send many parcels back, and confirm their orders twice.":
-    "كل ولايات الطلبيات الواردة في هذه الفترة، الأكثر طلبيات أولًا. ابحث عن الولايات التي تُرجِع طرودًا كثيرة، وأكِّد طلبياتها مرتين.",
   "What this wilaya's orders leave after their own costs, before ads and overhead. Revenue follows the revenue basis picked in More filters.":
     "ما يتبقى من طلبيات هذه الولاية بعد تكاليفها الخاصة، قبل الإعلانات والمصاريف العامة. تتبع المداخيل أساس المداخيل المختار في «خيارات تصفية أكثر».",
 
@@ -122,6 +106,14 @@ const ar: Dict = {
     "حدِّد حسابًا لتُحتسب كل حملاته لهذا المنتج، حتى الحملات الجديدة. تحديد حساب معلَّم بمنتج آخر ينقله إلى هذا المنتج.",
   "Tick the campaigns that sell this product. Their spend and ads count for it, even when their ad account counts for another product.":
     "حدِّد الحملات التي تبيع هذا المنتج. تُحتسب مصاريفها وإعلاناتها له، حتى لو كان حسابها الإعلاني يُحتسب لمنتج آخر.",
+  "Orders placed and orders delivered per day, week or month, by order date. The red bar has the most deliveries. Hover or tap a bar for its numbers.": "الطلبيات الواردة والطلبيات المسلَّمة في كل يوم أو أسبوع أو شهر، حسب تاريخ الطلبية. العمود الأحمر هو الذي فيه أكثر طلبيات مسلَّمة. مرِّر المؤشر على عمود أو المسه لترى أرقامه.",
+  "What happened to the orders placed in this period once shipped. The strip splits them into delivered, returned, still on the road, and lost or exchanged. An order counts once, however many parcels MDM made for it.": "ما حدث للطلبيات الواردة في هذه الفترة بعد إرسالها. يقسمها الشريط إلى مُسلَّمة، ومرتجَعة، وما زالت في الطريق، وضائعة أو مستبدَلة. تُحتسب الطلبية مرة واحدة مهما كان عدد الطرود التي صنعتها MDM لها.",
+  "Every order placed in this period, confirmed or not. Shipped counts the orders handed to the carrier, each once, even when MDM made several parcels for it.": "كل طلبية واردة في هذه الفترة، مؤكَّدة أو لا. «مُرسَلة» تعدّ الطلبيات التي سُلِّمت لشركة التوصيل، كل واحدة مرة واحدة، حتى لو صنعت لها MDM عدة طرود.",
+  "How many confirmed orders really left with the carrier. Worked out as: shipped orders ÷ confirmed orders.": "كم من الطلبيات المؤكَّدة خرجت فعلًا مع شركة التوصيل. طريقة الحساب: الطلبيات المُرسَلة ÷ الطلبيات المؤكَّدة.",
+  "Orders the customer received and paid for, out of the shipped orders whose delivery is finished. Orders still on the road are not counted yet.": "الطلبيات التي استلمها الزبون ودفع ثمنها، من بين الطلبيات المُرسَلة التي انتهى توصيلها. الطلبيات التي ما زالت في الطريق لا تُحتسب بعد.",
+  "Advice worked out from this period's numbers: your POAS against your target, wilayas with 10 or more shipped orders where 3 in 10 come back, and cash not paid out yet.": "نصائح مبنية على أرقام هذه الفترة: POAS عندك مقارنةً بهدفك، والولايات التي فيها 10 طلبيات مُرسَلة أو أكثر ويعود منها 3 من كل 10، والمال الذي لم يُحوَّل إليك بعد.",
+  "Your 5 ads with the highest return rate in this period, among ads with finished orders. Small n means too few orders to trust the rate yet.": "الإعلانات الـ5 ذات أعلى نسبة إرجاع في هذه الفترة، من بين الإعلانات التي لها طلبيات انتهى توصيلها. «عيّنة صغيرة» تعني أن الطلبيات قليلة جدًا للوثوق بالنسبة بعد.",
+  "Every wilaya of the orders placed in this period, most orders first. Look for wilayas that send many orders back, and confirm their orders twice.": "كل ولايات الطلبيات الواردة في هذه الفترة، الأكثر طلبيات أولًا. ابحث عن الولايات التي تُرجِع طلبيات كثيرة، وأكِّد طلبياتها مرتين.",
 };
 
 export default ar;

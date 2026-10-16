@@ -11,7 +11,7 @@ export async function getDataHealth(ctx: WorkspaceContext) {
     db.integrationConnection.findFirst({ where: { ...w, provider: "MDM_EXPRESS" }, select: { status: true, lastSuccessfulSyncAt: true, lastTestedAt: true, maskedLabel: true } }),
     db.syncJob.findFirst({ where: w, orderBy: { createdAt: "desc" }, select: { id: true, status: true, createdAt: true, finishedAt: true } }),
     db.unmatchedRecord.count({ where: { ...w, status: "OPEN" } }),
-    db.parcel.count({ where: { ...w, normalizedStatus: "UNKNOWN" } }),
+    db.parcel.count({ where: { ...w, normalizedStatus: "UNKNOWN", archived: false } }),
     db.importRowError.count({ where: w }),
     db.syncItem.count({ where: { ...w, result: "FAILED" } }),
     db.bankTransaction.count({ where: { ...w, reviewStatus: "PENDING" } }),
@@ -33,12 +33,12 @@ export async function getDataHealth(ctx: WorkspaceContext) {
 
 export async function getOperationalCounts(ctx: WorkspaceContext, range: { from?: Date; to?: Date }) {
   const placedAt = range.from || range.to ? { gte: range.from, lte: range.to } : undefined;
-  const orderWhere = { workspaceId: ctx.workspaceId, placedAt };
+  const orderWhere = { workspaceId: ctx.workspaceId, placedAt, mdmArchived: false };
   const [placed, confirmed, canceled, parcelGroups, wilayaGroups] = await Promise.all([
     db.order.count({ where: orderWhere }),
     db.order.count({ where: { ...orderWhere, confirmedAt: { not: null } } }),
     db.order.count({ where: { ...orderWhere, status: "CANCELED" } }),
-    db.parcel.groupBy({ by: ["normalizedStatus"], where: { workspaceId: ctx.workspaceId, order: placedAt ? { placedAt } : undefined }, _count: true }),
+    db.parcel.groupBy({ by: ["normalizedStatus"], where: { workspaceId: ctx.workspaceId, archived: false, order: { placedAt, mdmArchived: false } }, _count: true }),
     db.order.groupBy({ by: ["wilaya"], where: orderWhere, _count: true, orderBy: { _count: { wilaya: "desc" } }, take: 8 }),
   ]);
   const byStatus = Object.fromEntries(parcelGroups.map((g) => [g.normalizedStatus, g._count])) as Record<string, number>;

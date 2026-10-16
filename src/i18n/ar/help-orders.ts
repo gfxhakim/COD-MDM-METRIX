@@ -49,8 +49,6 @@ const ar: Dict = {
     "كيف عُثر على الإعلان. «محتوى UTM»: معرّف الإعلان في رابط الطلبية طابق إعلانًا. «لا شيء»: لا توجد مطابقة بعد.",
   "How sure the link to the ad is: 100% when the ad ID matched a creative exactly, 0% when no ad is linked.":
     "مدى التأكد من الربط بالإعلان: 100% عندما يطابق معرّف الإعلان إعلانًا تمامًا، و0% عندما لا يوجد إعلان مربوط.",
-  "The parcels MDM made for this order, with every status they went through. Delivery and return rates count parcels, not orders.":
-    "الطرود التي أنشأها MDM لهذه الطلبية، مع كل حالة مرّت بها. نسبة التسليم ونسبة الإرجاع تحسبان الطرود لا الطلبيات.",
   "Match: how the parcel was tied to this order. Confidence: 100% by MDM order, order reference or by hand; 95% by an earlier tracking-ID link; 90% by the store order ID.":
     "الربط: كيف رُبط الطرد بهذه الطلبية. الثقة: 100% عبر طلبية MDM أو مرجع الطلبية أو يدويًا، و95% عبر ربط سابق برقم التتبع، و90% عبر رقم طلبية المتجر.",
   "For a parcel that did not link by itself. Type its tracking number; later syncs keep this link, and Unlink undoes it.":

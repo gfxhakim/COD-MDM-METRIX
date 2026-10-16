@@ -95,7 +95,10 @@ describe("credentials", () => {
       const req = JSON.parse(String(init.body ?? "{}"));
       const body = path === "/api/v2/orders/search"
         ? { pagination: { page: 1, hasMore: false, nextPage: null, total: 2 }, list: req.filters?.upsell ? [] : req.filters?.trackingId ? [{ trackingId: "MO-1", externalId: "ES-2001" }] : [mdmOrder, { trackingId: "MO-BROKEN" }] }
-        : { pagination: { page: 1, hasMore: false, nextPage: null, total: 1 }, list: [{ trackingId: "LP-1", orderId: "MO-1", currency: "DZD", status: "outForDelivery", statusDate: "2026-09-20T10:00:00.000Z", pricing: { totalToPayFromClient: 3900 }, fees: { shipping: 600, return: 250 }, destinationAddress: { stateName: "Oran" }, client: { firstName: "Amina", phone: "0551111111" }, statusHistory: [{ date: "2026-09-20T10:00:00.000Z", status: "outForDelivery", responsible: { firstName: "Courier" } }] }] };
+        : { pagination: { page: 1, hasMore: false, nextPage: null, total: 2 }, list: [
+            { trackingId: "LP-1", orderId: "MO-1", currency: "DZD", status: "outForDelivery", statusDate: "2026-09-20T10:00:00.000Z", pricing: { totalToPayFromClient: 3900 }, fees: { shipping: 600, return: 250 }, destinationAddress: { stateName: "Oran" }, client: { firstName: "Amina", phone: "0551111111" }, statusHistory: [{ date: "2026-09-20T10:00:00.000Z", status: "outForDelivery", responsible: { firstName: "Courier" } }] },
+            { trackingId: "LP-2", orderId: "MO-1", parentParcelId: "LP-1", type: "exchange", archived: true, currency: "DZD", status: "pending", pricing: { totalToPayFromClient: 0, totalToPayToClient: 500 }, products: [{ name: "Lamp", quantity: 2 }], client: { firstName: "Amina", phone: "0551111111" }, statusHistory: [] },
+          ] };
       return new Response(JSON.stringify(body), { status: 200 });
     }));
     const { job } = await startSync(live.ctx, { mode: "FULL" });
@@ -105,7 +108,11 @@ describe("credentials", () => {
     expect(await db.syncItem.findFirstOrThrow({ where: { jobId: job.id, result: "FAILED" } })).toMatchObject({ entityType: "order", providerId: "MO-BROKEN" });
     expect(await db.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ mdmOrderId: "MO-1", status: "CONFIRMED", utmContent: "120000000000021" });
     const p = await db.parcel.findFirstOrThrow({ where: { workspaceId: live.ws.id, trackingId: "LP-1" } });
-    expect(p).toMatchObject({ orderId: order.id, matchMethod: "MDM_ORDER", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "وهران" });
+    expect(p).toMatchObject({ orderId: order.id, matchMethod: "MDM_ORDER", normalizedStatus: "SHIPPED", codAmount: 390000, wilaya: "وهران", mdmParentParcelId: null, archived: false });
+    // What makes a parcel a follow-up of another one, and whether MDM archived it, is kept.
+    expect(await db.parcel.findFirstOrThrow({ where: { workspaceId: live.ws.id, trackingId: "LP-2" } })).toMatchObject({ orderId: order.id, mdmType: "exchange", mdmParentParcelId: "LP-1", archived: true, paidToClient: 50000, piecesSent: 2 });
+    // The order as MDM sent it (no customer) is kept to show on the order.
+    expect(await db.rawExternalRecord.findFirstOrThrow({ where: { workspaceId: live.ws.id, entityType: "order", externalId: "MO-1" } })).toMatchObject({ payload: { trackingId: "MO-1", externalId: "ES-2001", totalPrice: 3900 } });
     const stored = JSON.stringify([await db.parcel.findMany({ where: { workspaceId: live.ws.id } }), await db.order.findMany({ where: { workspaceId: live.ws.id } }), await db.rawExternalRecord.findMany({ where: { workspaceId: live.ws.id } })]);
     expect(stored).not.toMatch(/Amina|Placeholder|0551111111|551111111|Courier|203\.0\.113\.7|12 rue X/);
     // The customer is kept only encrypted, and shown to the owner through the app.

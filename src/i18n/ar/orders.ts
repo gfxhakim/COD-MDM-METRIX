@@ -305,6 +305,17 @@ const ar: Dict = {
   "Default formula: forward shipping is charged on delivered parcels only; call-center cost K is charged once per order.": "المعادلة الافتراضية: رسوم التوصيل تُحسَب على الطرود المُسلَّمة فقط، وتكلفة مركز الاتصال K تُحسَب مرة واحدة لكل طلبية.",
   "Per placed lead; call-center cost charged per placed lead.": "لكل طلبية واردة؛ تكلفة مركز الاتصال تُحسَب لكل طلبية واردة.",
   "Per placed lead; call-center cost charged per confirmed order.": "لكل طلبية واردة؛ تكلفة مركز الاتصال تُحسَب لكل طلبية مؤكَّدة.",
+  "read {date}": "قُرئ {date}",
+  "MDM's own field names and values, as the last sync read them. Amounts are in dinars, as MDM sends them. The customer's details are never kept here.": "أسماء الحقول وقيمها كما تكتبها MDM، كما قرأتها آخر مزامنة. المبالغ بالدينار كما ترسلها MDM. لا تُحفظ بيانات الزبون هنا أبدًا.",
+  "Archived in MDM": "مؤرشَفة في MDM",
+  "MDM archived this order, so it counts in no report. It stays here so you can still find it.": "أرشفت MDM هذه الطلبية، لذلك لا تُحتسب في أي تقرير. تبقى هنا لتجدها متى أردت.",
+  "What MDM sent for this order": "ما أرسلته MDM لهذه الطلبية",
+  "The parcels MDM made for this order, with every status they went through. The order counts once in every number, however many parcels it has: an exchange, a refund or a copy adds its money, not one more delivery. Parcels MDM archived count for nothing.": "الطرود التي صنعتها MDM لهذه الطلبية، مع كل حالة مرّت بها. تُحتسب الطلبية مرة واحدة في كل رقم مهما كان عدد طرودها: الاستبدال أو الاسترجاع أو النسخة يضيف ماله فقط، وليس تسليمًا آخر. الطرود التي أرشفتها MDM لا تُحتسب.",
+  "Made from {id}": "مصنوع من {id}",
+  "MDM type: {type}": "نوع MDM: {type}",
+  "Pieces: {sent} sent · {kept} kept by the customer": "القطع: {sent} مُرسَلة · {kept} احتفظ بها الزبون",
+  "Pieces: {sent} sent": "القطع: {sent} مُرسَلة",
+  "What MDM sent for this parcel": "ما أرسلته MDM لهذا الطرد",
 };
 
 export default ar;

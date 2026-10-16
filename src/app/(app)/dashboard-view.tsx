@@ -254,7 +254,7 @@ function OverviewChart({ days, fmt }: { days: Day[]; fmt: (v: number) => string 
   const bestLabel = unit === "Daily" ? t("Best day") : unit === "Weekly" ? t("Best week") : t("Best month");
   return (
     <Panel className="h-full gap-3">
-      <PanelTitle def={t("Orders placed and parcels delivered per day, week or month, by order date. The red bar has the most deliveries. Hover or tap a bar for its numbers.")} action={<span className="whitespace-nowrap rounded-full bg-surface-3 px-3 py-1 text-[11px] font-medium text-muted">{capped ? t("Last 12 months") : span}</span>}>{title}</PanelTitle>
+      <PanelTitle def={t("Orders placed and orders delivered per day, week or month, by order date. The red bar has the most deliveries. Hover or tap a bar for its numbers.")} action={<span className="whitespace-nowrap rounded-full bg-surface-3 px-3 py-1 text-[11px] font-medium text-muted">{capped ? t("Last 12 months") : span}</span>}>{title}</PanelTitle>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
         <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] border border-[#d8d2d3] bg-[#ebe8e8]" />{t("Orders placed")}</span>
         <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-[#b9b0b2]" />{t("Delivered")}</span>
@@ -459,7 +459,7 @@ export function DashboardView() {
     }
     const risky = r.wilayas.filter((w) => w.shipped >= 10 && (w.returnRate ?? 0) >= 0.3).sort((a, b) => (b.returnRate ?? 0) - (a.returnRate ?? 0)).slice(0, 2);
     if (risky.length) {
-      const share = <b className="text-fg">{t("{n} parcels in 10", { n: Math.round((risky[0].returnRate ?? 0) * 10) })}</b>;
+      const share = <b className="text-fg">{t("{n} orders in 10", { n: Math.round((risky[0].returnRate ?? 0) * 10) })}</b>;
       tips.push(
         risky.length > 1
           ? tx("{wilaya} and {other} send back about {share}. Confirm those orders twice.", { wilaya: <bdi>{risky[0].wilaya}</bdi>, other: <bdi>{risky[1].wilaya}</bdi>, share })
@@ -553,11 +553,11 @@ export function DashboardView() {
               <span className="relative -mt-2 text-[11px] text-white/85">{m.trueNetProfit < 0 ? t("Loss after ads and every cost, on {basis}", { basis: basis(m.revenueView) }) : t("Profit after ads and every cost, on {basis}", { basis: basis(m.revenueView) })}</span>
             </section>
 
-            <KpiCard label={t("Delivered revenue")} def={t(DEF.deliveredRevenue)} href="/orders" linkLabel={t("Open orders and parcels")} graphic={<DayBars days={days} pick={(d) => d.delivered} tip={(day, n) => t("{day}: {n} delivered", { day, n })} label={t("Delivered parcels per day, by order date")} />} sub={t("{n} parcels", { n: count(m.delivered) })}>
+            <KpiCard label={t("Delivered revenue")} def={t(DEF.deliveredRevenue)} href="/orders" linkLabel={t("Open orders and parcels")} graphic={<DayBars days={days} pick={(d) => d.delivered} tip={(day, n) => t("{day}: {n} delivered", { day, n })} label={t("Delivered orders per day, by order date")} />} sub={t("{n} orders", { n: count(m.delivered) })}>
               <FitMoney value={m.deliveredRevenue} currency={cur} max={36} />
             </KpiCard>
 
-            <KpiCard label={t("Cash in transit")} def={t(DEF.cashInTransit)} href="/orders" linkLabel={t("Open orders and parcels")} graphic={<TransitSquares inTransit={m.inTransit} shipped={m.shipped} />} sub={t("{n} parcels", { n: count(m.inTransit) })}>
+            <KpiCard label={t("Cash in transit")} def={t(DEF.cashInTransit)} href="/orders" linkLabel={t("Open orders and parcels")} graphic={<TransitSquares inTransit={m.inTransit} shipped={m.shipped} />} sub={t("{n} orders", { n: count(m.inTransit) })}>
               <FitMoney value={m.cashInTransit} currency={cur} max={36} />
             </KpiCard>
 
@@ -578,7 +578,7 @@ export function DashboardView() {
                           <span className="line-clamp-2 min-w-0 break-words text-[22px] font-bold leading-tight tracking-tight">{best.name || t("Ad {id}", { id: best.externalCreativeId ?? "" })}</span>
                           {best.verdict ? <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-ink">{t(VERDICT_LABEL[best.verdict])}</span> : null}
                         </div>
-                        <span className="relative line-clamp-2 break-words text-[13px] text-[#d9d0d2]">{t("Ad {id} · {n} parcels shipped", { id: best.externalCreativeId ?? "", n: count(best.shipped) })}</span>
+                        <span className="relative line-clamp-2 break-words text-[13px] text-[#d9d0d2]">{t("Ad {id} · {n} orders shipped", { id: best.externalCreativeId ?? "", n: count(best.shipped) })}</span>
                         <div className="relative grid grid-cols-2 gap-2.5">
                           <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]"><Term label={t("Profit, {currency}", { currency: shownCode })} definition={t(DEF.trueNetProfit)} iconClassName="text-white/60 hover:text-white" /></span><FitText max={20} min={12}>{bare(best.trueNetProfit, true)}</FitText></div>
                           <div className="flex min-w-0 flex-col gap-0.5"><span className="text-[11px] text-[#bdb2b5]"><Term label="POAS" definition={t(DEF.truePoas)} iconClassName="text-white/60 hover:text-white" /></span><FitText max={20} min={12}>{best.truePoas === null ? "—" : best.truePoas.toFixed(2)}</FitText></div>
@@ -600,7 +600,7 @@ export function DashboardView() {
               <Panel className="gap-3 md:flex-1 md:basis-0 xl:flex-none xl:basis-auto">
                 <div className="flex items-center gap-2.5">
                   <span className="size-[30px] shrink-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,#ff9aa3_0%,#ff2d42_45%,#9b0718_100%)] shadow-[0_0_16px_rgb(255_45_66/0.75)]" aria-hidden="true" />
-                  <h2 className="text-[15px] font-bold"><Term label={t("Smart tips")} definition={t("Advice worked out from this period's numbers: your POAS against your target, wilayas with 10 or more shipped parcels where 3 in 10 come back, and cash not paid out yet.")} /></h2>
+                  <h2 className="text-[15px] font-bold"><Term label={t("Smart tips")} definition={t("Advice worked out from this period's numbers: your POAS against your target, wilayas with 10 or more shipped orders where 3 in 10 come back, and cash not paid out yet.")} /></h2>
                 </div>
                 <ul className="flex flex-col gap-2.5 text-[13px] leading-relaxed text-muted">
                   {tips.length ? tips.map((tip, i) => <li key={i}>{tip}</li>) : <li>{t("Nothing needs your attention right now.")}</li>}
@@ -614,14 +614,14 @@ export function DashboardView() {
 
             <div className="flex min-w-0 flex-col gap-[18px] md:col-span-2">
               <Panel className="gap-3.5">
-                <PanelTitle def={t("What happened to the parcels of the orders placed in this period. The strip splits shipped parcels into delivered, returned, still on the road, and lost or exchanged.")} action={<CornerLink href="/orders" label={t("Open orders and parcels")} />}>{t("Order statistics")}</PanelTitle>
+                <PanelTitle def={t("What happened to the orders placed in this period once shipped. The strip splits them into delivered, returned, still on the road, and lost or exchanged. An order counts once, however many parcels MDM made for it.")} action={<CornerLink href="/orders" label={t("Open orders and parcels")} />}>{t("Order statistics")}</PanelTitle>
                 {m.placed === 0 ? (
                   <EmptyState icon={<Boxes />} title={t("No orders in this period")} description={t("Change the filters, import orders, or add one manually.")} />
                 ) : (
                   <>
                     <div className="flex flex-wrap items-end justify-between gap-4">
                       <div className="flex min-w-0 flex-col gap-1">
-                        <span className="text-xs text-muted"><Term label={t("Orders placed")} definition={t("Every order placed in this period, confirmed or not. Shipped counts parcels handed to the carrier; one order can have several parcels.")} /></span>
+                        <span className="text-xs text-muted"><Term label={t("Orders placed")} definition={t("Every order placed in this period, confirmed or not. Shipped counts the orders handed to the carrier, each once, even when MDM made several parcels for it.")} /></span>
                         <div className="flex items-center gap-2.5">
                           <span className="num text-[40px] font-extrabold leading-none">{count(m.placed)}</span>
                           <span className="whitespace-nowrap rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-bold text-brand-deep">{tx("{n} shipped", { n: <span className="num">{count(m.shipped)}</span> })}</span>
@@ -648,8 +648,8 @@ export function DashboardView() {
                 ) : null}
               </Panel>
               <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2">
-                <RateCard title={t("Confirmed by the call center")} help={t("Orders your call center confirmed by phone, out of every order placed in this period. Orders still waiting for a call count as not confirmed.")} icon={<PhoneCall />} value={m.confirmed} of={m.placed} caption={t("orders confirmed")} rateLabel={t("Confirmation rate")} rate={m.confirmationRate} def={t(DEF.confirmationRate)} note={<span className="inline-flex items-center gap-1">{tx("Shipping rate {rate}", { rate: <Rate value={m.shippingRate} className="font-semibold text-fg" /> })}<HelpTip label={t("Shipping rate")}>{t("How many confirmed orders really left with the carrier. Worked out as: shipped parcels ÷ confirmed orders.")}</HelpTip></span>} />
-                <RateCard title={t("Delivered to the customer")} help={t("Parcels the customer received and paid for, out of the shipped parcels whose delivery is finished. Parcels still on the road are not counted yet.")} icon={<PackageCheck />} value={m.delivered} of={m.finished} caption={t("finished parcels delivered")} rateLabel={t("Delivery rate")} rate={m.deliveryRate} def={t(DEF.deliveryRate)} note={<span className="inline-flex items-center gap-1">{tx("Return rate {rate}", { rate: <Rate value={m.returnRate} className={cn("font-semibold", (m.returnRate ?? 0) > 0.3 ? "text-negative" : "text-fg")} /> })}<HelpTip label={t("Return rate")}>{t(DEF.returnRate)}</HelpTip></span>} />
+                <RateCard title={t("Confirmed by the call center")} help={t("Orders your call center confirmed by phone, out of every order placed in this period. Orders still waiting for a call count as not confirmed.")} icon={<PhoneCall />} value={m.confirmed} of={m.placed} caption={t("orders confirmed")} rateLabel={t("Confirmation rate")} rate={m.confirmationRate} def={t(DEF.confirmationRate)} note={<span className="inline-flex items-center gap-1">{tx("Shipping rate {rate}", { rate: <Rate value={m.shippingRate} className="font-semibold text-fg" /> })}<HelpTip label={t("Shipping rate")}>{t("How many confirmed orders really left with the carrier. Worked out as: shipped orders ÷ confirmed orders.")}</HelpTip></span>} />
+                <RateCard title={t("Delivered to the customer")} help={t("Orders the customer received and paid for, out of the shipped orders whose delivery is finished. Orders still on the road are not counted yet.")} icon={<PackageCheck />} value={m.delivered} of={m.finished} caption={t("finished orders delivered")} rateLabel={t("Delivery rate")} rate={m.deliveryRate} def={t(DEF.deliveryRate)} note={<span className="inline-flex items-center gap-1">{tx("Return rate {rate}", { rate: <Rate value={m.returnRate} className={cn("font-semibold", (m.returnRate ?? 0) > 0.3 ? "text-negative" : "text-fg")} /> })}<HelpTip label={t("Return rate")}>{t(DEF.returnRate)}</HelpTip></span>} />
               </div>
             </div>
 
@@ -692,9 +692,9 @@ export function DashboardView() {
               <PanelTitle def={t("The cash of the orders placed in this period. Row 1 is already paid out to you, rows 2 and 3 should still reach you, and row 4 is money lost on returns.")} action={<span className="text-xs font-semibold text-subtle">{shownCode}</span>}>{t("Where your cash is")}</PanelTitle>
               {[
                 { label: t("Collected"), sub: m.deliveredRevenue > 0 ? t("{pct} of delivered", { pct: formatPercent(m.remittedCash / m.deliveredRevenue, 0) }) : t("Paid out to you"), value: m.remittedCash, def: t(DEF.netCashCollected) },
-                { label: t("On the road"), sub: t("{n} parcels", { n: count(m.inTransit) }), value: m.cashInTransit, def: t(DEF.cashInTransit) },
+                { label: t("On the road"), sub: t("{n} orders", { n: count(m.inTransit) }), value: m.cashInTransit, def: t(DEF.cashInTransit) },
                 { label: t("Not paid yet"), sub: t("Delivered, not paid out"), value: unpaid, def: t("Delivered revenue minus the cash already paid out to you, for orders placed in this period.") },
-                { label: t("Lost on returns"), sub: t("{n} parcels", { n: count(m.returned) }), value: -m.rtoLoss, def: t(DEF.rtoLoss) },
+                { label: t("Lost on returns"), sub: t("{n} orders", { n: count(m.returned) }), value: -m.rtoLoss, def: t(DEF.rtoLoss) },
               ].map((row, i) => (
                 <div key={row.label} className={cn("flex items-center gap-3 rounded-2xl p-3", i === 0 ? "bg-brand glow" : "bg-surface-2")}>
                   <span className={cn("grid size-7 shrink-0 place-items-center rounded-full bg-white text-xs font-extrabold", i === 0 ? "text-brand-strong" : "text-fg")}>{i + 1}</span>
@@ -721,7 +721,7 @@ export function DashboardView() {
                   ))}
                 </ul>
               )}
-              <p className="mt-auto flex items-center gap-2 border-t border-[#f1eeee] pt-3 text-[11px] text-muted"><span className="size-2 shrink-0 rounded-full bg-ink" />{t("Black bar: more than 3 parcels in 10 come back.")}</p>
+              <p className="mt-auto flex items-center gap-2 border-t border-[#f1eeee] pt-3 text-[11px] text-muted"><span className="size-2 shrink-0 rounded-full bg-ink" />{t("Black bar: more than 3 orders in 10 come back.")}</p>
             </Panel>
           </>
         )}
@@ -762,14 +762,14 @@ export function DashboardView() {
             </CardBody>
           </Card>
           <Card>
-            <CardHeader title={t("Worst RTO ads")} help={t("Your 5 ads with the highest return rate in this period, among ads with finished parcels. Small n means too few parcels to trust the rate yet.")} description={t("Cheap orders that come back cost twice.")} />
-            {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title={t("No shipped parcels yet")} /> : (
+            <CardHeader title={t("Worst RTO ads")} help={t("Your 5 ads with the highest return rate in this period, among ads with finished orders. Small n means too few orders to trust the rate yet.")} description={t("Cheap orders that come back cost twice.")} />
+            {!r ? <Skeleton className="m-4 h-40" /> : r.worstRtoCreatives.length === 0 ? <EmptyState title={t("No shipped orders yet")} /> : (
               <Table>
                 <THead><tr><Th>{t("Ad")}</Th><Th className="text-end"><Term label={t("RTO")} definition={t(DEF.returnRate)} /></Th><Th className="text-end">{t("Returned")}</Th></tr></THead>
                 <tbody>
                   {r.worstRtoCreatives.map((c) => (
                     <Tr key={c.key}>
-                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ms-1" title={t("Fewer shipped parcels than the BAD TRAFFIC threshold")}>{t("small n")}</Badge> : null}</Td>
+                      <Td className="font-mono text-xs">{c.externalCreativeId} {c.belowSample ? <Badge className="ms-1" title={t("Fewer shipped orders than the BAD TRAFFIC threshold")}>{t("small n")}</Badge> : null}</Td>
                       <Td className="text-end"><Rate value={c.returnRate} className={(c.returnRate ?? 0) > 0.3 ? "font-semibold text-negative" : undefined} /></Td>
                       <Td className="num text-end text-muted">{c.returned}/{c.shipped}</Td>
                     </Tr>
@@ -797,7 +797,7 @@ export function DashboardView() {
         </div>
 
         <Card className="scroll-mt-24" id="wilayas">
-          <CardHeader title={t("By wilaya")} help={t("Every wilaya of the orders placed in this period, most orders first. Look for wilayas that send many parcels back, and confirm their orders twice.")} description={t("Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya.")} />
+          <CardHeader title={t("By wilaya")} help={t("Every wilaya of the orders placed in this period, most orders first. Look for wilayas that send many orders back, and confirm their orders twice.")} description={t("Contribution before ads = revenue − COGS − shipping − RTO − call center − packaging. Ad spend is not split by wilaya.")} />
           {!r ? <Skeleton className="m-4 h-40" /> : r.wilayas.length === 0 ? <EmptyState title={t("No wilaya data")} /> : (
             <Table>
               <THead><tr><Th>{t("Wilaya")}</Th><Th className="text-end">{t("Placed")}</Th><Th className="text-end">{t("Shipped")}</Th><Th className="text-end"><Term label={t("Delivery rate")} definition={t(DEF.deliveryRate)} /></Th><Th className="text-end"><Term label={t("RTO rate")} definition={t(DEF.returnRate)} /></Th><Th className="text-end"><Term label={t("Delivered revenue")} definition={t(DEF.deliveredRevenue)} /></Th><Th className="text-end"><Term label={t("Contribution before ads")} definition={t("What this wilaya's orders leave after their own costs, before ads and overhead. Revenue follows the revenue basis picked in More filters.")} /></Th></tr></THead>

@@ -50,7 +50,6 @@ const ar: Dict = {
   "Delivered revenue": "مداخيل الطلبيات المسلَّمة",
   "Open orders and parcels": "افتح الطلبيات والطرود",
   "{day}: {n} delivered": "{day}: {n} مُسلَّمة",
-  "Delivered parcels per day, by order date": "الطرود المسلَّمة في كل يوم، حسب تاريخ الطلبية",
   "{n} parcels": "{n} طرد",
   "Cash in transit": "المال في الطريق",
   "{pct} of shipped parcels are still on the road": "{pct} من الطرود المُرسَلة ما زالت في الطريق",
@@ -59,7 +58,6 @@ const ar: Dict = {
   "Best ad right now": "أفضل إعلان الآن",
   "Open all ads": "افتح كل الإعلانات",
   "Ad {id}": "إعلان {id}",
-  "Ad {id} · {n} parcels shipped": "إعلان {id} · {n} طرود مُرسَلة",
   "Profit, {currency}": "الربح، {currency}",
   "Compare every ad": "قارن كل الإعلانات",
   "No ad is making money yet": "لا يوجد إعلان يربح بعد",
@@ -69,7 +67,6 @@ const ar: Dict = {
   "Nothing needs your attention right now.": "لا شيء يحتاج انتباهك الآن.",
   "Your POAS is {poas}, under your {target} target. Cut the ads marked Kill first.": "POAS عندك {poas}، أقل من هدفك {target}. أوقِف أولًا الإعلانات المعلَّمة «أوقِف».",
   "Your POAS is {poas}, above your {target} target. Put more budget on the ads marked Scale.": "POAS عندك {poas}، أعلى من هدفك {target}. ضع ميزانية أكبر على الإعلانات المعلَّمة «وسِّع».",
-  "{n} parcels in 10": "{n} طرود من كل 10",
   "{wilaya} and {other} send back about {share}. Confirm those orders twice.": "في {wilaya} و{other} يعود حوالي {share}. أكِّد تلك الطلبيات مرتين.",
   "{wilaya} sends back about {share}. Confirm those orders twice.": "في {wilaya} يعود حوالي {share}. أكِّد تلك الطلبيات مرتين.",
   "{amount} is delivered but not paid out to you yet.": "{amount} من الطلبيات المسلَّمة لم تُحوَّل إليك بعد.",
@@ -118,7 +115,6 @@ const ar: Dict = {
   "Confirmation rate": "نسبة التأكيد",
   "Shipping rate {rate}": "نسبة الإرسال {rate}",
   "Delivered to the customer": "سُلِّمت إلى الزبون",
-  "finished parcels delivered": "طرود انتهى توصيلها وسُلِّمت",
   "Delivery rate": "نسبة التسليم",
   "Return rate {rate}": "نسبة الإرجاع {rate}",
 
@@ -144,7 +140,6 @@ const ar: Dict = {
   "Delivery by wilaya": "التسليم حسب الولاية",
   "Open the full wilaya table": "افتح جدول الولايات كاملًا",
   "No wilaya data yet.": "لا توجد بيانات ولايات بعد.",
-  "Black bar: more than 3 parcels in 10 come back.": "الشريط الأسود: يعود أكثر من 3 طرود من كل 10.",
 
   // Dashboard: more details
   "Where the profit goes, the ads with the most returns, data health and every wilaya.":
@@ -165,10 +160,8 @@ const ar: Dict = {
   "Cost per delivered order": "تكلفة الطلبية المسلَّمة",
   "Worst RTO ads": "الإعلانات الأكثر إرجاعًا (RTO)",
   "Cheap orders that come back cost twice.": "الطلبيات الرخيصة التي تعود تكلّف مرتين.",
-  "No shipped parcels yet": "لا توجد طرود مُرسَلة بعد",
   Ad: "إعلان",
   RTO: "الإرجاع (RTO)",
-  "Fewer shipped parcels than the BAD TRAFFIC threshold": "طرود مُرسَلة أقل من حدّ «زيارات سيئة» (BAD TRAFFIC)",
   "small n": "عيّنة صغيرة",
   "Data health": "سلامة البيانات",
   "What could make these numbers wrong.": "ما قد يجعل هذه الأرقام غير دقيقة.",
@@ -248,7 +241,6 @@ const ar: Dict = {
   "Campaigns in this account count for {product} unless linked to their own.": "حملات هذا الحساب تُحتسب لصالح {product} إلا إذا رُبطت بمنتجها الخاص.",
   "a product": "منتج",
   "Orders whose ad (utm_content) belongs to these campaigns, placed in the period.": "الطلبيات التي ينتمي إعلانها (utm_content) إلى هذه الحملات، والواردة في هذه الفترة.",
-  "No finished parcels yet": "لا توجد طرود انتهى توصيلها بعد",
   "{pct}% delivery rate": "نسبة التسليم {pct}%",
   "Whole account, this period": "الحساب كله، في هذه الفترة",
   "All campaigns, this period": "كل الحملات، في هذه الفترة",
@@ -283,6 +275,14 @@ const ar: Dict = {
   "1 other campaign hidden.": "حملة أخرى واحدة مخفية.",
   "{n} other campaigns hidden.": "{n} حملات أخرى مخفية.",
   "An order counts for the campaign of the ad in its utm_content.": "تُحتسب الطلبية لحملة الإعلان المذكور في utm_content الخاص بها.",
+  "Delivered orders per day, by order date": "الطلبيات المسلَّمة في كل يوم، حسب تاريخ الطلبية",
+  "finished orders delivered": "طلبيات انتهى توصيلها وسُلِّمت",
+  "Black bar: more than 3 orders in 10 come back.": "الشريط الأسود: يعود أكثر من 3 طلبيات من كل 10.",
+  "No shipped orders yet": "لا توجد طلبيات مُرسَلة بعد",
+  "Fewer shipped orders than the BAD TRAFFIC threshold": "طلبيات مُرسَلة أقل من حدّ «زيارات سيئة» (BAD TRAFFIC)",
+  "No finished orders yet": "لا توجد طلبيات انتهى توصيلها بعد",
+  "{n} orders in 10": "{n} طلبيات من كل 10",
+  "Ad {id} · {n} orders shipped": "إعلان {id} · {n} طلبيات مُرسَلة",
 };
 
 export default ar;

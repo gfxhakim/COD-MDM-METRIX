@@ -4,7 +4,9 @@
  * Conventions
  * - Money is integer minor units. Rates are plain numbers in [0, 1] or null when the
  *   denominator is zero ("Not enough data"), never NaN or Infinity.
- * - Orders and parcels are counted separately: one order can have several parcels.
+ * - Every order counts once in the funnel (shipped, delivered, returned…), whatever its number of
+ *   parcels: MDM makes more parcels for the same order (an exchange, a refund, a copy), and each
+ *   parcel's money counts, but never as one more order delivered or returned.
  * - Observed carrier fees on a parcel win over cost-version assumptions.
  */
 import type { NormalizedStatus } from "@prisma/client";
@@ -25,6 +27,11 @@ export type ParcelFact = {
   shippingFee: number | null;
   returnFee: number | null;
   dispatched: boolean;
+  /** MDM made this parcel from another one of the order (exchange, refund, copy). */
+  followUp?: boolean;
+  /** Money MDM hands to the customer with this parcel. Only a follow-up's (a refund, an exchange
+   *  difference) is taken off revenue once delivered: what MDM puts there on a first parcel isn't known. */
+  paidToClient?: number | null;
 };
 
 /** `quantity` is the pieces the line sends, its offer's free pieces included (see `loadFacts`). */
@@ -58,7 +65,7 @@ export type Counts = {
   inTransit: number;
   unknownStatus: number;
   deliveredUnits: number;
-  /** Orders with at least one delivered parcel (used for overhead allocation). */
+  /** Orders with at least one delivered parcel (the same as `delivered`; used for overhead allocation). */
   deliveredOrders: number;
   missingCostOrders: number;
 };
@@ -117,10 +124,17 @@ function fallbackTerms(d: EconomicsDefaults): CostTerms {
   return { salePrice: 0, sourcingCost: 0, forwardShippingFee: d.forwardShippingFee, rtoFee: d.rtoFee, callCenterFee: d.callCenterFee, packagingFee: d.packagingFee };
 }
 
+/** Where an order stands once its parcels are looked at together; the first that applies wins. */
+const OUTCOMES = ["DELIVERED", "IN_TRANSIT", "RETURNED", "LOST", "EXCHANGED"] as const;
+type Outcome = (typeof OUTCOMES)[number];
+
 /**
- * Economics of one order. Partial delivery: delivered units per line are
- * quantity × (delivered parcels ÷ non-canceled parcels), rounded, because parcels
- * do not say which lines they contain.
+ * Economics of one order. The order counts once: delivered when any of its parcels reached the
+ * customer, else on the road when one still is, else returned, lost or exchanged. Money is added
+ * up parcel by parcel: each finished parcel's shipping and packaging, each return's fee, the cash
+ * of each delivered parcel less what a follow-up handed back to the customer.
+ * Partial delivery: delivered units per line are quantity × (delivered parcels ÷ non-canceled
+ * parcels), follow-up parcels left out, rounded, because parcels do not say which lines they contain.
  */
 export function orderEconomics(order: OrderFact, resolveCost: CostResolver, defaults: EconomicsDefaults): Totals {
   const primaryTerms = resolveCost(order.productId, order.placedAt);
@@ -128,39 +142,46 @@ export function orderEconomics(order: OrderFact, resolveCost: CostResolver, defa
   let missingCost = primaryTerms === null && order.lines.length > 0;
 
   const t: Totals = { ...ZERO_TOTALS, placed: 1, confirmed: order.confirmed ? 1 : 0, remittedCash: order.remittedCash };
-  let activeParcels = 0;
+  let firstParcels = 0;
+  let firstDelivered = 0;
+  let outcome: Outcome | null = null;
   for (const p of order.parcels) {
-    if (p.status !== "CANCELED") activeParcels++;
+    if (p.status !== "CANCELED" && !p.followUp) firstParcels++;
     if (p.status === "UNKNOWN") t.unknownStatus++;
     if (!isShipped(p)) continue;
-    t.shipped++;
+    const state: Outcome = isInTransit(p) ? "IN_TRANSIT" : p.status === "DELIVERED" ? "DELIVERED" : p.status === "RETURNED" ? "RETURNED" : p.status === "LOST" ? "LOST" : "EXCHANGED";
+    if (!outcome || OUTCOMES.indexOf(state) < OUTCOMES.indexOf(outcome)) outcome = state;
     // Still with the carrier: nothing is counted until it is delivered or returned.
-    if (isInTransit(p)) {
-      t.inTransit++;
+    if (state === "IN_TRANSIT") {
       t.cashInTransit += p.codAmount;
       continue;
     }
     const ship = p.shippingFee ?? terms.forwardShippingFee;
     t.outboundShipping += ship;
     t.packagingCost += terms.packagingFee;
-    if (p.status === "DELIVERED") {
-      t.delivered++;
-      t.deliveredRevenue += p.codAmount;
-    } else if (p.status === "RETURNED") {
+    if (state === "DELIVERED") {
+      t.deliveredRevenue += p.codAmount - (p.followUp ? (p.paidToClient ?? 0) : 0);
+      if (!p.followUp) firstDelivered++;
+    } else if (state === "RETURNED") {
       const rto = p.returnFee ?? terms.rtoFee;
-      t.returned++;
       t.rtoCost += rto;
       t.rtoLoss += ship + rto + terms.packagingFee;
-    } else if (p.status === "LOST") {
-      t.lost++;
-    } else if (p.status === "EXCHANGED") {
-      t.exchanged++;
     }
+  }
+
+  if (outcome) {
+    t.shipped = 1;
+    if (outcome === "DELIVERED") t.delivered = 1;
+    else if (outcome === "IN_TRANSIT") t.inTransit = 1;
+    else if (outcome === "RETURNED") t.returned = 1;
+    else if (outcome === "LOST") t.lost = 1;
+    else t.exchanged = 1;
   }
 
   if (t.delivered > 0) {
     t.deliveredOrders = 1;
-    const fraction = activeParcels > 0 ? t.delivered / activeParcels : 0;
+    // Only a follow-up parcel reached the customer (e.g. a copy sent after a return): the whole order did.
+    const fraction = firstDelivered > 0 && firstParcels > 0 ? firstDelivered / firstParcels : 1;
     for (const line of order.lines) {
       const units = Math.round(line.quantity * fraction);
       const lineTerms = line.productId === order.productId ? primaryTerms : resolveCost(line.productId, order.placedAt);
@@ -202,7 +223,7 @@ export function sumTotals(list: Iterable<Totals>): Totals {
 export type RevenueView = "DELIVERED" | "REMITTED";
 
 export type Metrics = Totals & {
-  /** Shipped parcels whose delivery is finished (delivered, returned, lost or exchanged). */
+  /** Shipped orders whose delivery is finished (delivered, returned, lost or exchanged). */
   finished: number;
   revenueView: RevenueView;
   /** Revenue used for profit under the selected view. */
@@ -236,7 +257,7 @@ export function computeMetrics(totals: Totals, adSpend: number, allocatedOverhea
     truePoas: safeRate(trueNetProfit, adSpend),
     confirmationRate: safeRate(totals.confirmed, totals.placed),
     shippingRate: safeRate(totals.shipped, totals.confirmed),
-    // Parcels still with the carrier would drag these down until they finish, so they are left out.
+    // Orders still with the carrier would drag these down until they finish, so they are left out.
     deliveryRate: safeRate(totals.delivered, finished),
     returnRate: safeRate(totals.returned, finished),
     placedCpa: perUnit(adSpend, totals.placed),

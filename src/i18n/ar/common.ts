@@ -165,12 +165,7 @@ const ar: Dict = {
   "Ad spend ÷ placed orders. Cheap leads can still lose money.":
     "مصاريف الإعلانات ÷ الطلبيات الواردة. الطلبيات الرخيصة قد تبقى خاسرة.",
   "Cost per confirmed order: ad spend ÷ confirmed orders.": "تكلفة الطلبية المؤكَّدة: مصاريف الإعلانات ÷ الطلبيات المؤكَّدة.",
-  "Cost per delivered order: ad spend ÷ delivered parcels.": "تكلفة الطلبية المسلَّمة: مصاريف الإعلانات ÷ الطرود المسلَّمة.",
   "Confirmed ÷ placed orders.": "الطلبيات المؤكَّدة ÷ الطلبيات الواردة.",
-  "Delivered ÷ parcels whose delivery is finished (delivered, returned, lost or exchanged). Parcels still with the carrier are left out until they finish.":
-    "الطرود المسلَّمة ÷ الطرود التي انتهى توصيلها (مسلَّمة أو مرتجَعة أو ضائعة أو مُستبدَلة). الطرود التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها.",
-  "Returned (RTO) ÷ parcels whose delivery is finished. Parcels still with the carrier are left out until they finish.":
-    "الطرود المرتجَعة (RTO) ÷ الطرود التي انتهى توصيلها. الطرود التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها.",
   "Delivered quantity × sourcing cost from the cost version in effect on the order date. Returned goods go back to stock.":
     "الكمية المسلَّمة × تكلفة المنتج حسب التكلفة المعمول بها في تاريخ الطلبية. البضاعة المرتجَعة تعود إلى المخزون.",
   "Expenses in the period. At business level all of them count; per product/creative they are allocated by your overhead policy.":
@@ -244,6 +239,9 @@ const ar: Dict = {
   "Check the form fields.": "تحقّق من خانات الاستمارة.",
   "An account with this email already exists. Sign in instead.": "يوجد حساب بهذا البريد الإلكتروني. سجّل الدخول بدلًا من ذلك.",
   "You are not a member of that workspace": "لست عضوًا في مساحة العمل هذه",
+  "Cost per delivered order: ad spend ÷ delivered orders.": "تكلفة الطلبية المسلَّمة: مصاريف الإعلانات ÷ الطلبيات المسلَّمة.",
+  "Delivered orders ÷ shipped orders whose delivery is finished (delivered, returned, lost or exchanged). Orders still with the carrier are left out until they finish. An order counts once, however many parcels MDM made for it.": "الطلبيات المسلَّمة ÷ الطلبيات المُرسَلة التي انتهى توصيلها (مسلَّمة أو مرتجَعة أو ضائعة أو مُستبدَلة). الطلبيات التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها. تُحتسب الطلبية مرة واحدة مهما كان عدد الطرود التي صنعتها MDM لها.",
+  "Returned orders (RTO) ÷ shipped orders whose delivery is finished. Orders still with the carrier are left out until they finish.": "الطلبيات المرتجَعة (RTO) ÷ الطلبيات المُرسَلة التي انتهى توصيلها. الطلبيات التي ما زالت عند الناقل لا تُحتسب حتى ينتهي توصيلها.",
 };
 
 export default ar;

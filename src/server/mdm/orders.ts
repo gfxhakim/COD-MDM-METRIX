@@ -6,6 +6,7 @@ import { wilayaName } from "@/domain/wilayas";
 import { normalizeCreativeKey, normalizeReference } from "@/lib/normalize";
 import { hashPhone } from "@/lib/pii";
 import { customerKey, normalizeCustomer, openCustomer, sealCustomer } from "@/server/customers";
+import { sha256, stableStringify } from "./redact";
 import { reconcileOrderStatuses } from "./statuses";
 import type { MdmOrder, MdmOrdersPage, MdmUtm } from "./types";
 
@@ -184,6 +185,8 @@ async function ensureCreative(env: OrderSyncEnv, key: string, utm: MdmUtm, lines
   return id;
 }
 
+const PROVIDER = "MDM_EXPRESS" as const;
+
 const orderInclude = { attribution: true, lines: true } as const satisfies Prisma.OrderInclude;
 type ExistingOrder = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
@@ -238,6 +241,15 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
   return db.$transaction(async (tx) => {
     const existing = await find(tx);
     const statusAt = o.statusAt ?? o.placedAt;
+    // What MDM sent, kept to show on the order as received (new versions only). It is built from a
+    // list of order fields that leaves the customer out (orderAsReceived), so store and product names stay.
+    if (o.raw != null) {
+      const payload = o.raw;
+      const rawKey = { workspaceId: ws, provider: PROVIDER, entityType: "order", externalId: o.trackingId, payloadHash: sha256(stableStringify(payload)) };
+      const seen = await tx.rawExternalRecord.findUnique({ where: { workspaceId_provider_entityType_externalId_payloadHash: rawKey }, select: { id: true } });
+      if (!seen) await tx.rawExternalRecord.create({ data: { ...rawKey, payload: payload as Prisma.InputJsonValue } });
+    }
+    const archived = o.archived !== undefined ? { mdmArchived: o.archived } : {};
     // MDM's own status word is kept as sent, so exports can show and filter it exactly.
     const mdm = { mdmStatus: o.status, mdmStatusAt: o.statusAt };
     const statusData =
@@ -282,6 +294,7 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
           ...utmData,
           ...checked,
           ...upsell,
+          ...archived,
           lines: { create: lines.map((l) => ({ workspaceId: ws, ...l, currency: o.currency })) },
           attribution: { create: { workspaceId: ws, orderPlacedAt: o.placedAt, ...attribution } },
         },
@@ -306,6 +319,7 @@ export async function upsertMdmOrder(env: OrderSyncEnv, jobId: string, o: MdmOrd
             }),
         ...(fillUtm ? utmData : {}),
         ...upsell,
+        ...archived,
       };
       const changed = Object.entries(data).some(([k, v]) => !same(existing[k as keyof typeof existing], v));
       if (changed || historyChecked) await tx.order.update({ where: { id: existing.id }, data: { ...data, ...checked } });
