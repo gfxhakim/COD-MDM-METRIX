@@ -3,6 +3,7 @@ import { msg } from "@/i18n/core";
 /** Creative matrix column catalog, shared by the table and the CSV export. */
 export const MATRIX_COLUMNS = [
   { key: "creative", label: msg("Creative ID"), kind: "text" },
+  { key: "product", label: msg("Product"), kind: "text" },
   { key: "campaign", label: msg("Campaign"), kind: "text" },
   { key: "adSpend", label: msg("Spend"), kind: "money" },
   { key: "placed", label: msg("Placed"), kind: "count" },

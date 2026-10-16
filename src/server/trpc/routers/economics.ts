@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { adFilterSchema } from "@/domain/adFilter";
+import { ALL_PRODUCTS, EACH_PRODUCT, inProductPick } from "@/domain/creativeProducts";
 import { MATRIX_COLUMNS, MATRIX_COLUMN_KEYS } from "@/domain/matrixColumns";
 import { simulate, simulatorInputSchema } from "@/domain/simulator";
 import { toCsv } from "@/lib/csv";
@@ -25,10 +26,11 @@ export const reportsRouter = router({
 /** Money in the export follows the currency the page is shown in, with the workspace's rates. */
 type ExportCurrency = { book: string; to: string; rates: Partial<Record<string, number>> };
 
-function cellValue(row: CreativeRow, key: (typeof MATRIX_COLUMN_KEYS)[number], cur: ExportCurrency): unknown {
+function cellValue(row: CreativeRow, key: (typeof MATRIX_COLUMN_KEYS)[number], cur: ExportCurrency, productName: (id: string) => string): unknown {
   const m = row.metrics;
   switch (key) {
     case "creative": return row.externalCreativeId ?? row.name;
+    case "product": return row.product ? productName(row.product.id) : "";
     case "campaign": return row.campaignName;
     case "verdict": return row.verdict ?? "";
     default: {
@@ -49,16 +51,33 @@ export const creativesRouter = router({
   ),
   matrix: workspaceProcedure.input(range.extend({ revenueView })).query(({ ctx, input }) => creativeMatrix(ctx.ws, input)),
   exportCsv: workspaceProcedure
-    .input(range.extend({ revenueView, columns: z.array(z.enum(MATRIX_COLUMN_KEYS)).min(1), minSample: z.number().int().min(0).default(0), currency: currencyCodeSchema.optional() }))
+    .input(
+      range.extend({
+        revenueView,
+        columns: z.array(z.enum(MATRIX_COLUMN_KEYS)).min(1),
+        minSample: z.number().int().min(0).default(0),
+        currency: currencyCodeSchema.optional(),
+        // The Creatives page's product pick (src/domain/creativeProducts.ts).
+        product: z.string().max(64).default(ALL_PRODUCTS),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const report = await creativeMatrix(ctx.ws, input);
       const ws = await db.workspace.findUniqueOrThrow({ where: { id: ctx.ws.workspaceId }, select: { exchangeRates: true } });
       const cur: ExportCurrency = { book: report.currency, to: input.currency ?? report.currency, rates: parseExchangeRates(ws.exchangeRates) };
       if (convertWithRates(0, cur.book, cur.to, cur.book, cur.rates) === null) throw new InputError(`Add a ${cur.to} rate in Economics & currencies to export in ${cur.to}.`);
-      const rows = report.rows.filter((r) => r.kind !== "CREATIVE" || r.metrics.placed >= input.minSample);
+      const names = new Map(report.products.map((p) => [p.id, p.name]));
+      const productName = (pid: string) => names.get(pid) ?? "";
+      const rows = report.rows.filter((r) => (r.kind !== "CREATIVE" || r.metrics.placed >= input.minSample) && inProductPick(r, input.product));
+      // Each product apart: the ads come grouped by product, those with no product and the buckets last.
+      if (input.product === EACH_PRODUCT) {
+        const rank = (r: CreativeRow) => (r.kind !== "CREATIVE" ? 2 : r.product ? 0 : 1);
+        const name = (r: CreativeRow) => (r.kind === "CREATIVE" && r.product ? productName(r.product.id) : "");
+        rows.sort((a, b) => rank(a) - rank(b) || name(a).localeCompare(name(b)));
+      }
       const columns = input.columns.map((key) => {
         const col = MATRIX_COLUMNS.find((c) => c.key === key)!;
-        return { header: col.kind === "money" ? `${col.label} (${cur.to})` : col.label, value: (r: CreativeRow) => cellValue(r, key, cur) };
+        return { header: col.kind === "money" ? `${col.label} (${cur.to})` : col.label, value: (r: CreativeRow) => cellValue(r, key, cur, productName) };
       });
       await audit(ctx.ws, "report.exported", { type: "CreativeMatrix" }, { rows: rows.length, columns: input.columns.length });
       return { filename: `creative-matrix-${new Date().toISOString().slice(0, 10)}.csv`, content: toCsv(rows, columns) };

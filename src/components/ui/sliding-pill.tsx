@@ -53,7 +53,8 @@ export function useSlidingPill<T extends HTMLElement>(className?: string) {
     ro.observe(box);
     for (const child of Array.from(box.children)) ro.observe(child);
     const mo = new MutationObserver(place);
-    mo.observe(box, { subtree: true, attributes: true, attributeFilter: ["aria-current", "aria-pressed", "data-state", "data-active"] });
+    // childList: items that arrive later (a list loaded from the server) move the active one.
+    mo.observe(box, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-current", "aria-pressed", "data-state", "data-active"] });
     let live = true;
     document.fonts?.ready.then(() => live && place());
     return () => {
